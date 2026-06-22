@@ -1,5 +1,8 @@
+# Modelo SQLAlchemy para la tabla mesas.
+# Representa una mesa física asociada a un sector del restaurante.
+
 import enum
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -14,6 +17,7 @@ class EstadoMesa(str, enum.Enum):
 
 class Mesa(Base):
     __tablename__ = "mesas"
+    __table_args__ = (UniqueConstraint("numero", "sector_id", name="uq_mesa_numero_sector"),)
 
     id = Column(Integer, primary_key=True, index=True)
     numero = Column(Integer, nullable=False)

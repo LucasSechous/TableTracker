@@ -1,15 +1,14 @@
-# Router FastAPI para el CRUD de mesas.
-# Incluye filtros por sector_id y estado, y validación de unicidad número+sector.
-
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.exc import IntegrityError
 from typing import Optional
 from app.database import get_db
 from app.models.mesa import Mesa, EstadoMesa
 from app.models.sector import Sector
-from app.schemas.mesa import MesaCreate, MesaUpdate, MesaResponse
+from app.schemas.mesa import MesaCreate, MesaUpdate, MesaResponse, EstadoUpdate
+from app.routers.auth import get_usuario_actual
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_usuario_actual)])
 
 
 @router.get("/", response_model=list[MesaResponse])
@@ -18,7 +17,7 @@ def listar_mesas(
     estado: Optional[EstadoMesa] = Query(None),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Mesa)
+    query = db.query(Mesa).options(joinedload(Mesa.sector))
     if sector_id is not None:
         query = query.filter(Mesa.sector_id == sector_id)
     if estado is not None:
@@ -28,7 +27,7 @@ def listar_mesas(
 
 @router.get("/{mesa_id}", response_model=MesaResponse)
 def obtener_mesa(mesa_id: int, db: Session = Depends(get_db)):
-    mesa = db.query(Mesa).filter(Mesa.id == mesa_id).first()
+    mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
     if not mesa:
         raise HTTPException(status_code=404, detail="Mesa no encontrada")
     return mesa
@@ -38,41 +37,46 @@ def obtener_mesa(mesa_id: int, db: Session = Depends(get_db)):
 def crear_mesa(datos: MesaCreate, db: Session = Depends(get_db)):
     if not db.query(Sector).filter(Sector.id == datos.sector_id).first():
         raise HTTPException(status_code=400, detail="El sector indicado no existe")
-    if db.query(Mesa).filter(Mesa.numero == datos.numero, Mesa.sector_id == datos.sector_id).first():
-        raise HTTPException(
-            status_code=409,
-            detail=f"Ya existe la mesa {datos.numero} en ese sector",
-        )
     mesa = Mesa(**datos.model_dump())
     db.add(mesa)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=f"Ya existe la mesa {datos.numero} en ese sector")
     db.refresh(mesa)
+    db.refresh(mesa, attribute_names=["sector"])
     return mesa
 
 
 @router.patch("/{mesa_id}", response_model=MesaResponse)
 def actualizar_mesa(mesa_id: int, datos: MesaUpdate, db: Session = Depends(get_db)):
-    mesa = db.query(Mesa).filter(Mesa.id == mesa_id).first()
+    mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
     if not mesa:
         raise HTTPException(status_code=404, detail="Mesa no encontrada")
     if datos.sector_id is not None and not db.query(Sector).filter(Sector.id == datos.sector_id).first():
         raise HTTPException(status_code=400, detail="El sector indicado no existe")
-    if datos.numero is not None or datos.sector_id is not None:
-        nuevo_numero = datos.numero if datos.numero is not None else mesa.numero
-        nuevo_sector = datos.sector_id if datos.sector_id is not None else mesa.sector_id
-        if db.query(Mesa).filter(
-            Mesa.numero == nuevo_numero,
-            Mesa.sector_id == nuevo_sector,
-            Mesa.id != mesa_id,
-        ).first():
-            raise HTTPException(
-                status_code=409,
-                detail=f"Ya existe la mesa {nuevo_numero} en ese sector",
-            )
     for campo, valor in datos.model_dump(exclude_none=True).items():
         setattr(mesa, campo, valor)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=f"Ya existe la mesa {datos.numero or mesa.numero} en ese sector")
+    db.refresh(mesa)
+    db.refresh(mesa, attribute_names=["sector"])
+    return mesa
+
+
+@router.patch("/{mesa_id}/estado", response_model=MesaResponse)
+def cambiar_estado_mesa(mesa_id: int, datos: EstadoUpdate, db: Session = Depends(get_db)):
+    mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
+    if not mesa:
+        raise HTTPException(status_code=404, detail="Mesa no encontrada")
+    mesa.estado = datos.estado
     db.commit()
     db.refresh(mesa)
+    db.refresh(mesa, attribute_names=["sector"])
     return mesa
 
 

@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.sector import Sector
 from app.schemas.sector import SectorCreate, SectorUpdate, SectorResponse
+from app.routers.auth import get_usuario_actual
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_usuario_actual)])
 
 
 @router.get("/", response_model=list[SectorResponse])

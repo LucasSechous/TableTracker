@@ -23,6 +23,11 @@ class EstadoUpdate(BaseModel):
     estado: EstadoMesa
 
 
+class PosicionUpdate(BaseModel):
+    pos_x: int
+    pos_y: int
+
+
 class MesaResponse(BaseModel):
     id: int
     numero: int
@@ -31,5 +36,7 @@ class MesaResponse(BaseModel):
     estado: EstadoMesa
     activa: bool
     created_at: datetime
+    pos_x: int = 0
+    pos_y: int = 0
 
     model_config = {"from_attributes": True}

@@ -1,16 +1,34 @@
-const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+// Cliente HTTP centralizado para TableTracker.
+// Instancia axios con interceptores JWT y manejo automático de sesión expirada.
+import axios from "axios";
+import type { AxiosError } from "axios";
+import type { Mesa, Sector } from "../types";
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    ...options,
-  });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(error.detail ?? "Error desconocido");
+export type { Mesa, Sector } from "../types";
+export type { Modo } from "../types";
+
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000",
+});
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-  return res.json();
-}
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      localStorage.clear();
+      window.location.href = "/login";
+    }
+    return Promise.reject(error);
+  }
+);
 
 export interface TokenResponse {
   access_token: string;
@@ -27,19 +45,29 @@ export interface UserResponse {
 
 export const authApi = {
   login: (email: string, password: string) =>
-    request<TokenResponse>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    }),
+    api.post<TokenResponse>("/auth/login", { email, password }),
 
-  register: (nombre: string, email: string, password: string, rol = "mozo") =>
-    request<UserResponse>("/auth/register", {
-      method: "POST",
-      body: JSON.stringify({ nombre, email, password, rol }),
-    }),
-
-  me: (token: string) =>
-    request<UserResponse>("/auth/me", {
-      headers: { Authorization: `Bearer ${token}` },
-    }),
+  me: () => api.get<UserResponse>("/auth/me"),
 };
+
+export const mesasApi = {
+  listar: (params?: { estado?: string; sector_id?: number }) =>
+    api.get<Mesa[]>("/mesas", { params }),
+
+  cambiarEstado: (id: number, estado: string) =>
+    api.patch<Mesa>(`/mesas/${id}/estado`, { estado }),
+
+  cambiarPosicion: (id: number, pos_x: number, pos_y: number) =>
+    api.patch<Mesa>(`/mesas/${id}/posicion`, { pos_x, pos_y }),
+};
+
+export const sectoresApi = {
+  listar: () => api.get<Sector[]>("/sectores"),
+
+  actualizar: (
+    id: number,
+    datos: { pos_x?: number; pos_y?: number; nombre?: string; ancho?: number; alto?: number }
+  ) => api.patch<Sector>(`/sectores/${id}`, datos),
+};
+
+export default api;

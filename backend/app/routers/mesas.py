@@ -5,7 +5,7 @@ from typing import Optional
 from app.database import get_db
 from app.models.mesa import Mesa, EstadoMesa
 from app.models.sector import Sector
-from app.schemas.mesa import MesaCreate, MesaUpdate, MesaResponse, EstadoUpdate
+from app.schemas.mesa import MesaCreate, MesaUpdate, MesaResponse, EstadoUpdate, PosicionUpdate
 from app.routers.auth import get_usuario_actual
 
 router = APIRouter(dependencies=[Depends(get_usuario_actual)])
@@ -74,6 +74,19 @@ def cambiar_estado_mesa(mesa_id: int, datos: EstadoUpdate, db: Session = Depends
     if not mesa:
         raise HTTPException(status_code=404, detail="Mesa no encontrada")
     mesa.estado = datos.estado
+    db.commit()
+    db.refresh(mesa)
+    db.refresh(mesa, attribute_names=["sector"])
+    return mesa
+
+
+@router.patch("/{id}/posicion", response_model=MesaResponse)
+def actualizar_posicion_mesa(id: int, datos: PosicionUpdate, db: Session = Depends(get_db)):
+    mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == id).first()
+    if not mesa or not mesa.activa:
+        raise HTTPException(status_code=404, detail="Mesa no encontrada")
+    mesa.pos_x = datos.pos_x
+    mesa.pos_y = datos.pos_y
     db.commit()
     db.refresh(mesa)
     db.refresh(mesa, attribute_names=["sector"])

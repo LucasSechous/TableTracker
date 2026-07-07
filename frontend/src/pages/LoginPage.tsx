@@ -1,26 +1,28 @@
+// Página de inicio de sesión de TableTracker.
+// Autentica al usuario contra el backend y redirige al dashboard tras el login.
 import { useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
+import type { AxiosError } from "axios";
 import { authApi } from "../services/api";
 
-interface Props {
-  onLogin: (token: string) => void;
-}
-
-export default function LoginPage({ onLogin }: Props) {
+export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const { access_token } = await authApi.login(email, password);
-      localStorage.setItem("token", access_token);
-      onLogin(access_token);
+      const { data } = await authApi.login(email, password);
+      localStorage.setItem("token", data.access_token);
+      navigate("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al iniciar sesión");
+      const axiosErr = err as AxiosError<{ detail?: string }>;
+      setError(axiosErr.response?.data?.detail ?? "Error al iniciar sesión");
     } finally {
       setLoading(false);
     }

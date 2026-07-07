@@ -12,6 +12,10 @@ class SectorUpdate(BaseModel):
     nombre: Optional[str] = None
     descripcion: Optional[str] = None
     activo: Optional[bool] = None
+    pos_x: Optional[int] = None
+    pos_y: Optional[int] = None
+    ancho: Optional[int] = None
+    alto: Optional[int] = None
 
 
 class SectorResponse(BaseModel):
@@ -19,5 +23,9 @@ class SectorResponse(BaseModel):
     nombre: str
     descripcion: Optional[str]
     activo: bool
+    pos_x: int = 0
+    pos_y: int = 0
+    ancho: int = 400
+    alto: int = 300
 
     model_config = {"from_attributes": True}

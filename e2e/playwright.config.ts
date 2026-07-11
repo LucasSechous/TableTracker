@@ -1,8 +1,16 @@
 import { defineConfig, devices } from "@playwright/test";
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Credenciales del usuario de test (no se commitean): ver e2e/.env.example.
+const envPath = path.join(__dirname, ".env");
+if (existsSync(envPath)) {
+  process.loadEnvFile(envPath);
+}
+
 const repoRoot = path.resolve(__dirname, "..");
 const frontendDir = path.join(repoRoot, "frontend");
 const backendDir = path.join(repoRoot, "backend");

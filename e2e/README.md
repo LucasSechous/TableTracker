@@ -15,7 +15,12 @@ incluyendo el proyecto Supabase configurado en `backend/.env`.
 cd e2e
 npm install
 npx playwright install chromium
+cp .env.example .env   # completar E2E_TEST_EMAIL / E2E_TEST_PASSWORD
 ```
+
+`.env` no se commitea (contiene la contraseña del usuario de test contra el backend real).
+Si es la primera vez que se corre la suite con esas credenciales, el usuario se registra
+solo; si ya existe, simplemente hace login con lo que pusiste en `.env`.
 
 ## Ejecución
 
@@ -31,9 +36,9 @@ Si ya los tenés corriendo manualmente, los reutiliza en vez de levantar otra in
 
 ## Datos de prueba
 
-- Se registra una única vez (idempotente) un usuario fijo `e2e.tabletracker@tabletracker-e2e.dev`
-  vía `POST /auth/register`. No hay endpoint para borrar usuarios, así que ese usuario queda
-  permanentemente en la base — es intencional, para no crear uno nuevo en cada corrida.
+- Se registra una única vez (idempotente) el usuario definido en `e2e/.env` vía `POST /auth/register`.
+  No hay endpoint para borrar usuarios, así que ese usuario queda permanentemente en la base —
+  es intencional, para no crear uno nuevo en cada corrida.
 - Cada test crea sus propios sectores/mesas con nombres únicos (sufijo de timestamp) vía la API
   y los borra en su `afterEach`. No se toca ni se borra ningún dato preexistente.
 

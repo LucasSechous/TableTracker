@@ -1,10 +1,18 @@
 import type { APIRequestContext } from "@playwright/test";
 import { BACKEND_URL } from "../playwright.config";
 
+const testEmail = process.env.E2E_TEST_EMAIL;
+const testPassword = process.env.E2E_TEST_PASSWORD;
+if (!testEmail || !testPassword) {
+  throw new Error(
+    "Faltan E2E_TEST_EMAIL / E2E_TEST_PASSWORD. Copiá e2e/.env.example a e2e/.env y completá los valores."
+  );
+}
+
 export const TEST_USER = {
   nombre: "E2E Test Runner",
-  email: "e2e.tabletracker@tabletracker-e2e.dev",
-  password: "E2eTest!2026",
+  email: testEmail,
+  password: testPassword,
   rol: "admin",
 };
 

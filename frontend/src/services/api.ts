@@ -19,10 +19,15 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Endpoints públicos de auth: un 401 acá significa "credenciales inválidas",
+// nunca "sesión expirada", así que no deben disparar el logout global.
+const PUBLIC_AUTH_PATHS = ["/auth/login", "/auth/register"];
+
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
-    if (error.response?.status === 401) {
+    const isPublicAuthRequest = PUBLIC_AUTH_PATHS.some((path) => error.config?.url?.includes(path));
+    if (error.response?.status === 401 && !isPublicAuthRequest) {
       localStorage.clear();
       window.location.href = "/login";
     }

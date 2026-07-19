@@ -5,10 +5,15 @@ from typing import Optional
 from app.database import get_db
 from app.models.mesa import Mesa, EstadoMesa
 from app.models.sector import Sector
+from app.models.historial import HistorialEstado
 from app.schemas.mesa import MesaCreate, MesaUpdate, MesaResponse, EstadoUpdate, PosicionUpdate
 from app.routers.auth import get_usuario_actual
 
 router = APIRouter(dependencies=[Depends(get_usuario_actual)])
+
+
+def registrar_historial(db: Session, mesa_id: int, estado: EstadoMesa) -> None:
+    db.add(HistorialEstado(mesa_id=mesa_id, estado=estado))
 
 
 @router.get("/", response_model=list[MesaResponse])
@@ -74,6 +79,35 @@ def cambiar_estado_mesa(mesa_id: int, datos: EstadoUpdate, db: Session = Depends
     if not mesa:
         raise HTTPException(status_code=404, detail="Mesa no encontrada")
     mesa.estado = datos.estado
+    registrar_historial(db, mesa.id, mesa.estado)
+    db.commit()
+    db.refresh(mesa)
+    db.refresh(mesa, attribute_names=["sector"])
+    return mesa
+
+
+@router.patch("/{mesa_id}/limpieza", response_model=MesaResponse)
+def limpiar_mesa(mesa_id: int, db: Session = Depends(get_db)):
+    mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
+    if not mesa:
+        raise HTTPException(status_code=404, detail="Mesa no encontrada")
+    if mesa.estado != EstadoMesa.pendiente_limpieza:
+        raise HTTPException(status_code=409, detail="La mesa no está pendiente de limpieza")
+    mesa.estado = EstadoMesa.libre
+    registrar_historial(db, mesa.id, mesa.estado)
+    db.commit()
+    db.refresh(mesa)
+    db.refresh(mesa, attribute_names=["sector"])
+    return mesa
+
+
+@router.patch("/{mesa_id}/reserva", response_model=MesaResponse)
+def reservar_mesa(mesa_id: int, db: Session = Depends(get_db)):
+    mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
+    if not mesa:
+        raise HTTPException(status_code=404, detail="Mesa no encontrada")
+    mesa.estado = EstadoMesa.reservada
+    registrar_historial(db, mesa.id, mesa.estado)
     db.commit()
     db.refresh(mesa)
     db.refresh(mesa, attribute_names=["sector"])

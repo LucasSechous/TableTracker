@@ -2,7 +2,7 @@
 // En modo edición el bloque completo es arrastrable; contiene sus mesas activas como MesaVisual.
 
 import { useState, useEffect, useRef } from "react"
-import type { Sector, Modo } from "../types"
+import type { Sector, Mesa, Modo } from "../types"
 import MesaVisual from "./MesaVisual"
 
 interface SectorBloqueProps {
@@ -11,6 +11,7 @@ interface SectorBloqueProps {
   onMesaEstadoChange: (mesaId: number, nuevoEstado: string) => void
   onMesaPosicionChange: (mesaId: number, pos_x: number, pos_y: number) => void
   onSectorDrag: (sectorId: number, pos_x: number, pos_y: number) => void
+  onMesaActualizada: (mesa: Mesa) => void
 }
 
 export default function SectorBloque({
@@ -19,6 +20,7 @@ export default function SectorBloque({
   onMesaEstadoChange,
   onMesaPosicionChange,
   onSectorDrag,
+  onMesaActualizada,
 }: SectorBloqueProps) {
   const [localPos, setLocalPos] = useState({ x: sector.pos_x, y: sector.pos_y })
   const isDragging = useRef(false)
@@ -106,6 +108,7 @@ export default function SectorBloque({
             modo={modo}
             onEstadoChange={onMesaEstadoChange}
             onPosicionChange={onMesaPosicionChange}
+            onMesaActualizada={onMesaActualizada}
           />
         ))}
     </div>

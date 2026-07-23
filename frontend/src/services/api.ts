@@ -64,6 +64,10 @@ export const mesasApi = {
 
   cambiarPosicion: (id: number, pos_x: number, pos_y: number) =>
     api.patch<Mesa>(`/mesas/${id}/posicion`, { pos_x, pos_y }),
+
+  confirmarLimpieza: (id: number) => api.patch<Mesa>(`/mesas/${id}/limpieza`),
+
+  marcarReservada: (id: number) => api.patch<Mesa>(`/mesas/${id}/reserva`),
 };
 
 export const sectoresApi = {

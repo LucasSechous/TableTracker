@@ -1,0 +1,21 @@
+# Entorno y secretos
+.env
+.env.*
+!.env.example
+
+# Bytecode de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Logs
+*.log
+
+# Cache de tests/tipos
+.pytest_cache/
+.mypy_cache/

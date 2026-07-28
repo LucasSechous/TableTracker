@@ -2,9 +2,9 @@
 // Instancia axios con interceptores JWT y manejo automático de sesión expirada.
 import axios from "axios";
 import type { AxiosError } from "axios";
-import type { Mesa, Sector } from "../types";
+import type { Mesa, Sector, HistorialEstado } from "../types";
 
-export type { Mesa, Sector } from "../types";
+export type { Mesa, Sector, HistorialEstado } from "../types";
 export type { Modo } from "../types";
 
 const api = axios.create({
@@ -64,6 +64,15 @@ export const mesasApi = {
 
   cambiarPosicion: (id: number, pos_x: number, pos_y: number) =>
     api.patch<Mesa>(`/mesas/${id}/posicion`, { pos_x, pos_y }),
+
+  confirmarLimpieza: (id: number) => api.patch<Mesa>(`/mesas/${id}/limpieza`),
+
+  marcarReservada: (id: number) => api.patch<Mesa>(`/mesas/${id}/reserva`),
+};
+
+export const historialApi = {
+  listar: (params?: { mesa_id?: number; fecha_inicio?: string; fecha_fin?: string }) =>
+    api.get<HistorialEstado[]>("/historial/", { params }),
 };
 
 export const sectoresApi = {

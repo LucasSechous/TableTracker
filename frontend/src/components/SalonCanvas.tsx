@@ -1,7 +1,7 @@
 // Canvas 2D que representa el salón del restaurante con sectores y mesas posicionados.
 // Componente puramente presentacional: no mantiene estado propio, delega todo al padre.
 
-import type { Sector, Modo } from "../types"
+import type { Sector, Mesa, Modo } from "../types"
 import SectorBloque from "./SectorBloque"
 
 interface Props {
@@ -10,6 +10,7 @@ interface Props {
   onMesaEstadoChange: (mesaId: number, nuevoEstado: string) => void
   onMesaPosicionChange: (mesaId: number, pos_x: number, pos_y: number) => void
   onSectorPosicionChange: (sectorId: number, pos_x: number, pos_y: number) => void
+  onMesaActualizada: (mesa: Mesa) => void
 }
 
 export default function SalonCanvas({
@@ -18,6 +19,7 @@ export default function SalonCanvas({
   onMesaEstadoChange,
   onMesaPosicionChange,
   onSectorPosicionChange,
+  onMesaActualizada,
 }: Props) {
   return (
     <div
@@ -39,6 +41,7 @@ export default function SalonCanvas({
           onMesaEstadoChange={onMesaEstadoChange}
           onMesaPosicionChange={onMesaPosicionChange}
           onSectorDrag={onSectorPosicionChange}
+          onMesaActualizada={onMesaActualizada}
         />
       ))}
     </div>

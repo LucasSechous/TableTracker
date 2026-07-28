@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import type { JSX } from "react";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
+import HistorialPage from "./pages/HistorialPage";
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const token = localStorage.getItem("token");
@@ -15,6 +16,14 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/historial"
+          element={
+            <PrivateRoute>
+              <HistorialPage />
+            </PrivateRoute>
+          }
+        />
         <Route
           path="/*"
           element={

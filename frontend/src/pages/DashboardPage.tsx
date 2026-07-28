@@ -44,30 +44,75 @@ export default function DashboardPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  function extraerDetalle(err: unknown, fallback: string) {
+    return (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? fallback
+  }
+
   function handleMesaEstadoChange(mesaId: number, nuevoEstado: string) {
-    mesasApi.cambiarEstado(mesaId, nuevoEstado).catch(() => {})
+    const estadoAnterior = sectores.flatMap((s) => s.mesas ?? []).find((m) => m.id === mesaId)?.estado
+
     setSectores((prev) =>
       prev.map((s) => ({
         ...s,
         mesas: s.mesas?.map((m) => (m.id === mesaId ? { ...m, estado: nuevoEstado } : m)),
       }))
     )
+
+    mesasApi.cambiarEstado(mesaId, nuevoEstado).catch((err) => {
+      setSectores((prev) =>
+        prev.map((s) => ({
+          ...s,
+          mesas: s.mesas?.map((m) => (m.id === mesaId && estadoAnterior !== undefined ? { ...m, estado: estadoAnterior } : m)),
+        }))
+      )
+      alert(extraerDetalle(err, "Error al cambiar el estado de la mesa"))
+    })
   }
 
   function handleMesaPosicionChange(mesaId: number, pos_x: number, pos_y: number) {
-    mesasApi.cambiarPosicion(mesaId, pos_x, pos_y).catch(() => {})
+    const posAnterior = sectores.flatMap((s) => s.mesas ?? []).find((m) => m.id === mesaId)
+
     setSectores((prev) =>
       prev.map((s) => ({
         ...s,
         mesas: s.mesas?.map((m) => (m.id === mesaId ? { ...m, pos_x, pos_y } : m)),
       }))
     )
+
+    mesasApi.cambiarPosicion(mesaId, pos_x, pos_y).catch((err) => {
+      setSectores((prev) =>
+        prev.map((s) => ({
+          ...s,
+          mesas: s.mesas?.map((m) =>
+            m.id === mesaId && posAnterior ? { ...m, pos_x: posAnterior.pos_x, pos_y: posAnterior.pos_y } : m
+          ),
+        }))
+      )
+      alert(extraerDetalle(err, "Error al mover la mesa"))
+    })
   }
 
   function handleSectorPosicionChange(sectorId: number, pos_x: number, pos_y: number) {
-    sectoresApi.actualizar(sectorId, { pos_x, pos_y }).catch(() => {})
+    const posAnterior = sectores.find((s) => s.id === sectorId)
+
+    setSectores((prev) => prev.map((s) => (s.id === sectorId ? { ...s, pos_x, pos_y } : s)))
+
+    sectoresApi.actualizar(sectorId, { pos_x, pos_y }).catch((err) => {
+      setSectores((prev) =>
+        prev.map((s) =>
+          s.id === sectorId && posAnterior ? { ...s, pos_x: posAnterior.pos_x, pos_y: posAnterior.pos_y } : s
+        )
+      )
+      alert(extraerDetalle(err, "Error al mover el sector"))
+    })
+  }
+
+  function handleMesaActualizada(mesaActualizada: Mesa) {
     setSectores((prev) =>
-      prev.map((s) => (s.id === sectorId ? { ...s, pos_x, pos_y } : s))
+      prev.map((s) => ({
+        ...s,
+        mesas: s.mesas?.map((m) => (m.id === mesaActualizada.id ? mesaActualizada : m)),
+      }))
     )
   }
 
@@ -98,6 +143,21 @@ export default function DashboardPage() {
               <span style={{ textTransform: "capitalize" }}>{user.rol}</span>
             </span>
           )}
+          <button
+            onClick={() => navigate("/historial")}
+            style={{
+              padding: "6px 14px",
+              borderRadius: 6,
+              border: "1px solid #1976d2",
+              fontSize: 13,
+              cursor: "pointer",
+              backgroundColor: "#fff",
+              color: "#1976d2",
+              fontWeight: 500,
+            }}
+          >
+            Ver historial
+          </button>
           <button
             onClick={() => setModo((m) => (m === "monitoreo" ? "edicion" : "monitoreo"))}
             style={{
@@ -156,6 +216,7 @@ export default function DashboardPage() {
             onMesaEstadoChange={handleMesaEstadoChange}
             onMesaPosicionChange={handleMesaPosicionChange}
             onSectorPosicionChange={handleSectorPosicionChange}
+            onMesaActualizada={handleMesaActualizada}
           />
         )}
       </main>

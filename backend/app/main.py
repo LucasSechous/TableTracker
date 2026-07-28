@@ -3,9 +3,9 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, sectores, mesas
+from app.routers import auth, sectores, mesas, historial
 from app.database import Base, engine
-from app.models import user, sector, mesa  # noqa: F401 — registra modelos para create_all
+from app.models import user, sector, mesa, historial as historial_model  # noqa: F401 — registra modelos para create_all
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -25,6 +25,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/auth", tags=["Autenticación"])
 app.include_router(sectores.router, prefix="/sectores", tags=["Sectores"])
 app.include_router(mesas.router, prefix="/mesas", tags=["Mesas"])
+app.include_router(historial.router, prefix="/historial", tags=["Historial"])
 
 @app.get("/")
 def root():

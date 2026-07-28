@@ -3,7 +3,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Literal, Optional
 from datetime import datetime
 from app.database import get_db
 from app.models.historial import HistorialEstado
@@ -18,6 +18,7 @@ def listar_historial(
     mesa_id: Optional[int] = Query(None),
     fecha_inicio: Optional[datetime] = Query(None),
     fecha_fin: Optional[datetime] = Query(None),
+    orden: Literal["asc", "desc"] = Query("desc"),
     db: Session = Depends(get_db),
 ):
     if fecha_inicio is not None and fecha_fin is not None and fecha_inicio > fecha_fin:
@@ -29,4 +30,5 @@ def listar_historial(
         query = query.filter(HistorialEstado.created_at >= fecha_inicio)
     if fecha_fin is not None:
         query = query.filter(HistorialEstado.created_at <= fecha_fin)
-    return query.order_by(HistorialEstado.created_at.desc()).all()
+    orden_columna = HistorialEstado.created_at.asc() if orden == "asc" else HistorialEstado.created_at.desc()
+    return query.order_by(orden_columna).all()

@@ -133,4 +133,8 @@ def eliminar_mesa(mesa_id: int, db: Session = Depends(get_db)):
     if not mesa:
         raise HTTPException(status_code=404, detail="Mesa no encontrada")
     db.delete(mesa)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="No se puede eliminar la mesa: tiene historial de estados asociado")

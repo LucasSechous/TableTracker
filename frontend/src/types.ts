@@ -24,3 +24,10 @@ export interface Sector {
 }
 
 export type Modo = "monitoreo" | "edicion"
+
+export interface HistorialEstado {
+  id: number
+  mesa_id: number
+  estado: string
+  created_at: string
+}

@@ -144,6 +144,21 @@ export default function DashboardPage() {
             </span>
           )}
           <button
+            onClick={() => navigate("/historial")}
+            style={{
+              padding: "6px 14px",
+              borderRadius: 6,
+              border: "1px solid #1976d2",
+              fontSize: 13,
+              cursor: "pointer",
+              backgroundColor: "#fff",
+              color: "#1976d2",
+              fontWeight: 500,
+            }}
+          >
+            Ver historial
+          </button>
+          <button
             onClick={() => setModo((m) => (m === "monitoreo" ? "edicion" : "monitoreo"))}
             style={{
               padding: "6px 14px",

@@ -59,6 +59,11 @@ export const mesasApi = {
   listar: (params?: { estado?: string; sector_id?: number }) =>
     api.get<Mesa[]>("/mesas", { params }),
 
+  // La barra final apunta al path exacto del router y evita el 307 de FastAPI,
+  // que en un POST obliga a repetir preflight y cuerpo.
+  crear: (datos: { numero: number; sector_id: number; estado?: string; activa?: boolean }) =>
+    api.post<Mesa>("/mesas/", datos),
+
   cambiarEstado: (id: number, estado: string) =>
     api.patch<Mesa>(`/mesas/${id}/estado`, { estado }),
 
@@ -77,6 +82,9 @@ export const historialApi = {
 
 export const sectoresApi = {
   listar: () => api.get<Sector[]>("/sectores"),
+
+  crear: (datos: { nombre: string; descripcion?: string; activo?: boolean }) =>
+    api.post<Sector>("/sectores/", datos),
 
   actualizar: (
     id: number,

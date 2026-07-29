@@ -1,0 +1,14 @@
+{
+  "descripcion": "Mapa de zonas: asocia cada mesa del backend con un polígono del frame. Copiar como config/zonas.json y ajustar a la cámara del local.",
+  "resolucion": [1280, 720],
+  "zonas": [
+    {
+      "mesa_id": 1,
+      "poligono": [[120, 300], [340, 300], [340, 520], [120, 520]]
+    },
+    {
+      "mesa_id": 2,
+      "poligono": [[420, 280], [640, 280], [640, 500], [420, 500]]
+    }
+  ]
+}

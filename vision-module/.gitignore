@@ -1,0 +1,37 @@
+# Entorno y secretos
+.env
+.env.*
+!.env.example
+
+# Bytecode de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Pesos de modelos YOLO (se descargan, no se versionan)
+models/*
+!models/.gitkeep
+
+# Material de prueba (videos e imágenes)
+data/samples/*
+!data/samples/.gitkeep
+
+# Configuración real de zonas (la de ejemplo sí se versiona)
+config/zonas.json
+
+# Salidas de inferencia
+runs/
+*.avi
+*.mp4
+
+# Logs
+*.log
+
+# Cache de tests/tipos
+.pytest_cache/
+.mypy_cache/

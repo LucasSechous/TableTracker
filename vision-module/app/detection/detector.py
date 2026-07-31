@@ -1,6 +1,10 @@
 # Wrapper del modelo YOLO (ultralytics).
 # Recibe un frame y devuelve las detecciones filtradas por clase y confianza,
 # de modo que el resto del módulo no dependa de la API de ultralytics.
+# El modelo se carga una sola vez (load) y se reutiliza en cada detect(),
+# sin importar de qué fuente de captura (T26-99) vengan los frames.
+
+from ultralytics import YOLO
 
 from app.utils.logger import get_logger
 
@@ -29,8 +33,24 @@ class Detector:
 
     def load(self):
         # Carga los pesos YOLO una sola vez (ultralytics.YOLO).
-        raise NotImplementedError
+        self.model = YOLO(str(self.model_path))
+        logger.info("Modelo YOLO cargado: %s", self.model_path)
 
     def detect(self, frame):
         # Ejecuta la inferencia sobre un frame y devuelve una lista de Deteccion.
-        raise NotImplementedError
+        # La confianza y las clases se filtran en la propia inferencia para no
+        # duplicar ese criterio en el resto del pipeline.
+        if self.model is None:
+            raise RuntimeError("El modelo no está cargado: llamar a load() antes de detect()")
+
+        resultados = self.model.predict(
+            frame,
+            conf=self.confidence,
+            classes=self.classes,
+            verbose=False,
+        )
+        cajas = resultados[0].boxes
+        return [
+            Deteccion(tuple(caja.xyxy[0].tolist()), int(caja.cls[0]), float(caja.conf[0]))
+            for caja in cajas
+        ]

@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef } from "react"
 import type { Sector, Mesa, Modo } from "../types"
 import MesaVisual from "./MesaVisual"
+import { CANVAS_ANCHO, CANVAS_ALTO } from "../constants"
 
 interface SectorBloqueProps {
   sector: Sector
@@ -33,13 +34,19 @@ export default function SectorBloque({
   }, [sector.pos_x, sector.pos_y])
 
   useEffect(() => {
+    // Piso en 0 y techo en (dimensión del canvas - dimensión del sector), para que el
+    // bloque no pueda arrastrarse fuera de ninguno de los 4 bordes del canvas. El
+    // Math.max(0, ...) externo cubre el caso límite de un sector más grande que el canvas.
+    const clampX = (valor: number) => Math.min(Math.max(0, valor), Math.max(0, CANVAS_ANCHO - sector.ancho))
+    const clampY = (valor: number) => Math.min(Math.max(0, valor), Math.max(0, CANVAS_ALTO - sector.alto))
+
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging.current || !dragStart.current) return
       const dx = e.clientX - dragStart.current.mouseX
       const dy = e.clientY - dragStart.current.mouseY
       setLocalPos({
-        x: dragStart.current.sectorX + dx,
-        y: dragStart.current.sectorY + dy,
+        x: clampX(dragStart.current.sectorX + dx),
+        y: clampY(dragStart.current.sectorY + dy),
       })
     }
 
@@ -48,8 +55,8 @@ export default function SectorBloque({
       isDragging.current = false
       const dx = e.clientX - dragStart.current.mouseX
       const dy = e.clientY - dragStart.current.mouseY
-      const nuevaX = Math.max(0, dragStart.current.sectorX + dx)
-      const nuevaY = Math.max(0, dragStart.current.sectorY + dy)
+      const nuevaX = clampX(dragStart.current.sectorX + dx)
+      const nuevaY = clampY(dragStart.current.sectorY + dy)
       dragStart.current = null
       onSectorDrag(sector.id, Math.round(nuevaX), Math.round(nuevaY))
     }
@@ -60,7 +67,7 @@ export default function SectorBloque({
       window.removeEventListener("mousemove", handleMouseMove)
       window.removeEventListener("mouseup", handleMouseUp)
     }
-  }, [sector.id, onSectorDrag])
+  }, [sector.id, sector.ancho, sector.alto, onSectorDrag])
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (modo !== "edicion") return
@@ -106,6 +113,8 @@ export default function SectorBloque({
             key={mesa.id}
             mesa={mesa}
             modo={modo}
+            anchoSector={sector.ancho}
+            altoSector={sector.alto}
             onEstadoChange={onMesaEstadoChange}
             onPosicionChange={onMesaPosicionChange}
             onMesaActualizada={onMesaActualizada}

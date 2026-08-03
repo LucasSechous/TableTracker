@@ -3,6 +3,7 @@ import {
   createSector,
   createMesa,
   actualizarSector,
+  cambiarPosicionMesa,
   deleteMesa,
   deleteSector,
   listarMesas,
@@ -16,10 +17,16 @@ import {
   waitForSalonLoaded,
   getSectorBlock,
   getMesaCircle,
+  getResizeHandle,
   getEstadoSelect,
   getToggleModoButton,
   dragBy,
 } from "../fixtures/ui-helpers";
+
+// Diámetro de mesa (constants.ts del frontend); duplicado acá para no acoplar los
+// tests a un import del código de la app, igual que el resto del archivo hardcodea
+// las dimensiones del canvas/sector.
+const DIAMETRO_MESA = 60;
 
 // Sección 5 — Canvas del salón, modo edición
 
@@ -198,5 +205,137 @@ test.describe("con un sector (700x400) y una mesa cerca de la esquina", () => {
     const despues = await wrapper.boundingBox();
     expect(despues!.x).toBeCloseTo(antes!.x, 0);
     expect(despues!.y).toBeCloseTo(antes!.y, 0);
+  });
+});
+
+test.describe("con un sector cerca del borde inferior derecho del canvas", () => {
+  let sector: SectorResponse;
+  let mesa: MesaResponse;
+
+  test.beforeEach(async ({ request, token }) => {
+    const suffix = uniqueSuffix(test.info().parallelIndex);
+    sector = await createSector(request, token, { nombre: `E2E Resize Borde Canvas ${suffix}` });
+    // Canvas de 1200x700: a esta posición sólo quedan 200x100 de margen para crecer.
+    sector = await actualizarSector(request, token, sector.id, { pos_x: 1000, pos_y: 600, ancho: 150, alto: 80 });
+    mesa = await createMesa(request, token, { numero: 1, sector_id: sector.id, estado: "libre" });
+  });
+
+  test.afterEach(async ({ request, token }) => {
+    await deleteMesa(request, token, mesa.id).catch(() => {});
+    await deleteSector(request, token, sector.id).catch(() => {});
+  });
+
+  test("5.8 agrandar un sector con el handle no lo saca del canvas", async ({ page, token, request }) => {
+    await gotoDashboardAuthed(page, token);
+    await toggleAEdicion(page);
+
+    const sectorBlock = getSectorBlock(page, sector.nombre);
+    const handle = getResizeHandle(sectorBlock);
+    await expect(handle).toBeVisible();
+
+    const [patchRequest] = await Promise.all([
+      page.waitForRequest((req) => req.url().includes(`/sectores/${sector.id}`) && req.method() === "PATCH"),
+      dragBy(page, handle, 1000, 1000),
+    ]);
+    const payload = patchRequest.postDataJSON() as { ancho: number; alto: number };
+    expect(payload.ancho).toBe(200); // 1200 - pos_x(1000)
+    expect(payload.alto).toBe(100); // 700 - pos_y(600)
+
+    await page.reload();
+    await waitForSalonLoaded(page);
+    const sectoresBackend = await listarSectores(request, token);
+    const sectorActualizado = sectoresBackend.find((s) => s.id === sector.id)!;
+    expect(sectorActualizado.ancho).toBe(200);
+    expect(sectorActualizado.alto).toBe(100);
+    expect(sectorActualizado.pos_x + sectorActualizado.ancho).toBeLessThanOrEqual(1200);
+    expect(sectorActualizado.pos_y + sectorActualizado.alto).toBeLessThanOrEqual(700);
+  });
+});
+
+test.describe("con un sector vacío (sin mesas)", () => {
+  let sector: SectorResponse;
+
+  test.beforeEach(async ({ request, token }) => {
+    const suffix = uniqueSuffix(test.info().parallelIndex);
+    sector = await createSector(request, token, { nombre: `E2E Resize Vacio ${suffix}` });
+    sector = await actualizarSector(request, token, sector.id, { pos_x: 50, pos_y: 50, ancho: 300, alto: 300 });
+  });
+
+  test.afterEach(async ({ request, token }) => {
+    await deleteSector(request, token, sector.id).catch(() => {});
+  });
+
+  test("5.9 achicar un sector vacío hasta el mínimo no lo colapsa a 0 ni negativo", async ({
+    page,
+    token,
+    request,
+  }) => {
+    await gotoDashboardAuthed(page, token);
+    await toggleAEdicion(page);
+
+    const sectorBlock = getSectorBlock(page, sector.nombre);
+    const handle = getResizeHandle(sectorBlock);
+
+    const [patchRequest] = await Promise.all([
+      page.waitForRequest((req) => req.url().includes(`/sectores/${sector.id}`) && req.method() === "PATCH"),
+      dragBy(page, handle, -1000, -1000),
+    ]);
+    const payload = patchRequest.postDataJSON() as { ancho: number; alto: number };
+    expect(payload.ancho).toBeGreaterThan(0);
+    expect(payload.alto).toBeGreaterThan(0);
+
+    await page.reload();
+    await waitForSalonLoaded(page);
+    const sectoresBackend = await listarSectores(request, token);
+    const sectorActualizado = sectoresBackend.find((s) => s.id === sector.id)!;
+    expect(sectorActualizado.ancho).toBe(payload.ancho);
+    expect(sectorActualizado.alto).toBe(payload.alto);
+    expect(sectorActualizado.ancho).toBeGreaterThan(0);
+    expect(sectorActualizado.alto).toBeGreaterThan(0);
+  });
+});
+
+test.describe("con un sector y una mesa cerca del borde inferior derecho", () => {
+  let sector: SectorResponse;
+  let mesa: MesaResponse;
+
+  test.beforeEach(async ({ request, token }) => {
+    const suffix = uniqueSuffix(test.info().parallelIndex);
+    sector = await createSector(request, token, { nombre: `E2E Resize Mesa Borde ${suffix}` });
+    sector = await actualizarSector(request, token, sector.id, { pos_x: 50, pos_y: 50, ancho: 400, alto: 300 });
+    mesa = await createMesa(request, token, { numero: 1, sector_id: sector.id, estado: "libre" });
+    mesa = await cambiarPosicionMesa(request, token, mesa.id, 300, 200);
+  });
+
+  test.afterEach(async ({ request, token }) => {
+    await deleteMesa(request, token, mesa.id).catch(() => {});
+    await deleteSector(request, token, sector.id).catch(() => {});
+  });
+
+  test("5.10 achicar un sector no puede dejar sus mesas fuera del nuevo tamaño", async ({ page, token, request }) => {
+    await gotoDashboardAuthed(page, token);
+    await toggleAEdicion(page);
+
+    const sectorBlock = getSectorBlock(page, sector.nombre);
+    const handle = getResizeHandle(sectorBlock);
+
+    const [patchRequest] = await Promise.all([
+      page.waitForRequest((req) => req.url().includes(`/sectores/${sector.id}`) && req.method() === "PATCH"),
+      dragBy(page, handle, -1000, -1000),
+    ]);
+    const payload = patchRequest.postDataJSON() as { ancho: number; alto: number };
+    // El límite de achique es exactamente el espacio que ocupa la mesa (pos + diámetro).
+    expect(payload.ancho).toBe(mesa.pos_x + DIAMETRO_MESA);
+    expect(payload.alto).toBe(mesa.pos_y + DIAMETRO_MESA);
+
+    await page.reload();
+    await waitForSalonLoaded(page);
+    const mesasBackend = await listarMesas(request, token, { sector_id: sector.id });
+    const sectoresBackend = await listarSectores(request, token);
+    const mesaBackend = mesasBackend.find((m) => m.id === mesa.id)!;
+    const sectorBackend = sectoresBackend.find((s) => s.id === sector.id)!;
+    // Comparado contra la posición real de la mesa persistida en Supabase: nunca queda afuera.
+    expect(mesaBackend.pos_x + DIAMETRO_MESA).toBeLessThanOrEqual(sectorBackend.ancho);
+    expect(mesaBackend.pos_y + DIAMETRO_MESA).toBeLessThanOrEqual(sectorBackend.alto);
   });
 });

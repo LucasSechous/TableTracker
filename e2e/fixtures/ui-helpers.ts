@@ -29,6 +29,21 @@ export function getMesaCircle(sectorBlock: Locator, numero: number): Locator {
     .filter({ hasText: new RegExp(`^${numero}$`) });
 }
 
+/** Locator del handle de resize (esquina inferior derecha) de un SectorBloque, en modo edición. */
+export function getResizeHandle(sectorBlock: Locator): Locator {
+  return sectorBlock.locator('div[style*="nwse-resize"]');
+}
+
+/** Locator del botón de editar (lápiz, esquina superior derecha) de un SectorBloque, en modo edición. */
+export function getEditarSectorButton(sectorBlock: Locator): Locator {
+  return sectorBlock.locator('button[title="Editar sector"]');
+}
+
+/** Locator del botón de eliminar (tacho, esquina superior derecha) de un SectorBloque, en modo edición. */
+export function getEliminarSectorButton(sectorBlock: Locator): Locator {
+  return sectorBlock.locator('button[title="Eliminar sector"]');
+}
+
 /** Abre (o cierra) el <select> de estado haciendo click en el círculo de la mesa (modo monitoreo). */
 export function getEstadoSelect(mesaCircle: Locator): Locator {
   return mesaCircle.locator("xpath=following-sibling::select");

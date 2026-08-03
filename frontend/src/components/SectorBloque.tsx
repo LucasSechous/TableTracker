@@ -3,8 +3,11 @@
 // inferior derecha; contiene sus mesas activas como MesaVisual.
 
 import { useState, useEffect, useRef } from "react"
+import type { AxiosError } from "axios"
 import type { Sector, Mesa, Modo } from "../types"
 import MesaVisual from "./MesaVisual"
+import ModalEditarSector from "./ModalEditarSector"
+import { sectoresApi } from "../services/api"
 import { CANVAS_ANCHO, CANVAS_ALTO, DIAMETRO_MESA } from "../constants"
 
 // Tamaño mínimo de un sector sin mesas, para evitar que el resize lo colapse a 0.
@@ -17,6 +20,8 @@ interface SectorBloqueProps {
   onMesaPosicionChange: (mesaId: number, pos_x: number, pos_y: number) => void
   onSectorDrag: (sectorId: number, pos_x: number, pos_y: number) => void
   onSectorResize: (sectorId: number, ancho: number, alto: number) => void
+  onSectorActualizado: (sector: Sector) => void
+  onSectorEliminado: (sectorId: number) => void
   onMesaActualizada: (mesa: Mesa) => void
 }
 
@@ -27,8 +32,13 @@ export default function SectorBloque({
   onMesaPosicionChange,
   onSectorDrag,
   onSectorResize,
+  onSectorActualizado,
+  onSectorEliminado,
   onMesaActualizada,
 }: SectorBloqueProps) {
+  const [modalEditarAbierto, setModalEditarAbierto] = useState(false)
+  const [eliminando, setEliminando] = useState(false)
+
   const [localPos, setLocalPos] = useState({ x: sector.pos_x, y: sector.pos_y })
   const isDragging = useRef(false)
   const dragStart = useRef<{ mouseX: number; mouseY: number; sectorX: number; sectorY: number } | null>(null)
@@ -146,68 +156,139 @@ export default function SectorBloque({
     resizeStart.current = { mouseX: e.clientX, mouseY: e.clientY, ancho: localSize.ancho, alto: localSize.alto }
   }
 
+  async function handleEliminarClick(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!window.confirm(`¿Eliminar el sector "${sector.nombre}"?`)) return
+    setEliminando(true)
+    try {
+      await sectoresApi.eliminar(sector.id)
+      onSectorEliminado(sector.id)
+    } catch (err) {
+      const axiosErr = err as AxiosError<{ detail?: string }>
+      alert(axiosErr.response?.data?.detail ?? "No se pudo eliminar el sector")
+    } finally {
+      setEliminando(false)
+    }
+  }
+
   return (
-    <div
-      style={{
-        position: "absolute",
-        left: localPos.x,
-        top: localPos.y,
-        width: localSize.ancho,
-        height: localSize.alto,
-        border: "2px solid #999",
-        backgroundColor: "rgba(255,255,255,0.85)",
-        borderRadius: 6,
-        boxSizing: "border-box",
-        userSelect: "none",
-        cursor: modo === "edicion" ? "grab" : "default",
-      }}
-      onMouseDown={handleMouseDown}
-    >
+    <>
       <div
         style={{
           position: "absolute",
-          top: 6,
-          left: 8,
-          fontWeight: "bold",
-          fontSize: 12,
-          color: "#555",
-          pointerEvents: "none",
+          left: localPos.x,
+          top: localPos.y,
+          width: localSize.ancho,
+          height: localSize.alto,
+          border: "2px solid #999",
+          backgroundColor: "rgba(255,255,255,0.85)",
+          borderRadius: 6,
+          boxSizing: "border-box",
+          userSelect: "none",
+          cursor: modo === "edicion" ? "grab" : "default",
         }}
+        onMouseDown={handleMouseDown}
       >
-        {sector.nombre}
-      </div>
-
-      {sector.mesas
-        ?.filter((m) => m.activa)
-        .map((mesa) => (
-          <MesaVisual
-            key={mesa.id}
-            mesa={mesa}
-            modo={modo}
-            anchoSector={localSize.ancho}
-            altoSector={localSize.alto}
-            onEstadoChange={onMesaEstadoChange}
-            onPosicionChange={onMesaPosicionChange}
-            onMesaActualizada={onMesaActualizada}
-          />
-        ))}
-
-      {modo === "edicion" && (
         <div
-          onMouseDown={handleResizeMouseDown}
           style={{
             position: "absolute",
-            right: 0,
-            bottom: 0,
-            width: 12,
-            height: 12,
-            cursor: "nwse-resize",
-            backgroundColor: "#999",
-            borderTopLeftRadius: 4,
-            zIndex: 3,
+            top: 6,
+            left: 8,
+            fontWeight: "bold",
+            fontSize: 12,
+            color: "#555",
+            pointerEvents: "none",
+          }}
+        >
+          {sector.nombre}
+        </div>
+
+        {modo === "edicion" && (
+          <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 4, zIndex: 3 }}>
+            <button
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={() => setModalEditarAbierto(true)}
+              title="Editar sector"
+              style={{
+                width: 20,
+                height: 20,
+                padding: 0,
+                lineHeight: 1,
+                fontSize: 11,
+                border: "1px solid #ccc",
+                borderRadius: 4,
+                backgroundColor: "#fff",
+                cursor: "pointer",
+              }}
+            >
+              ✎
+            </button>
+            <button
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={handleEliminarClick}
+              disabled={eliminando}
+              title="Eliminar sector"
+              style={{
+                width: 20,
+                height: 20,
+                padding: 0,
+                lineHeight: 1,
+                fontSize: 11,
+                border: "1px solid #ccc",
+                borderRadius: 4,
+                backgroundColor: "#fff",
+                cursor: eliminando ? "default" : "pointer",
+                opacity: eliminando ? 0.6 : 1,
+              }}
+            >
+              🗑
+            </button>
+          </div>
+        )}
+
+        {sector.mesas
+          ?.filter((m) => m.activa)
+          .map((mesa) => (
+            <MesaVisual
+              key={mesa.id}
+              mesa={mesa}
+              modo={modo}
+              anchoSector={localSize.ancho}
+              altoSector={localSize.alto}
+              onEstadoChange={onMesaEstadoChange}
+              onPosicionChange={onMesaPosicionChange}
+              onMesaActualizada={onMesaActualizada}
+            />
+          ))}
+
+        {modo === "edicion" && (
+          <div
+            onMouseDown={handleResizeMouseDown}
+            style={{
+              position: "absolute",
+              right: 0,
+              bottom: 0,
+              width: 12,
+              height: 12,
+              cursor: "nwse-resize",
+              backgroundColor: "#999",
+              borderTopLeftRadius: 4,
+              zIndex: 3,
+            }}
+          />
+        )}
+      </div>
+
+      {modalEditarAbierto && (
+        <ModalEditarSector
+          sector={sector}
+          onClose={() => setModalEditarAbierto(false)}
+          onSectorActualizado={(sectorActualizado) => {
+            onSectorActualizado(sectorActualizado)
+            setModalEditarAbierto(false)
           }}
         />
       )}
-    </div>
+    </>
   )
 }

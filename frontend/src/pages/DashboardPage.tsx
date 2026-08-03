@@ -125,6 +125,14 @@ export default function DashboardPage() {
     })
   }
 
+  function handleSectorActualizado(sectorActualizado: Sector) {
+    setSectores((prev) => prev.map((s) => (s.id === sectorActualizado.id ? sectorActualizado : s)))
+  }
+
+  function handleSectorEliminado(sectorId: number) {
+    setSectores((prev) => prev.filter((s) => s.id !== sectorId))
+  }
+
   function handleMesaActualizada(mesaActualizada: Mesa) {
     setSectores((prev) =>
       prev.map((s) => ({
@@ -281,6 +289,8 @@ export default function DashboardPage() {
             onMesaPosicionChange={handleMesaPosicionChange}
             onSectorPosicionChange={handleSectorPosicionChange}
             onSectorResize={handleSectorResize}
+            onSectorActualizado={handleSectorActualizado}
+            onSectorEliminado={handleSectorEliminado}
             onMesaActualizada={handleMesaActualizada}
           />
         )}

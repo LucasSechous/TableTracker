@@ -88,8 +88,10 @@ export const sectoresApi = {
 
   actualizar: (
     id: number,
-    datos: { pos_x?: number; pos_y?: number; nombre?: string; ancho?: number; alto?: number }
+    datos: { pos_x?: number; pos_y?: number; nombre?: string; descripcion?: string; ancho?: number; alto?: number }
   ) => api.patch<Sector>(`/sectores/${id}`, datos),
+
+  eliminar: (id: number) => api.delete(`/sectores/${id}`),
 };
 
 export default api;

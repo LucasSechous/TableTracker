@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.sector import Sector
+from app.models.mesa import Mesa
 from app.schemas.sector import SectorCreate, SectorUpdate, SectorResponse
 from app.routers.auth import get_usuario_actual
 
@@ -49,5 +50,7 @@ def eliminar_sector(sector_id: int, db: Session = Depends(get_db)):
     sector = db.query(Sector).filter(Sector.id == sector_id).first()
     if not sector:
         raise HTTPException(status_code=404, detail="Sector no encontrado")
+    if db.query(Mesa).filter(Mesa.sector_id == sector_id).first():
+        raise HTTPException(status_code=409, detail="No se puede eliminar un sector con mesas asociadas")
     db.delete(sector)
     db.commit()

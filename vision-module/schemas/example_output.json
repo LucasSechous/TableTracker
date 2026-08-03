@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "frame_timestamp": "2026-08-01T14:32:07.512000Z",
+  "source_id": "camara_salon_01",
+  "frame_width": 1280,
+  "frame_height": 720,
+  "model_name": "yolov8n",
+  "detections": [
+    {
+      "class_id": 60,
+      "class_name": "dining table",
+      "confidence": 0.91,
+      "bbox": { "x1": 412, "y1": 268, "x2": 861, "y2": 540 }
+    },
+    {
+      "class_id": 0,
+      "class_name": "person",
+      "confidence": 0.87,
+      "bbox": { "x1": 470, "y1": 140, "x2": 612, "y2": 402 }
+    },
+    {
+      "class_id": 56,
+      "class_name": "chair",
+      "confidence": 0.76,
+      "bbox": { "x1": 300, "y1": 300, "x2": 420, "y2": 560 }
+    }
+  ]
+}

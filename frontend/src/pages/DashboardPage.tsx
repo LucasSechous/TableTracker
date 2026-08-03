@@ -7,6 +7,8 @@ import { authApi, mesasApi, sectoresApi } from "../services/api"
 import type { UserResponse } from "../services/api"
 import type { Mesa, Sector, Modo } from "../types"
 import SalonCanvas from "../components/SalonCanvas"
+import ModalAltaSector from "../components/ModalAltaSector"
+import ModalAltaMesa from "../components/ModalAltaMesa"
 
 export default function DashboardPage() {
   const [user, setUser] = useState<UserResponse | null>(null)
@@ -14,6 +16,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [modo, setModo] = useState<Modo>("monitoreo")
+  const [modalAbierto, setModalAbierto] = useState<"sector" | "mesa" | null>(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -116,6 +119,18 @@ export default function DashboardPage() {
     )
   }
 
+  function handleSectorCreado(sector: Sector) {
+    setSectores((prev) => [...prev, sector])
+    setModalAbierto(null)
+  }
+
+  function handleMesaCreada(mesa: Mesa) {
+    setSectores((prev) =>
+      prev.map((s) => (s.id === mesa.sector.id ? { ...s, mesas: [...(s.mesas ?? []), mesa] } : s))
+    )
+    setModalAbierto(null)
+  }
+
   function handleLogout() {
     localStorage.removeItem("token")
     navigate("/login")
@@ -174,6 +189,40 @@ export default function DashboardPage() {
           >
             {modo === "monitoreo" ? "Editar disposición" : "Ver monitoreo"}
           </button>
+          {modo === "edicion" && (
+            <>
+              <button
+                onClick={() => setModalAbierto("sector")}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 6,
+                  border: "1px solid #1976d2",
+                  fontSize: 13,
+                  cursor: "pointer",
+                  backgroundColor: "#fff",
+                  color: "#1976d2",
+                  fontWeight: 500,
+                }}
+              >
+                + Nuevo sector
+              </button>
+              <button
+                onClick={() => setModalAbierto("mesa")}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 6,
+                  border: "1px solid #1976d2",
+                  fontSize: 13,
+                  cursor: "pointer",
+                  backgroundColor: "#fff",
+                  color: "#1976d2",
+                  fontWeight: 500,
+                }}
+              >
+                + Nueva mesa
+              </button>
+            </>
+          )}
           <button
             onClick={handleLogout}
             style={{
@@ -220,6 +269,13 @@ export default function DashboardPage() {
           />
         )}
       </main>
+
+      {modalAbierto === "sector" && (
+        <ModalAltaSector onClose={() => setModalAbierto(null)} onSectorCreado={handleSectorCreado} />
+      )}
+      {modalAbierto === "mesa" && (
+        <ModalAltaMesa sectores={sectores} onClose={() => setModalAbierto(null)} onMesaCreada={handleMesaCreada} />
+      )}
     </div>
   )
 }

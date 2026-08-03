@@ -3,6 +3,7 @@
 
 import type { Sector, Mesa, Modo } from "../types"
 import SectorBloque from "./SectorBloque"
+import { CANVAS_ANCHO, CANVAS_ALTO } from "../constants"
 
 interface Props {
   sectores: Sector[]
@@ -25,8 +26,8 @@ export default function SalonCanvas({
     <div
       style={{
         position: "relative",
-        width: 1200,
-        height: 700,
+        width: CANVAS_ANCHO,
+        height: CANVAS_ALTO,
         backgroundColor: "#f0f0f0",
         border: "2px solid #ccc",
         borderRadius: 8,

@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from "react"
 import type { AxiosError } from "axios"
 import type { Mesa, Modo } from "../types"
 import { mesasApi } from "../services/api"
+import { DIAMETRO_MESA } from "../constants"
 
 const COLOR_POR_ESTADO: Record<string, string> = {
   libre: "#4caf50",
@@ -16,12 +17,22 @@ const COLOR_POR_ESTADO: Record<string, string> = {
 interface MesaVisualProps {
   mesa: Mesa
   modo: Modo
+  anchoSector: number
+  altoSector: number
   onEstadoChange: (mesaId: number, nuevoEstado: string) => void
   onPosicionChange: (mesaId: number, pos_x: number, pos_y: number) => void
   onMesaActualizada: (mesa: Mesa) => void
 }
 
-export default function MesaVisual({ mesa, modo, onEstadoChange, onPosicionChange, onMesaActualizada }: MesaVisualProps) {
+export default function MesaVisual({
+  mesa,
+  modo,
+  anchoSector,
+  altoSector,
+  onEstadoChange,
+  onPosicionChange,
+  onMesaActualizada,
+}: MesaVisualProps) {
   const [mostrarSelect, setMostrarSelect] = useState(false)
   const [confirmandoLimpieza, setConfirmandoLimpieza] = useState(false)
   const [marcandoReservada, setMarcandoReservada] = useState(false)
@@ -43,13 +54,19 @@ export default function MesaVisual({ mesa, modo, onEstadoChange, onPosicionChang
   }, [mostrarSelect])
 
   useEffect(() => {
+    // Piso en 0 y techo en (dimensión del sector - diámetro de la mesa), para que el
+    // círculo no pueda arrastrarse fuera de ninguno de los 4 bordes del sector. El
+    // Math.max(0, ...) externo cubre el caso límite de un sector más chico que la mesa.
+    const clampX = (valor: number) => Math.min(Math.max(0, valor), Math.max(0, anchoSector - DIAMETRO_MESA))
+    const clampY = (valor: number) => Math.min(Math.max(0, valor), Math.max(0, altoSector - DIAMETRO_MESA))
+
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging.current || !dragStart.current) return
       const dx = e.clientX - dragStart.current.mouseX
       const dy = e.clientY - dragStart.current.mouseY
       setLocalPos({
-        x: Math.max(0, dragStart.current.mesaX + dx),
-        y: Math.max(0, dragStart.current.mesaY + dy),
+        x: clampX(dragStart.current.mesaX + dx),
+        y: clampY(dragStart.current.mesaY + dy),
       })
     }
 
@@ -58,8 +75,8 @@ export default function MesaVisual({ mesa, modo, onEstadoChange, onPosicionChang
       isDragging.current = false
       const dx = e.clientX - dragStart.current.mouseX
       const dy = e.clientY - dragStart.current.mouseY
-      const nuevaX = Math.max(0, dragStart.current.mesaX + dx)
-      const nuevaY = Math.max(0, dragStart.current.mesaY + dy)
+      const nuevaX = clampX(dragStart.current.mesaX + dx)
+      const nuevaY = clampY(dragStart.current.mesaY + dy)
       dragStart.current = null
       onPosicionChange(mesa.id, Math.round(nuevaX), Math.round(nuevaY))
     }
@@ -70,7 +87,7 @@ export default function MesaVisual({ mesa, modo, onEstadoChange, onPosicionChang
       window.removeEventListener("mousemove", handleMouseMove)
       window.removeEventListener("mouseup", handleMouseUp)
     }
-  }, [mesa.id, onPosicionChange])
+  }, [mesa.id, onPosicionChange, anchoSector, altoSector])
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (modo !== "edicion") return
@@ -119,8 +136,8 @@ export default function MesaVisual({ mesa, modo, onEstadoChange, onPosicionChang
     <div style={{ position: "absolute", left: localPos.x, top: localPos.y }}>
       <div
         style={{
-          width: 60,
-          height: 60,
+          width: DIAMETRO_MESA,
+          height: DIAMETRO_MESA,
           borderRadius: "50%",
           backgroundColor: COLOR_POR_ESTADO[mesa.estado] ?? "#9e9e9e",
           display: "flex",

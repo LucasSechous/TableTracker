@@ -110,6 +110,21 @@ export default function DashboardPage() {
     })
   }
 
+  function handleSectorResize(sectorId: number, ancho: number, alto: number) {
+    const sizeAnterior = sectores.find((s) => s.id === sectorId)
+
+    setSectores((prev) => prev.map((s) => (s.id === sectorId ? { ...s, ancho, alto } : s)))
+
+    sectoresApi.actualizar(sectorId, { ancho, alto }).catch((err) => {
+      setSectores((prev) =>
+        prev.map((s) =>
+          s.id === sectorId && sizeAnterior ? { ...s, ancho: sizeAnterior.ancho, alto: sizeAnterior.alto } : s
+        )
+      )
+      alert(extraerDetalle(err, "Error al redimensionar el sector"))
+    })
+  }
+
   function handleMesaActualizada(mesaActualizada: Mesa) {
     setSectores((prev) =>
       prev.map((s) => ({
@@ -265,6 +280,7 @@ export default function DashboardPage() {
             onMesaEstadoChange={handleMesaEstadoChange}
             onMesaPosicionChange={handleMesaPosicionChange}
             onSectorPosicionChange={handleSectorPosicionChange}
+            onSectorResize={handleSectorResize}
             onMesaActualizada={handleMesaActualizada}
           />
         )}

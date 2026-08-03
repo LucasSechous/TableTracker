@@ -11,6 +11,7 @@ interface Props {
   onMesaEstadoChange: (mesaId: number, nuevoEstado: string) => void
   onMesaPosicionChange: (mesaId: number, pos_x: number, pos_y: number) => void
   onSectorPosicionChange: (sectorId: number, pos_x: number, pos_y: number) => void
+  onSectorResize: (sectorId: number, ancho: number, alto: number) => void
   onMesaActualizada: (mesa: Mesa) => void
 }
 
@@ -20,6 +21,7 @@ export default function SalonCanvas({
   onMesaEstadoChange,
   onMesaPosicionChange,
   onSectorPosicionChange,
+  onSectorResize,
   onMesaActualizada,
 }: Props) {
   return (
@@ -42,6 +44,7 @@ export default function SalonCanvas({
           onMesaEstadoChange={onMesaEstadoChange}
           onMesaPosicionChange={onMesaPosicionChange}
           onSectorDrag={onSectorPosicionChange}
+          onSectorResize={onSectorResize}
           onMesaActualizada={onMesaActualizada}
         />
       ))}

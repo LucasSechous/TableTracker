@@ -44,9 +44,13 @@ export function getEliminarSectorButton(sectorBlock: Locator): Locator {
   return sectorBlock.locator('button[title="Eliminar sector"]');
 }
 
-/** Abre (o cierra) el <select> de estado haciendo click en el círculo de la mesa (modo monitoreo). */
+/**
+ * Abre (o cierra) el <select> de estado haciendo click en el círculo de la mesa (modo monitoreo).
+ * El <select> vive dentro de un <div> wrapper hermano del círculo (junto al botón "Marcar como
+ * reservada" en MesaVisual.tsx), no como hermano directo, así que se baja un nivel más.
+ */
 export function getEstadoSelect(mesaCircle: Locator): Locator {
-  return mesaCircle.locator("xpath=following-sibling::select");
+  return mesaCircle.locator("xpath=following-sibling::div//select");
 }
 
 export function getToggleModoButton(page: Page): Locator {
@@ -91,3 +95,52 @@ export const COLOR_POR_ESTADO: Record<string, string> = {
   pendiente_limpieza: "rgb(255, 152, 0)",
   reservada: "rgb(33, 150, 243)",
 };
+
+export const ESTADO_LABEL: Record<string, string> = {
+  libre: "Libre",
+  ocupada: "Ocupada",
+  pendiente_limpieza: "Pendiente de limpieza",
+  reservada: "Reservada",
+};
+
+export async function gotoHistorialAuthed(page: Page, token: string): Promise<void> {
+  await injectToken(page, token);
+  await page.goto("/historial");
+  await waitForHistorialLoaded(page);
+}
+
+export async function waitForHistorialLoaded(page: Page): Promise<void> {
+  await page.getByText("Cargando historial...").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
+}
+
+export function getMesaFilterSelect(page: Page): Locator {
+  return page.getByLabel("Mesa");
+}
+
+export function getFechaDesdeInput(page: Page): Locator {
+  return page.getByLabel("Desde");
+}
+
+export function getFechaHastaInput(page: Page): Locator {
+  return page.getByLabel("Hasta");
+}
+
+export function getBuscarButton(page: Page): Locator {
+  return page.getByRole("button", { name: "Buscar" });
+}
+
+export function getLimpiarFiltrosButton(page: Page): Locator {
+  return page.getByRole("button", { name: "Limpiar filtros" });
+}
+
+/** Todas las filas del cuerpo de la tabla de historial. */
+export function getHistorialRows(page: Page): Locator {
+  return page.locator("table tbody tr");
+}
+
+/** Locator de la fila de historial cuya mesa y estado (texto exacto de cada celda) coinciden. */
+export function getHistorialRow(page: Page, mesaId: number, estadoLabel: string): Locator {
+  return getHistorialRows(page)
+    .filter({ has: page.locator("td", { hasText: new RegExp(`^${mesaId}$`) }) })
+    .filter({ has: page.locator("td", { hasText: new RegExp(`^${estadoLabel}$`) }) });
+}

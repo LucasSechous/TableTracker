@@ -126,14 +126,17 @@ test.describe("con un sector (700x400) y una mesa cerca de la esquina", () => {
     const patchResponse = await patchRequest.response();
     expect(patchResponse?.ok()).toBe(true);
 
-    // La mesa sigue existiendo (no se pierde ni rompe el render), aunque quede
-    // visualmente recortada por el overflow:hidden del canvas.
+    // La mesa sigue existiendo (no se pierde ni rompe el render). No queda afuera del
+    // sector ni recortada por el overflow:hidden del canvas: MesaVisual clampea pos_x/pos_y
+    // dentro de [0, ancho/alto del sector - DIAMETRO_MESA] durante el propio drag
+    // (MesaVisual.tsx:57-61), así que soltarla "afuera" la deja pegada al borde del sector.
     await page.reload();
     await waitForSalonLoaded(page);
     const mesasBackend = await listarMesas(request, token, { sector_id: sector.id });
     const mesaActualizada = mesasBackend.find((m) => m.id === mesa.id);
     expect(mesaActualizada, "la mesa debe seguir existiendo en el backend tras soltarla fuera de límites").toBeTruthy();
-    expect(mesaActualizada!.pos_x).toBeGreaterThan(sector.ancho);
+    expect(mesaActualizada!.pos_x).toBe(sector.ancho - DIAMETRO_MESA);
+    expect(mesaActualizada!.pos_y).toBe(sector.alto - DIAMETRO_MESA);
 
     const sectorBlockAfter = getSectorBlock(page, sector.nombre);
     await expect(sectorBlockAfter).toBeVisible();

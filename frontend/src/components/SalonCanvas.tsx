@@ -40,7 +40,7 @@ export default function SalonCanvas({
         overflow: "hidden",
       }}
     >
-      {sectores.map((sector) => (
+      {sectores.filter((sector) => sector.activo).map((sector) => (
         <SectorBloque
           key={sector.id}
           sector={sector}

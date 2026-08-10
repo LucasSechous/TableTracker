@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.sector import Sector
@@ -10,8 +10,11 @@ router = APIRouter(dependencies=[Depends(get_usuario_actual)])
 
 
 @router.get("/", response_model=list[SectorResponse])
-def listar_sectores(db: Session = Depends(get_db)):
-    return db.query(Sector).all()
+def listar_sectores(incluir_inactivos: bool = Query(False), db: Session = Depends(get_db)):
+    query = db.query(Sector)
+    if not incluir_inactivos:
+        query = query.filter(Sector.activo == True)  # noqa: E712
+    return query.all()
 
 
 @router.get("/{sector_id}", response_model=SectorResponse)

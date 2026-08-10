@@ -5,8 +5,8 @@ import {
   createMesa,
   actualizarSector,
   cambiarPosicionMesa,
-  deleteMesa,
-  deleteSector,
+  desactivarMesa,
+  desactivarSector,
   listarMesas,
   listarSectores,
   uniqueSuffix,
@@ -43,9 +43,11 @@ test.describe("con un sector y dos mesas", () => {
   });
 
   test.afterEach(async ({ request, token }) => {
-    await deleteMesa(request, token, mesaA.id).catch(() => {});
-    await deleteMesa(request, token, mesaB.id).catch(() => {});
-    await deleteSector(request, token, sector.id).catch(() => {});
+    // Soft-delete: 6.1/6.2 cambian el estado de las mesas, lo que genera historial y
+    // bloquearía un DELETE físico (409, FK con historial_estados).
+    await desactivarMesa(request, token, mesaA.id).catch(() => {});
+    await desactivarMesa(request, token, mesaB.id).catch(() => {});
+    await desactivarSector(request, token, sector.id).catch(() => {});
   });
 
   test("6.1 flujo completo login -> dashboard -> cambio de estado, sin recargas manuales", async ({ page }) => {

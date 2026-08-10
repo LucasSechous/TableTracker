@@ -20,9 +20,12 @@ def registrar_historial(db: Session, mesa_id: int, estado: EstadoMesa) -> None:
 def listar_mesas(
     sector_id: Optional[int] = Query(None),
     estado: Optional[EstadoMesa] = Query(None),
+    incluir_inactivos: bool = Query(False),
     db: Session = Depends(get_db),
 ):
     query = db.query(Mesa).options(joinedload(Mesa.sector))
+    if not incluir_inactivos:
+        query = query.filter(Mesa.activa == True)  # noqa: E712
     if sector_id is not None:
         query = query.filter(Mesa.sector_id == sector_id)
     if estado is not None:

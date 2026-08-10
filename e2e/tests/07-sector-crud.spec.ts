@@ -4,6 +4,7 @@ import {
   createMesa,
   deleteMesa,
   deleteSector,
+  listarMesas,
   listarSectores,
   uniqueSuffix,
   SectorResponse,
@@ -94,7 +95,7 @@ test.describe("con un sector y una mesa", () => {
     await deleteSector(request, token, sector.id).catch(() => {});
   });
 
-  test("7.3 intentar eliminar un sector CON mesas muestra el error del backend sin romper la UI", async ({
+  test("7.3 eliminar un sector CON mesas lo desactiva sin romper la UI (soft-delete, ya no bloquea por mesas asociadas)", async ({
     page,
     token,
     request,
@@ -104,23 +105,21 @@ test.describe("con un sector y una mesa", () => {
 
     const sectorBlock = getSectorBlock(page, sector.nombre);
 
-    const dialogs: { type: string; message: string }[] = [];
-    page.on("dialog", async (dialog) => {
-      dialogs.push({ type: dialog.type(), message: dialog.message() });
-      await dialog.accept();
-    });
-
+    page.once("dialog", (dialog) => dialog.accept());
     await getEliminarSectorButton(sectorBlock).click();
 
-    await expect.poll(() => dialogs.length).toBeGreaterThanOrEqual(2);
-    expect(dialogs[0].type).toBe("confirm");
-    expect(dialogs[1].type).toBe("alert");
-    expect(dialogs[1].message).toContain("No se puede eliminar un sector con mesas asociadas");
-
-    // La UI no se rompe: el sector y su mesa siguen ahí.
-    await expect(sectorBlock).toBeVisible();
+    // El botón desactiva (PATCH activo=false) en vez de un DELETE físico, así que ya no hay
+    // restricción por mesas asociadas: el sector desaparece del canvas sin recargar.
+    await expect(getSectorBlock(page, sector.nombre)).toHaveCount(0);
 
     const sectoresBackend = await listarSectores(request, token);
-    expect(sectoresBackend.find((s) => s.id === sector.id)).toBeTruthy();
+    expect(sectoresBackend.find((s) => s.id === sector.id)).toBeUndefined();
+
+    const sectoresInactivos = await listarSectores(request, token, { incluir_inactivos: true });
+    expect(sectoresInactivos.find((s) => s.id === sector.id)?.activo).toBe(false);
+
+    // La mesa no se pierde: sigue activa, solo su sector quedó desactivado.
+    const mesasBackend = await listarMesas(request, token, { sector_id: sector.id });
+    expect(mesasBackend.find((m) => m.id === mesa.id)?.activa).toBe(true);
   });
 });

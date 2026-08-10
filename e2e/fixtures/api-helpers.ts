@@ -95,6 +95,20 @@ export async function deleteSector(request: APIRequestContext, token: string, se
   await request.delete(`${BACKEND_URL}/sectores/${sectorId}`, { headers: authHeaders(token) });
 }
 
+/** Soft-delete: desactiva el sector (activo=false) en vez de borrarlo físicamente. */
+export async function desactivarSector(
+  request: APIRequestContext,
+  token: string,
+  sectorId: number
+): Promise<SectorResponse> {
+  const res = await request.patch(`${BACKEND_URL}/sectores/${sectorId}`, {
+    headers: authHeaders(token),
+    data: { activo: false },
+  });
+  if (!res.ok()) throw new Error(`No se pudo desactivar sector: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
 export async function createMesa(
   request: APIRequestContext,
   token: string,
@@ -141,18 +155,36 @@ export async function deleteMesa(request: APIRequestContext, token: string, mesa
   await request.delete(`${BACKEND_URL}/mesas/${mesaId}`, { headers: authHeaders(token) });
 }
 
+/** Soft-delete: desactiva la mesa (activa=false) en vez de borrarla físicamente. */
+export async function desactivarMesa(
+  request: APIRequestContext,
+  token: string,
+  mesaId: number
+): Promise<MesaResponse> {
+  const res = await request.patch(`${BACKEND_URL}/mesas/${mesaId}`, {
+    headers: authHeaders(token),
+    data: { activa: false },
+  });
+  if (!res.ok()) throw new Error(`No se pudo desactivar mesa: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
 export async function listarMesas(
   request: APIRequestContext,
   token: string,
-  params?: { sector_id?: number }
+  params?: { sector_id?: number; incluir_inactivos?: boolean }
 ): Promise<MesaResponse[]> {
   const res = await request.get(`${BACKEND_URL}/mesas/`, { headers: authHeaders(token), params });
   if (!res.ok()) throw new Error(`No se pudo listar mesas: ${res.status()} ${await res.text()}`);
   return res.json();
 }
 
-export async function listarSectores(request: APIRequestContext, token: string): Promise<SectorResponse[]> {
-  const res = await request.get(`${BACKEND_URL}/sectores/`, { headers: authHeaders(token) });
+export async function listarSectores(
+  request: APIRequestContext,
+  token: string,
+  params?: { incluir_inactivos?: boolean }
+): Promise<SectorResponse[]> {
+  const res = await request.get(`${BACKEND_URL}/sectores/`, { headers: authHeaders(token), params });
   if (!res.ok()) throw new Error(`No se pudo listar sectores: ${res.status()} ${await res.text()}`);
   return res.json();
 }
@@ -160,4 +192,21 @@ export async function listarSectores(request: APIRequestContext, token: string):
 /** Sufijo único por corrida/worker para no colisionar nombres/números contra datos reales o entre workers. */
 export function uniqueSuffix(workerIndex: number): string {
   return `${Date.now()}_${workerIndex}`;
+}
+
+export interface HistorialResponse {
+  id: number;
+  mesa_id: number;
+  estado: string;
+  created_at: string;
+}
+
+export async function listarHistorial(
+  request: APIRequestContext,
+  token: string,
+  params?: { mesa_id?: number; fecha_inicio?: string; fecha_fin?: string; orden?: "asc" | "desc" }
+): Promise<HistorialResponse[]> {
+  const res = await request.get(`${BACKEND_URL}/historial/`, { headers: authHeaders(token), params });
+  if (!res.ok()) throw new Error(`No se pudo listar historial: ${res.status()} ${await res.text()}`);
+  return res.json();
 }

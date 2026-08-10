@@ -1,5 +1,7 @@
-# Punto de entrada principal de la API. Inicializa FastAPI, 
+# Punto de entrada principal de la API. Inicializa FastAPI,
 # conecta la base de datos y registra las rutas del sistema.
+
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,9 +16,17 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="TableTracker API")
 
+# Lista explícita de orígenes permitidos, vía env var (CORS_ORIGINS, coma-separado) para poder
+# diferenciar desarrollo/producción sin tocar código. allow_credentials=True exige orígenes
+# explícitos: la spec de CORS prohíbe combinarlo con "*".
+_cors_origins_default = "http://localhost:5173,http://localhost:5174,http://localhost:5175"
+CORS_ORIGINS = [
+    origin.strip() for origin in os.getenv("CORS_ORIGINS", _cors_origins_default).split(",") if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

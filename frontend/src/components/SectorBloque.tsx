@@ -161,7 +161,7 @@ export default function SectorBloque({
     if (!window.confirm(`¿Eliminar el sector "${sector.nombre}"?`)) return
     setEliminando(true)
     try {
-      await sectoresApi.eliminar(sector.id)
+      await sectoresApi.actualizar(sector.id, { activo: false })
       onSectorEliminado(sector.id)
     } catch (err) {
       const axiosErr = err as AxiosError<{ detail?: string }>

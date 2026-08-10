@@ -4,8 +4,8 @@ import {
   createMesa,
   actualizarSector,
   cambiarPosicionMesa,
-  deleteMesa,
-  deleteSector,
+  desactivarMesa,
+  desactivarSector,
   uniqueSuffix,
   SectorResponse,
   MesaResponse,
@@ -48,8 +48,11 @@ test.describe("con un salón sembrado (1 sector, 4 mesas: una por estado)", () =
   });
 
   test.afterEach(async ({ request, token }) => {
-    for (const mesa of mesas) await deleteMesa(request, token, mesa.id);
-    await deleteSector(request, token, sector.id);
+    // Soft-delete: algunos tests cambian el estado de una mesa, lo que genera historial y
+    // bloquearía un DELETE físico (409, FK con historial_estados). Desactivar no tiene esa
+    // restricción y el sector/mesa desactivados dejan de aparecer en el canvas (activo=false).
+    for (const mesa of mesas) await desactivarMesa(request, token, mesa.id);
+    await desactivarSector(request, token, sector.id);
   });
 
   test("4.1 carga inicial: sector y mesas se renderizan en su posición guardada", async ({ page, token }) => {

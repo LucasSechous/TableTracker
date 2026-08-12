@@ -29,6 +29,9 @@ runs/
 *.avi
 *.mp4
 
+# Resultados de scripts/test_condiciones.py (pruebas locales, T26-103)
+scripts/resultados/
+
 # Logs
 *.log
 

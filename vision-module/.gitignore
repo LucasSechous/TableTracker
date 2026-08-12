@@ -35,3 +35,6 @@ runs/
 # Cache de tests/tipos
 .pytest_cache/
 .mypy_cache/
+
+# Resultados de pruebas de scripts
+scripts/resultados/

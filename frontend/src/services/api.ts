@@ -76,7 +76,7 @@ export const mesasApi = {
 };
 
 export const historialApi = {
-  listar: (params?: { mesa_id?: number; fecha_inicio?: string; fecha_fin?: string }) =>
+  listar: (params?: { mesa_id?: number; fecha_inicio?: string; fecha_fin?: string; orden?: "asc" | "desc" }) =>
     api.get<HistorialEstado[]>("/historial/", { params }),
 };
 

@@ -4,7 +4,8 @@ from app.database import get_db
 from app.models.sector import Sector
 from app.models.mesa import Mesa
 from app.schemas.sector import SectorCreate, SectorUpdate, SectorResponse
-from app.routers.auth import get_usuario_actual
+from app.models.user import User
+from app.routers.auth import get_usuario_actual, requiere_rol, ROL_ADMIN
 
 router = APIRouter(dependencies=[Depends(get_usuario_actual)])
 
@@ -26,7 +27,11 @@ def obtener_sector(sector_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/", response_model=SectorResponse, status_code=status.HTTP_201_CREATED)
-def crear_sector(datos: SectorCreate, db: Session = Depends(get_db)):
+def crear_sector(
+    datos: SectorCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(requiere_rol("encargado")),
+):
     if db.query(Sector).filter(Sector.nombre == datos.nombre).first():
         raise HTTPException(status_code=400, detail="Ya existe un sector con ese nombre")
     sector = Sector(**datos.model_dump())
@@ -37,7 +42,12 @@ def crear_sector(datos: SectorCreate, db: Session = Depends(get_db)):
 
 
 @router.patch("/{sector_id}", response_model=SectorResponse)
-def actualizar_sector(sector_id: int, datos: SectorUpdate, db: Session = Depends(get_db)):
+def actualizar_sector(
+    sector_id: int,
+    datos: SectorUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(requiere_rol("encargado")),
+):
     sector = db.query(Sector).filter(Sector.id == sector_id).first()
     if not sector:
         raise HTTPException(status_code=404, detail="Sector no encontrado")
@@ -49,7 +59,11 @@ def actualizar_sector(sector_id: int, datos: SectorUpdate, db: Session = Depends
 
 
 @router.delete("/{sector_id}", status_code=status.HTTP_204_NO_CONTENT)
-def eliminar_sector(sector_id: int, db: Session = Depends(get_db)):
+def eliminar_sector(
+    sector_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(requiere_rol(ROL_ADMIN)),
+):
     sector = db.query(Sector).filter(Sector.id == sector_id).first()
     if not sector:
         raise HTTPException(status_code=404, detail="Sector no encontrado")

@@ -38,6 +38,8 @@ un `String` libre) — ver "Fuera de alcance" más abajo.
 | PATCH | `/mesas/{id}/posicion` | `admin`, `encargado` | Cualquier rol autenticado |
 | DELETE | `/mesas/{id}` | `admin` | Cualquier rol autenticado |
 | GET | `/historial/` | Cualquier rol autenticado | Sin cambios |
+| * | `/camaras/*` | `admin` | No existía (RF-30, RF-31) |
+| * | `/roi-mesa/*` | `admin` | No existía (RF-12) |
 
 ## Criterios usados donde el ticket no daba un ejemplo directo
 
@@ -55,6 +57,11 @@ confirmado con el reporter del ticket ante la falta de acceso al Capítulo 1 (an
   criterio de aceptación para exigir 403), así que queda abierto a cualquier rol autenticado.
 - **Borrados (`DELETE`)**: solo `admin` en todos los casos, por ser la operación más destructiva
   de cada recurso.
+- **Cámaras y ROI**: `admin` en **todos** los verbos, incluidos los `GET`. El criterio de
+  aceptación de T26-116 nombra "configuración de cámaras" como ejemplo explícito de acceso
+  exclusivo de admin, y a diferencia de mesas y sectores acá el listado tampoco es inocuo: expone
+  la topología de red del local (host, puerto y usuario de cada cámara). Ver
+  [camaras-roi.md](camaras-roi.md).
 
 ## Bootstrap del primer admin
 

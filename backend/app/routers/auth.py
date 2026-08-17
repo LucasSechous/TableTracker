@@ -90,6 +90,12 @@ def get_usuario_actual(token: str = Depends(oauth2_scheme), db: Session = Depend
     return usuario
 
 
+def get_admin_actual(usuario: User = Depends(get_usuario_actual)) -> User:
+    if usuario.rol != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requiere rol admin")
+    return usuario
+
+
 @router.post("/register", response_model=UserResponse, status_code=201)
 def register(datos: UserCreate, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == datos.email).first():

@@ -8,7 +8,7 @@ import type { Sector, Mesa, Modo } from "../types"
 import MesaVisual from "./MesaVisual"
 import ModalEditarSector from "./ModalEditarSector"
 import { sectoresApi } from "../services/api"
-import { CANVAS_ANCHO, CANVAS_ALTO, DIAMETRO_MESA } from "../constants"
+import { DIAMETRO_MESA } from "../constants"
 
 // Tamaño mínimo de un sector sin mesas, para evitar que el resize lo colapse a 0.
 const TAMANO_MINIMO_SECTOR = 80
@@ -16,6 +16,8 @@ const TAMANO_MINIMO_SECTOR = 80
 interface SectorBloqueProps {
   sector: Sector
   modo: Modo
+  anchoSalon: number
+  altoSalon: number
   onMesaEstadoChange: (mesaId: number, nuevoEstado: string) => void
   onMesaPosicionChange: (mesaId: number, pos_x: number, pos_y: number) => void
   onSectorDrag: (sectorId: number, pos_x: number, pos_y: number) => void
@@ -28,6 +30,8 @@ interface SectorBloqueProps {
 export default function SectorBloque({
   sector,
   modo,
+  anchoSalon,
+  altoSalon,
   onMesaEstadoChange,
   onMesaPosicionChange,
   onSectorDrag,
@@ -63,8 +67,8 @@ export default function SectorBloque({
     // Piso en 0 y techo en (dimensión del canvas - dimensión del sector), para que el
     // bloque no pueda arrastrarse fuera de ninguno de los 4 bordes del canvas. El
     // Math.max(0, ...) externo cubre el caso límite de un sector más grande que el canvas.
-    const clampX = (valor: number) => Math.min(Math.max(0, valor), Math.max(0, CANVAS_ANCHO - sector.ancho))
-    const clampY = (valor: number) => Math.min(Math.max(0, valor), Math.max(0, CANVAS_ALTO - sector.alto))
+    const clampX = (valor: number) => Math.min(Math.max(0, valor), Math.max(0, anchoSalon - sector.ancho))
+    const clampY = (valor: number) => Math.min(Math.max(0, valor), Math.max(0, altoSalon - sector.alto))
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging.current || !dragStart.current) return
@@ -93,7 +97,7 @@ export default function SectorBloque({
       window.removeEventListener("mousemove", handleMouseMove)
       window.removeEventListener("mouseup", handleMouseUp)
     }
-  }, [sector.id, sector.ancho, sector.alto, onSectorDrag])
+  }, [sector.id, sector.ancho, sector.alto, anchoSalon, altoSalon, onSectorDrag])
 
   useEffect(() => {
     // El mínimo es el espacio que ocupan las mesas activas (para no dejarlas fuera del
@@ -107,8 +111,8 @@ export default function SectorBloque({
     const minAlto = mesasActivas.length
       ? Math.max(...mesasActivas.map((m) => m.pos_y + DIAMETRO_MESA))
       : TAMANO_MINIMO_SECTOR
-    const maxAncho = Math.max(minAncho, CANVAS_ANCHO - sector.pos_x)
-    const maxAlto = Math.max(minAlto, CANVAS_ALTO - sector.pos_y)
+    const maxAncho = Math.max(minAncho, anchoSalon - sector.pos_x)
+    const maxAlto = Math.max(minAlto, altoSalon - sector.pos_y)
 
     const clampAncho = (valor: number) => Math.min(Math.max(minAncho, valor), maxAncho)
     const clampAlto = (valor: number) => Math.min(Math.max(minAlto, valor), maxAlto)
@@ -140,7 +144,7 @@ export default function SectorBloque({
       window.removeEventListener("mousemove", handleMouseMove)
       window.removeEventListener("mouseup", handleMouseUp)
     }
-  }, [sector.id, sector.pos_x, sector.pos_y, sector.mesas, onSectorResize])
+  }, [sector.id, sector.pos_x, sector.pos_y, sector.mesas, anchoSalon, altoSalon, onSectorResize])
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (modo !== "edicion") return

@@ -25,6 +25,12 @@ export interface Sector {
 
 export type Modo = "monitoreo" | "edicion"
 
+export interface Configuracion {
+  ancho_salon: number
+  alto_salon: number
+  nombre_establecimiento?: string | null
+}
+
 export interface HistorialEstado {
   id: number
   mesa_id: number

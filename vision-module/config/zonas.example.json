@@ -1,5 +1,5 @@
 {
-  "descripcion": "Mapa de zonas: asocia cada mesa del backend con un polígono del frame. Copiar como config/zonas.json y ajustar a la cámara del local.",
+  "descripcion": "Formato de los polígonos de ROI, como referencia. Los ROI reales viven en el backend (tabla roi_mesa, GET /roi-mesa/) y el módulo los lee de ahí: este archivo ya no se carga, queda solo para documentar la forma de 'coordenadas'.",
   "resolucion": [1280, 720],
   "zonas": [
     {

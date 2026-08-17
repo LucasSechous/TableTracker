@@ -3,9 +3,9 @@
 
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { authApi, mesasApi, sectoresApi } from "../services/api"
+import { authApi, mesasApi, sectoresApi, configuracionApi } from "../services/api"
 import type { UserResponse } from "../services/api"
-import type { Mesa, Sector, Modo } from "../types"
+import type { Mesa, Sector, Modo, Configuracion } from "../types"
 import SalonCanvas from "../components/SalonCanvas"
 import ModalAltaSector from "../components/ModalAltaSector"
 import ModalAltaMesa from "../components/ModalAltaMesa"
@@ -13,6 +13,7 @@ import ModalAltaMesa from "../components/ModalAltaMesa"
 export default function DashboardPage() {
   const [user, setUser] = useState<UserResponse | null>(null)
   const [sectores, setSectores] = useState<Sector[]>([])
+  const [configuracion, setConfiguracion] = useState<Configuracion | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [modo, setModo] = useState<Modo>("monitoreo")
@@ -26,8 +27,8 @@ export default function DashboardPage() {
   useEffect(() => {
     setLoading(true)
     setError(null)
-    Promise.all([mesasApi.listar(), sectoresApi.listar()])
-      .then(([mesasRes, sectoresRes]) => {
+    Promise.all([mesasApi.listar(), sectoresApi.listar(), configuracionApi.obtener()])
+      .then(([mesasRes, sectoresRes, configuracionRes]) => {
         const mesas: Mesa[] = mesasRes.data
         const rawSectores: Sector[] = sectoresRes.data
         const mesasBySector = new Map<number, Mesa[]>()
@@ -39,6 +40,7 @@ export default function DashboardPage() {
         setSectores(
           rawSectores.map((s) => ({ ...s, mesas: mesasBySector.get(s.id) ?? [] }))
         )
+        setConfiguracion(configuracionRes.data)
       })
       .catch((err: unknown) => {
         const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -122,6 +124,17 @@ export default function DashboardPage() {
         )
       )
       alert(extraerDetalle(err, "Error al redimensionar el sector"))
+    })
+  }
+
+  function handleSalonResize(ancho_salon: number, alto_salon: number) {
+    const anterior = configuracion
+
+    setConfiguracion((prev) => (prev ? { ...prev, ancho_salon, alto_salon } : prev))
+
+    configuracionApi.actualizar({ ancho_salon, alto_salon }).catch((err) => {
+      setConfiguracion(anterior)
+      alert(extraerDetalle(err, "Error al redimensionar el salón"))
     })
   }
 
@@ -281,10 +294,13 @@ export default function DashboardPage() {
             {error}
           </p>
         )}
-        {!loading && !error && (
+        {!loading && !error && configuracion && (
           <SalonCanvas
             sectores={sectores}
             modo={modo}
+            anchoSalon={configuracion.ancho_salon}
+            altoSalon={configuracion.alto_salon}
+            esAdmin={user?.rol === "admin"}
             onMesaEstadoChange={handleMesaEstadoChange}
             onMesaPosicionChange={handleMesaPosicionChange}
             onSectorPosicionChange={handleSectorPosicionChange}
@@ -292,6 +308,7 @@ export default function DashboardPage() {
             onSectorActualizado={handleSectorActualizado}
             onSectorEliminado={handleSectorEliminado}
             onMesaActualizada={handleMesaActualizada}
+            onSalonResize={handleSalonResize}
           />
         )}
       </main>

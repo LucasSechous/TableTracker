@@ -38,13 +38,26 @@ export interface MesaResponse {
   pos_y: number;
 }
 
-/** Registra el usuario fijo de e2e si todavía no existe (idempotente). */
+/**
+ * Verifica que el usuario fijo de e2e ya exista y pueda loguearse.
+ *
+ * Antes se autoregistraba vía POST /auth/register, pero ese endpoint ahora exige
+ * rol admin (T26-116: RF-02, restricciones por rol), así que ya no hay forma de
+ * autoregistrarse sin token. El usuario de test debe crearse una única vez con el
+ * script de bootstrap: `python -m app.seed_admin` (ver backend/app/seed_admin.py y
+ * e2e/README.md).
+ */
 export async function ensureTestUser(request: APIRequestContext): Promise<void> {
-  const res = await request.post(`${BACKEND_URL}/auth/register`, { data: TEST_USER });
+  const res = await request.post(`${BACKEND_URL}/auth/login`, {
+    data: { email: TEST_USER.email, password: TEST_USER.password },
+  });
   if (res.ok()) return;
-  const body = await res.json().catch(() => ({}));
-  if (res.status() === 400 && String(body.detail ?? "").includes("ya está registrado")) return;
-  throw new Error(`No se pudo asegurar el usuario de test: ${res.status()} ${JSON.stringify(body)}`);
+  throw new Error(
+    `El usuario de test (${TEST_USER.email}) no existe o las credenciales no coinciden ` +
+      `(${res.status()}). POST /auth/register ya no permite autoregistro; corré una vez ` +
+      `"ADMIN_EMAIL=... ADMIN_PASSWORD=... python -m app.seed_admin" desde backend/ con esas ` +
+      `mismas credenciales (ver e2e/README.md).`
+  );
 }
 
 export async function loginViaApi(

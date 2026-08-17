@@ -23,6 +23,7 @@ export default function HistorialPage() {
   const [mesaId, setMesaId] = useState("")
   const [fechaInicio, setFechaInicio] = useState("")
   const [fechaFin, setFechaFin] = useState("")
+  const [orden, setOrden] = useState<"asc" | "desc">("desc")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
@@ -31,10 +32,12 @@ export default function HistorialPage() {
     mesasApi.listar().then((res) => setMesas(res.data)).catch(() => {})
   }, [])
 
-  function buscar(filtros: { mesaId: string; fechaInicio: string; fechaFin: string }) {
+  function buscar(filtros: { mesaId: string; fechaInicio: string; fechaFin: string; orden: "asc" | "desc" }) {
     setLoading(true)
     setError(null)
-    const params: { mesa_id?: number; fecha_inicio?: string; fecha_fin?: string } = {}
+    const params: { mesa_id?: number; fecha_inicio?: string; fecha_fin?: string; orden: "asc" | "desc" } = {
+      orden: filtros.orden,
+    }
     if (filtros.mesaId) params.mesa_id = Number(filtros.mesaId)
     if (filtros.fechaInicio) params.fecha_inicio = filtros.fechaInicio
     if (filtros.fechaFin) params.fecha_fin = `${filtros.fechaFin}T23:59:59`
@@ -50,18 +53,23 @@ export default function HistorialPage() {
   }
 
   useEffect(() => {
-    buscar({ mesaId: "", fechaInicio: "", fechaFin: "" })
+    buscar({ mesaId: "", fechaInicio: "", fechaFin: "", orden: "desc" })
   }, [])
 
   function handleBuscar() {
-    buscar({ mesaId, fechaInicio, fechaFin })
+    buscar({ mesaId, fechaInicio, fechaFin, orden })
   }
 
   function handleLimpiar() {
     setMesaId("")
     setFechaInicio("")
     setFechaFin("")
-    buscar({ mesaId: "", fechaInicio: "", fechaFin: "" })
+    buscar({ mesaId: "", fechaInicio: "", fechaFin: "", orden })
+  }
+
+  function handleOrdenChange(nuevoOrden: "asc" | "desc") {
+    setOrden(nuevoOrden)
+    buscar({ mesaId, fechaInicio, fechaFin, orden: nuevoOrden })
   }
 
   return (
@@ -144,6 +152,18 @@ export default function HistorialPage() {
               onChange={(e) => setFechaFin(e.target.value)}
               style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc" }}
             />
+          </label>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, color: "#444" }}>
+            Orden
+            <select
+              value={orden}
+              onChange={(e) => handleOrdenChange(e.target.value as "asc" | "desc")}
+              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", minWidth: 160 }}
+            >
+              <option value="desc">Más reciente primero</option>
+              <option value="asc">Más antiguo primero</option>
+            </select>
           </label>
 
           <button

@@ -7,7 +7,8 @@ from app.models.mesa import Mesa, EstadoMesa
 from app.models.sector import Sector
 from app.models.historial import HistorialEstado
 from app.schemas.mesa import MesaCreate, MesaUpdate, MesaResponse, EstadoUpdate, PosicionUpdate
-from app.routers.auth import get_usuario_actual
+from app.models.user import User
+from app.routers.auth import get_usuario_actual, requiere_rol, ROL_ADMIN
 
 router = APIRouter(dependencies=[Depends(get_usuario_actual)])
 
@@ -42,7 +43,11 @@ def obtener_mesa(mesa_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/", response_model=MesaResponse, status_code=status.HTTP_201_CREATED)
-def crear_mesa(datos: MesaCreate, db: Session = Depends(get_db)):
+def crear_mesa(
+    datos: MesaCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(requiere_rol("encargado")),
+):
     if not db.query(Sector).filter(Sector.id == datos.sector_id).first():
         raise HTTPException(status_code=400, detail="El sector indicado no existe")
     mesa = Mesa(**datos.model_dump())
@@ -58,7 +63,12 @@ def crear_mesa(datos: MesaCreate, db: Session = Depends(get_db)):
 
 
 @router.patch("/{mesa_id}", response_model=MesaResponse)
-def actualizar_mesa(mesa_id: int, datos: MesaUpdate, db: Session = Depends(get_db)):
+def actualizar_mesa(
+    mesa_id: int,
+    datos: MesaUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(requiere_rol("encargado")),
+):
     mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
     if not mesa:
         raise HTTPException(status_code=404, detail="Mesa no encontrada")
@@ -77,7 +87,12 @@ def actualizar_mesa(mesa_id: int, datos: MesaUpdate, db: Session = Depends(get_d
 
 
 @router.patch("/{mesa_id}/estado", response_model=MesaResponse)
-def cambiar_estado_mesa(mesa_id: int, datos: EstadoUpdate, db: Session = Depends(get_db)):
+def cambiar_estado_mesa(
+    mesa_id: int,
+    datos: EstadoUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(requiere_rol("encargado", "mozo")),
+):
     mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
     if not mesa:
         raise HTTPException(status_code=404, detail="Mesa no encontrada")
@@ -90,7 +105,11 @@ def cambiar_estado_mesa(mesa_id: int, datos: EstadoUpdate, db: Session = Depends
 
 
 @router.patch("/{mesa_id}/limpieza", response_model=MesaResponse)
-def limpiar_mesa(mesa_id: int, db: Session = Depends(get_db)):
+def limpiar_mesa(
+    mesa_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(requiere_rol("encargado", "limpieza")),
+):
     mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
     if not mesa:
         raise HTTPException(status_code=404, detail="Mesa no encontrada")
@@ -105,7 +124,11 @@ def limpiar_mesa(mesa_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/{mesa_id}/reserva", response_model=MesaResponse)
-def reservar_mesa(mesa_id: int, db: Session = Depends(get_db)):
+def reservar_mesa(
+    mesa_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(requiere_rol("encargado", "recepcion")),
+):
     mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
     if not mesa:
         raise HTTPException(status_code=404, detail="Mesa no encontrada")
@@ -118,7 +141,12 @@ def reservar_mesa(mesa_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/{id}/posicion", response_model=MesaResponse)
-def actualizar_posicion_mesa(id: int, datos: PosicionUpdate, db: Session = Depends(get_db)):
+def actualizar_posicion_mesa(
+    id: int,
+    datos: PosicionUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(requiere_rol("encargado")),
+):
     mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == id).first()
     if not mesa or not mesa.activa:
         raise HTTPException(status_code=404, detail="Mesa no encontrada")
@@ -131,7 +159,11 @@ def actualizar_posicion_mesa(id: int, datos: PosicionUpdate, db: Session = Depen
 
 
 @router.delete("/{mesa_id}", status_code=status.HTTP_204_NO_CONTENT)
-def eliminar_mesa(mesa_id: int, db: Session = Depends(get_db)):
+def eliminar_mesa(
+    mesa_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(requiere_rol(ROL_ADMIN)),
+):
     mesa = db.query(Mesa).filter(Mesa.id == mesa_id).first()
     if not mesa:
         raise HTTPException(status_code=404, detail="Mesa no encontrada")

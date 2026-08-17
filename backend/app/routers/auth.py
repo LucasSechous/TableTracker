@@ -90,14 +90,33 @@ def get_usuario_actual(token: str = Depends(oauth2_scheme), db: Session = Depend
     return usuario
 
 
-def get_admin_actual(usuario: User = Depends(get_usuario_actual)) -> User:
-    if usuario.rol != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requiere rol admin")
-    return usuario
+# Rol con acceso total: no hace falta nombrarlo en cada requiere_rol(...), cualquier
+# endpoint protegido por rol acepta admin implícitamente (ver docs/roles-permisos.md).
+ROL_ADMIN = "admin"
+
+
+def requiere_rol(*roles_permitidos: str):
+    """Dependencia adicional sobre get_usuario_actual: exige que el usuario autenticado
+    tenga uno de los roles indicados (admin siempre pasa). Devuelve 403, no 401, porque
+    en este punto el token ya es válido — lo que falta es autorización, no autenticación."""
+
+    def dependencia(usuario: User = Depends(get_usuario_actual)) -> User:
+        if usuario.rol != ROL_ADMIN and usuario.rol not in roles_permitidos:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tu rol no tiene permiso para realizar esta acción",
+            )
+        return usuario
+
+    return dependencia
 
 
 @router.post("/register", response_model=UserResponse, status_code=201)
-def register(datos: UserCreate, db: Session = Depends(get_db)):
+def register(
+    datos: UserCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(requiere_rol(ROL_ADMIN)),
+):
     if db.query(User).filter(User.email == datos.email).first():
         raise HTTPException(status_code=400, detail="El email ya está registrado")
     nuevo_usuario = User(

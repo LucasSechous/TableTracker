@@ -19,8 +19,17 @@ cp .env.example .env   # completar E2E_TEST_EMAIL / E2E_TEST_PASSWORD
 ```
 
 `.env` no se commitea (contiene la contraseña del usuario de test contra el backend real).
-Si es la primera vez que se corre la suite con esas credenciales, el usuario se registra
-solo; si ya existe, simplemente hace login con lo que pusiste en `.env`.
+
+`POST /auth/register` ahora exige rol admin (T26-116), así que el usuario de test ya no se
+autoregistra solo. Antes de correr la suite por primera vez con esas credenciales, hay que
+crearlo una única vez con el script de bootstrap (desde `backend/`, con el venv activado):
+
+```bash
+ADMIN_EMAIL=<mismo valor que E2E_TEST_EMAIL> ADMIN_PASSWORD=<mismo valor que E2E_TEST_PASSWORD> python -m app.seed_admin
+```
+
+Es idempotente (no hace nada si el email ya existe), así que correrlo de más no rompe nada.
+Con el usuario ya creado, las corridas siguientes solo hacen login con lo que pusiste en `.env`.
 
 ## Ejecución
 
@@ -36,9 +45,9 @@ Si ya los tenés corriendo manualmente, los reutiliza en vez de levantar otra in
 
 ## Datos de prueba
 
-- Se registra una única vez (idempotente) el usuario definido en `e2e/.env` vía `POST /auth/register`.
-  No hay endpoint para borrar usuarios, así que ese usuario queda permanentemente en la base —
-  es intencional, para no crear uno nuevo en cada corrida.
+- El usuario definido en `e2e/.env` se crea una única vez con `python -m app.seed_admin` (ver
+  más arriba). No hay endpoint para borrar usuarios, así que ese usuario queda permanentemente
+  en la base — es intencional, para no crear uno nuevo en cada corrida.
 - Cada test crea sus propios sectores/mesas con nombres únicos (sufijo de timestamp) vía la API
   y los borra en su `afterEach`. No se toca ni se borra ningún dato preexistente.
 

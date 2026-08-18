@@ -12,7 +12,7 @@
 
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
@@ -29,7 +29,12 @@ from collections import defaultdict
 load_dotenv()
 
 router = APIRouter()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+# HTTPBearer, no OAuth2PasswordBearer: nunca implementamos el flujo OAuth2 real (/auth/login
+# espera JSON, no el form-urlencoded que ese esquema le pide al botón "Authorize" de Swagger),
+# así que declarar OAuth2PasswordBearer solo hacía que ese botón mandara un pedido que /auth/login
+# iba a rechazar con 422 (T26-139). HTTPBearer le pide a Swagger un campo de texto simple para
+# pegar un token ya obtenido — no intenta loguear desde el dialog.
+bearer_scheme = HTTPBearer()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
@@ -71,12 +76,15 @@ def crear_token(data: dict):
     datos.update({"exp": expiracion})
     return jwt.encode(datos, SECRET_KEY, algorithm=ALGORITHM)
 
-def get_usuario_actual(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def get_usuario_actual(
+    credenciales: HTTPAuthorizationCredentials = Depends(bearer_scheme), db: Session = Depends(get_db)
+):
     credenciales_invalidas = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Token inválido o expirado",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    token = credenciales.credentials
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")

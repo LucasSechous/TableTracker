@@ -16,6 +16,10 @@ env/
 # Logs
 *.log
 
+# Salida de scripts/probar_snapshot.py: frames reales de una cámara del local
+scripts/snapshot.jpg
+scripts/*.jpg
+
 # Cache de tests/tipos
 .pytest_cache/
 .mypy_cache/

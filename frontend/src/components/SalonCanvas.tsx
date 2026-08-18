@@ -5,9 +5,18 @@
 import { useState, useRef, useEffect } from "react"
 import type { Sector, Mesa, Modo } from "../types"
 import SectorBloque from "./SectorBloque"
+import { COLOR_POR_ESTADO } from "../constants"
 
 // Tamaño mínimo del salón sin sectores, para evitar que el resize lo colapse a 0.
 const TAMANO_MINIMO_SALON = 200
+
+// Etiquetas legibles de cada estado para la leyenda de colores.
+const ETIQUETA_POR_ESTADO: Record<string, string> = {
+  libre: "Libre",
+  ocupada: "Ocupada",
+  pendiente_limpieza: "Pendiente de limpieza",
+  reservada: "Reservada",
+}
 
 interface Props {
   sectores: Sector[]
@@ -22,6 +31,7 @@ interface Props {
   onSectorActualizado: (sector: Sector) => void
   onSectorEliminado: (sectorId: number) => void
   onMesaActualizada: (mesa: Mesa) => void
+  onMesaEliminada: (mesaId: number) => void
   onSalonResize: (ancho: number, alto: number) => void
 }
 
@@ -38,6 +48,7 @@ export default function SalonCanvas({
   onSectorActualizado,
   onSectorEliminado,
   onMesaActualizada,
+  onMesaEliminada,
   onSalonResize,
 }: Props) {
   const puedeRedimensionar = modo === "edicion" && esAdmin
@@ -105,51 +116,78 @@ export default function SalonCanvas({
   }
 
   return (
-    <div
-      style={{
-        position: "relative",
-        width: localSize.ancho,
-        height: localSize.alto,
-        backgroundColor: "#f0f0f0",
-        border: "2px solid #ccc",
-        borderRadius: 8,
-        overflow: "hidden",
-      }}
-    >
-      {sectores.filter((sector) => sector.activo).map((sector) => (
-        <SectorBloque
-          key={sector.id}
-          sector={sector}
-          modo={modo}
-          anchoSalon={localSize.ancho}
-          altoSalon={localSize.alto}
-          onMesaEstadoChange={onMesaEstadoChange}
-          onMesaPosicionChange={onMesaPosicionChange}
-          onSectorDrag={onSectorPosicionChange}
-          onSectorResize={onSectorResize}
-          onSectorActualizado={onSectorActualizado}
-          onSectorEliminado={onSectorEliminado}
-          onMesaActualizada={onMesaActualizada}
-        />
-      ))}
+    <div>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 16,
+          marginBottom: 8,
+        }}
+      >
+        {Object.entries(COLOR_POR_ESTADO).map(([estado, color]) => (
+          <div key={estado} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: "50%",
+                backgroundColor: color,
+                display: "inline-block",
+              }}
+            />
+            <span style={{ fontSize: 12, color: "#555" }}>{ETIQUETA_POR_ESTADO[estado] ?? estado}</span>
+          </div>
+        ))}
+      </div>
 
-      {puedeRedimensionar && (
-        <div
-          onMouseDown={handleResizeMouseDown}
-          title="Redimensionar salón"
-          style={{
-            position: "absolute",
-            right: 0,
-            bottom: 0,
-            width: 14,
-            height: 14,
-            cursor: "nwse-resize",
-            backgroundColor: "#1976d2",
-            borderTopLeftRadius: 4,
-            zIndex: 4,
-          }}
-        />
-      )}
+      <div
+        style={{
+          position: "relative",
+          width: localSize.ancho,
+          height: localSize.alto,
+          backgroundColor: "#f0f0f0",
+          border: "2px solid #ccc",
+          borderRadius: 8,
+          overflow: "hidden",
+        }}
+      >
+        {sectores.filter((sector) => sector.activo).map((sector) => (
+          <SectorBloque
+            key={sector.id}
+            sector={sector}
+            modo={modo}
+            anchoSalon={localSize.ancho}
+            altoSalon={localSize.alto}
+            onMesaEstadoChange={onMesaEstadoChange}
+            onMesaPosicionChange={onMesaPosicionChange}
+            onSectorDrag={onSectorPosicionChange}
+            onSectorResize={onSectorResize}
+            onSectorActualizado={onSectorActualizado}
+            onSectorEliminado={onSectorEliminado}
+            onMesaActualizada={onMesaActualizada}
+            onMesaEliminada={onMesaEliminada}
+          />
+        ))}
+
+        {puedeRedimensionar && (
+          <div
+            onMouseDown={handleResizeMouseDown}
+            title="Redimensionar salón"
+            style={{
+              position: "absolute",
+              right: 0,
+              bottom: 0,
+              width: 14,
+              height: 14,
+              cursor: "nwse-resize",
+              backgroundColor: "#1976d2",
+              borderTopLeftRadius: 4,
+              zIndex: 4,
+            }}
+          />
+        )}
+      </div>
     </div>
   )
 }

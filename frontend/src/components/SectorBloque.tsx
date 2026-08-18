@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import type { AxiosError } from "axios"
+import { Pencil, Trash2 } from "lucide-react"
 import type { Sector, Mesa, Modo } from "../types"
 import MesaVisual from "./MesaVisual"
 import ModalEditarSector from "./ModalEditarSector"
@@ -25,6 +26,7 @@ interface SectorBloqueProps {
   onSectorActualizado: (sector: Sector) => void
   onSectorEliminado: (sectorId: number) => void
   onMesaActualizada: (mesa: Mesa) => void
+  onMesaEliminada: (mesaId: number) => void
 }
 
 export default function SectorBloque({
@@ -39,6 +41,7 @@ export default function SectorBloque({
   onSectorActualizado,
   onSectorEliminado,
   onMesaActualizada,
+  onMesaEliminada,
 }: SectorBloqueProps) {
   const [modalEditarAbierto, setModalEditarAbierto] = useState(false)
   const [eliminando, setEliminando] = useState(false)
@@ -217,15 +220,16 @@ export default function SectorBloque({
                 width: 20,
                 height: 20,
                 padding: 0,
-                lineHeight: 1,
-                fontSize: 11,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 border: "1px solid #ccc",
                 borderRadius: 4,
                 backgroundColor: "#fff",
                 cursor: "pointer",
               }}
             >
-              ✎
+              <Pencil size={12} />
             </button>
             <button
               onMouseDown={(e) => e.stopPropagation()}
@@ -236,8 +240,9 @@ export default function SectorBloque({
                 width: 20,
                 height: 20,
                 padding: 0,
-                lineHeight: 1,
-                fontSize: 11,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 border: "1px solid #ccc",
                 borderRadius: 4,
                 backgroundColor: "#fff",
@@ -245,7 +250,7 @@ export default function SectorBloque({
                 opacity: eliminando ? 0.6 : 1,
               }}
             >
-              🗑
+              <Trash2 size={12} />
             </button>
           </div>
         )}
@@ -262,6 +267,7 @@ export default function SectorBloque({
               onEstadoChange={onMesaEstadoChange}
               onPosicionChange={onMesaPosicionChange}
               onMesaActualizada={onMesaActualizada}
+              onMesaEliminada={onMesaEliminada}
             />
           ))}
 

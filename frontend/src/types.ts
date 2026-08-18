@@ -37,3 +37,29 @@ export interface HistorialEstado {
   estado: string
   created_at: string
 }
+
+export interface Camara {
+  id: number
+  nombre: string
+  sector_id: number
+  sector: { id: number; nombre: string }
+  // Enmascarada por la API (rtsp://usuario:***@host:puerto/ruta): nunca trae la contraseña.
+  rtsp_url: string
+  tiene_credenciales: boolean
+  activa: boolean
+  created_at: string
+}
+
+// [x, y] en píxeles reales del frame devuelto por GET /camaras/{id}/snapshot.
+export type PuntoRoi = [number, number]
+
+export interface RoiMesa {
+  id: number
+  mesa_id: number
+  mesa_numero: number | null
+  camara_id: number
+  camara_nombre: string | null
+  coordenadas: PuntoRoi[]
+  activa: boolean
+  created_at: string
+}

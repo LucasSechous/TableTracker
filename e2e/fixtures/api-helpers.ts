@@ -207,6 +207,49 @@ export function uniqueSuffix(workerIndex: number): string {
   return `${Date.now()}_${workerIndex}`;
 }
 
+export interface CamaraResponse {
+  id: number;
+  nombre: string;
+  sector_id: number;
+  sector: SectorResponse;
+  rtsp_url: string;
+  tiene_credenciales: boolean;
+  activa: boolean;
+}
+
+export async function listarCamaras(
+  request: APIRequestContext,
+  token: string,
+  params?: { sector_id?: number; incluir_inactivas?: boolean }
+): Promise<CamaraResponse[]> {
+  const res = await request.get(`${BACKEND_URL}/camaras/`, { headers: authHeaders(token), params });
+  if (!res.ok()) throw new Error(`No se pudo listar cámaras: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
+export interface RoiMesaResponse {
+  id: number;
+  mesa_id: number;
+  camara_id: number;
+  coordenadas: number[][];
+  activa: boolean;
+}
+
+export async function listarRois(
+  request: APIRequestContext,
+  token: string,
+  params?: { mesa_id?: number; camara_id?: number; incluir_inactivos?: boolean }
+): Promise<RoiMesaResponse[]> {
+  const res = await request.get(`${BACKEND_URL}/roi-mesa/`, { headers: authHeaders(token), params });
+  if (!res.ok()) throw new Error(`No se pudo listar ROI: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
+/** Soft-delete: desactiva el ROI (activa=false) en vez de borrarlo físicamente. */
+export async function desactivarRoi(request: APIRequestContext, token: string, roiId: number): Promise<void> {
+  await request.delete(`${BACKEND_URL}/roi-mesa/${roiId}`, { headers: authHeaders(token) });
+}
+
 export interface HistorialResponse {
   id: number;
   mesa_id: number;

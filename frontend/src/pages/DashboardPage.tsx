@@ -146,6 +146,15 @@ export default function DashboardPage() {
     setSectores((prev) => prev.filter((s) => s.id !== sectorId))
   }
 
+  function handleMesaEliminada(mesaId: number) {
+    setSectores((prev) =>
+      prev.map((s) => ({
+        ...s,
+        mesas: s.mesas?.filter((m) => m.id !== mesaId),
+      }))
+    )
+  }
+
   function handleMesaActualizada(mesaActualizada: Mesa) {
     setSectores((prev) =>
       prev.map((s) => ({
@@ -209,6 +218,23 @@ export default function DashboardPage() {
           >
             Ver historial
           </button>
+          {user?.rol === "admin" && (
+            <button
+              onClick={() => navigate("/calibracion-roi")}
+              style={{
+                padding: "6px 14px",
+                borderRadius: 6,
+                border: "1px solid #1976d2",
+                fontSize: 13,
+                cursor: "pointer",
+                backgroundColor: "#fff",
+                color: "#1976d2",
+                fontWeight: 500,
+              }}
+            >
+              Calibrar ROI
+            </button>
+          )}
           <button
             onClick={() => setModo((m) => (m === "monitoreo" ? "edicion" : "monitoreo"))}
             style={{
@@ -308,6 +334,7 @@ export default function DashboardPage() {
             onSectorActualizado={handleSectorActualizado}
             onSectorEliminado={handleSectorEliminado}
             onMesaActualizada={handleMesaActualizada}
+            onMesaEliminada={handleMesaEliminada}
             onSalonResize={handleSalonResize}
           />
         )}

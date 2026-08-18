@@ -1,17 +1,8 @@
-# Schemas Pydantic para validación y serialización de mesas.
-# MesaResponse incluye el sector anidado (id + nombre).
-
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 from app.models.mesa import EstadoMesa
-
-
-class SectorAnidado(BaseModel):
-    id: int
-    nombre: str
-
-    model_config = {"from_attributes": True}
+from app.schemas.sector import SectorResponse
 
 
 class MesaCreate(BaseModel):
@@ -28,13 +19,24 @@ class MesaUpdate(BaseModel):
     activa: Optional[bool] = None
 
 
+class EstadoUpdate(BaseModel):
+    estado: EstadoMesa
+
+
+class PosicionUpdate(BaseModel):
+    pos_x: int
+    pos_y: int
+
+
 class MesaResponse(BaseModel):
     id: int
     numero: int
     sector_id: int
-    sector: SectorAnidado
+    sector: SectorResponse
     estado: EstadoMesa
     activa: bool
     created_at: datetime
+    pos_x: int = 0
+    pos_y: int = 0
 
     model_config = {"from_attributes": True}

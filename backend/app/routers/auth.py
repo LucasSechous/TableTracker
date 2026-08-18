@@ -11,7 +11,7 @@
 #   El sistema busca el usuario en la base de datos, verifica la contraseña, y si todo está bien devuelve el token.
 
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -22,6 +22,9 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
+import time
+import threading
+from collections import defaultdict
 
 load_dotenv()
 
@@ -31,6 +34,29 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
+
+# Rate limit de /auth/login por IP (sin dependencia externa: alcanza con un dict en memoria
+# para un solo proceso de Uvicorn). Por IP y no por usuario porque también frena probar
+# muchas cuentas distintas desde el mismo origen, no solo una cuenta puntual.
+# Solo se cuentan los intentos FALLIDOS: un login correcto nunca consume el cupo, así que un
+# usuario legítimo (o una suite de tests que loguea seguido) no se ve afectado por este límite.
+LOGIN_RATE_LIMIT = 5
+LOGIN_RATE_WINDOW_SECONDS = 60
+_login_failures: dict[str, list[float]] = defaultdict(list)
+_login_failures_lock = threading.Lock()
+
+
+def _rate_limit_excedido(ip: str) -> bool:
+    ahora = time.monotonic()
+    with _login_failures_lock:
+        fallos = _login_failures[ip]
+        fallos[:] = [t for t in fallos if ahora - t < LOGIN_RATE_WINDOW_SECONDS]
+        return len(fallos) >= LOGIN_RATE_LIMIT
+
+
+def _registrar_intento_fallido(ip: str) -> None:
+    with _login_failures_lock:
+        _login_failures[ip].append(time.monotonic())
 
 
 def verificar_password(password_plano, password_hash):
@@ -64,8 +90,33 @@ def get_usuario_actual(token: str = Depends(oauth2_scheme), db: Session = Depend
     return usuario
 
 
+# Rol con acceso total: no hace falta nombrarlo en cada requiere_rol(...), cualquier
+# endpoint protegido por rol acepta admin implícitamente (ver docs/roles-permisos.md).
+ROL_ADMIN = "admin"
+
+
+def requiere_rol(*roles_permitidos: str):
+    """Dependencia adicional sobre get_usuario_actual: exige que el usuario autenticado
+    tenga uno de los roles indicados (admin siempre pasa). Devuelve 403, no 401, porque
+    en este punto el token ya es válido — lo que falta es autorización, no autenticación."""
+
+    def dependencia(usuario: User = Depends(get_usuario_actual)) -> User:
+        if usuario.rol != ROL_ADMIN and usuario.rol not in roles_permitidos:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tu rol no tiene permiso para realizar esta acción",
+            )
+        return usuario
+
+    return dependencia
+
+
 @router.post("/register", response_model=UserResponse, status_code=201)
-def register(datos: UserCreate, db: Session = Depends(get_db)):
+def register(
+    datos: UserCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(requiere_rol(ROL_ADMIN)),
+):
     if db.query(User).filter(User.email == datos.email).first():
         raise HTTPException(status_code=400, detail="El email ya está registrado")
     nuevo_usuario = User(
@@ -81,9 +132,16 @@ def register(datos: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-def login(datos: UserLogin, db: Session = Depends(get_db)):
+def login(datos: UserLogin, request: Request, db: Session = Depends(get_db)):
+    ip = request.client.host if request.client else "desconocida"
+    if _rate_limit_excedido(ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Demasiados intentos de login. Probá de nuevo en un minuto.",
+        )
     usuario = db.query(User).filter(User.email == datos.email).first()
     if not usuario or not verificar_password(datos.password, usuario.password):
+        _registrar_intento_fallido(ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas",

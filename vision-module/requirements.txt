@@ -1,0 +1,6 @@
+ultralytics==8.4.109
+opencv-python==4.14.0.94
+numpy==2.5.1
+requests==2.34.2
+python-dotenv==1.2.2
+pydantic==2.13.4

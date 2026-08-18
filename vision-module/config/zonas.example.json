@@ -1,0 +1,14 @@
+{
+  "descripcion": "Formato de los polígonos de ROI, como referencia. Los ROI reales viven en el backend (tabla roi_mesa, GET /roi-mesa/) y el módulo los lee de ahí: este archivo ya no se carga, queda solo para documentar la forma de 'coordenadas'.",
+  "resolucion": [1280, 720],
+  "zonas": [
+    {
+      "mesa_id": 1,
+      "poligono": [[120, 300], [340, 300], [340, 520], [120, 520]]
+    },
+    {
+      "mesa_id": 2,
+      "poligono": [[420, 280], [640, 280], [640, 500], [420, 500]]
+    }
+  ]
+}

@@ -73,6 +73,11 @@ export const mesasApi = {
   confirmarLimpieza: (id: number) => api.patch<Mesa>(`/mesas/${id}/limpieza`),
 
   marcarReservada: (id: number) => api.patch<Mesa>(`/mesas/${id}/reserva`),
+
+  // Soft-delete vía el PATCH genérico (mismo endpoint que usa MesaUpdate.activa en el
+  // backend), igual que sectoresApi.actualizar(id, { activo: false }). No usa el
+  // DELETE /mesas/{id} (hard-delete, solo admin, falla con 409 si hay historial).
+  desactivar: (id: number) => api.patch<Mesa>(`/mesas/${id}`, { activa: false }),
 };
 
 export const historialApi = {

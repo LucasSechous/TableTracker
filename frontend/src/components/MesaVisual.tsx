@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import type { AxiosError } from "axios"
+import { Trash2 } from "lucide-react"
 import type { Mesa, Modo } from "../types"
 import { mesasApi } from "../services/api"
 import { DIAMETRO_MESA, COLOR_POR_ESTADO } from "../constants"
@@ -15,6 +16,7 @@ interface MesaVisualProps {
   onEstadoChange: (mesaId: number, nuevoEstado: string) => void
   onPosicionChange: (mesaId: number, pos_x: number, pos_y: number) => void
   onMesaActualizada: (mesa: Mesa) => void
+  onMesaEliminada: (mesaId: number) => void
 }
 
 export default function MesaVisual({
@@ -25,10 +27,12 @@ export default function MesaVisual({
   onEstadoChange,
   onPosicionChange,
   onMesaActualizada,
+  onMesaEliminada,
 }: MesaVisualProps) {
   const [mostrarSelect, setMostrarSelect] = useState(false)
   const [confirmandoLimpieza, setConfirmandoLimpieza] = useState(false)
   const [marcandoReservada, setMarcandoReservada] = useState(false)
+  const [eliminando, setEliminando] = useState(false)
   const [localPos, setLocalPos] = useState({ x: mesa.pos_x, y: mesa.pos_y })
   const isDragging = useRef(false)
   const dragStart = useRef<{ mouseX: number; mouseY: number; mesaX: number; mesaY: number } | null>(null)
@@ -125,6 +129,21 @@ export default function MesaVisual({
     }
   }
 
+  async function handleEliminarClick(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!window.confirm(`¿Eliminar la mesa ${mesa.numero}?`)) return
+    setEliminando(true)
+    try {
+      await mesasApi.desactivar(mesa.id)
+      onMesaEliminada(mesa.id)
+    } catch (err) {
+      const axiosErr = err as AxiosError<{ detail?: string }>
+      alert(axiosErr.response?.data?.detail ?? "No se pudo eliminar la mesa")
+    } finally {
+      setEliminando(false)
+    }
+  }
+
   return (
     <div style={{ position: "absolute", left: localPos.x, top: localPos.y }}>
       <div
@@ -149,6 +168,34 @@ export default function MesaVisual({
       >
         {mesa.numero}
       </div>
+
+      {modo === "edicion" && (
+        <button
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={handleEliminarClick}
+          disabled={eliminando}
+          title="Eliminar mesa"
+          style={{
+            position: "absolute",
+            top: -6,
+            left: 44,
+            width: 20,
+            height: 20,
+            padding: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "1px solid #ccc",
+            borderRadius: 4,
+            backgroundColor: "#fff",
+            cursor: eliminando ? "default" : "pointer",
+            opacity: eliminando ? 0.6 : 1,
+            zIndex: 3,
+          }}
+        >
+          <Trash2 size={12} />
+        </button>
+      )}
 
       {modo === "monitoreo" && mesa.estado === "pendiente_limpieza" && (
         <button

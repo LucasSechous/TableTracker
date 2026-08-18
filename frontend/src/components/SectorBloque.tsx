@@ -26,6 +26,7 @@ interface SectorBloqueProps {
   onSectorActualizado: (sector: Sector) => void
   onSectorEliminado: (sectorId: number) => void
   onMesaActualizada: (mesa: Mesa) => void
+  onMesaEliminada: (mesaId: number) => void
 }
 
 export default function SectorBloque({
@@ -40,6 +41,7 @@ export default function SectorBloque({
   onSectorActualizado,
   onSectorEliminado,
   onMesaActualizada,
+  onMesaEliminada,
 }: SectorBloqueProps) {
   const [modalEditarAbierto, setModalEditarAbierto] = useState(false)
   const [eliminando, setEliminando] = useState(false)
@@ -265,6 +267,7 @@ export default function SectorBloque({
               onEstadoChange={onMesaEstadoChange}
               onPosicionChange={onMesaPosicionChange}
               onMesaActualizada={onMesaActualizada}
+              onMesaEliminada={onMesaEliminada}
             />
           ))}
 

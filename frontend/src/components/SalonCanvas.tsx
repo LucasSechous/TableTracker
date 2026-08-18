@@ -31,6 +31,7 @@ interface Props {
   onSectorActualizado: (sector: Sector) => void
   onSectorEliminado: (sectorId: number) => void
   onMesaActualizada: (mesa: Mesa) => void
+  onMesaEliminada: (mesaId: number) => void
   onSalonResize: (ancho: number, alto: number) => void
 }
 
@@ -47,6 +48,7 @@ export default function SalonCanvas({
   onSectorActualizado,
   onSectorEliminado,
   onMesaActualizada,
+  onMesaEliminada,
   onSalonResize,
 }: Props) {
   const puedeRedimensionar = modo === "edicion" && esAdmin
@@ -164,6 +166,7 @@ export default function SalonCanvas({
             onSectorActualizado={onSectorActualizado}
             onSectorEliminado={onSectorEliminado}
             onMesaActualizada={onMesaActualizada}
+            onMesaEliminada={onMesaEliminada}
           />
         ))}
 

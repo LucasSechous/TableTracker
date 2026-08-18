@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import cv2
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 
@@ -8,6 +9,12 @@ from app.models.sector import Sector
 from app.schemas.camara import CamaraCreate, CamaraUpdate, CamaraResponse, CamaraTestResponse
 from app.routers.auth import requiere_rol, ROL_ADMIN
 from app.services import rtsp
+
+# El propio OpenCV (no solo ffmpeg) escribe warnings de conexión a stderr por su
+# cuenta; nunca incluyen la URL completa (solo host/hostname), pero de todos
+# modos conviene no dejar pasar el ruido de cada cámara caída como si fuera un
+# problema del backend.
+cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_SILENT)
 
 # Configuración de cámaras: solo admin en todos los verbos, incluido el GET
 # (T26-116, docs/roles-permisos.md). El listado también queda restringido porque
@@ -125,3 +132,58 @@ def probar_conexion_camara(
         latencia_ms=resultado.latencia_ms,
         rtsp_url=camara.rtsp_url_enmascarada,
     )
+
+
+@router.get("/{camara_id}/snapshot")
+def capturar_snapshot(
+    camara_id: int,
+    timeout_segundos: float = Query(rtsp.TIMEOUT_DEFECTO, ge=1, le=15),
+    db: Session = Depends(get_db),
+):
+    """Captura un frame actual de la cámara para calibrar el ROI (T26-134, RF-12).
+
+    A diferencia de `test-conexion`, acá hace falta decodificar el stream, no
+    solo hablar el protocolo: `app/services/rtsp.py` confirma que la cámara
+    responde pero no entrega frames. Por eso este endpoint sí usa OpenCV
+    (backend FFMPEG, incluido en el propio wheel de opencv-python-headless, sin
+    depender de que el sistema tenga ffmpeg instalado aparte).
+
+    El timeout se pasa en el propio constructor de VideoCapture, no con
+    `.set()` después de crearlo: seteado después, `CAP_PROP_OPEN_TIMEOUT_MSEC`
+    se pierde en silencio (no hay backend abierto todavía que lo retenga) y la
+    apertura cae al valor por defecto de OpenCV (~30 s) en vez del que pidió
+    quien llama. Verificado a mano contra un host que no responde.
+    """
+    camara = _obtener(db, camara_id)
+    if not camara.activa:
+        raise HTTPException(status_code=404, detail="Cámara no encontrada")
+
+    timeout_ms = int(timeout_segundos * 1000)
+    parametros = [
+        cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, timeout_ms,
+        cv2.CAP_PROP_READ_TIMEOUT_MSEC, timeout_ms,
+    ]
+    captura = cv2.VideoCapture(camara.rtsp_url, cv2.CAP_FFMPEG, parametros)
+    try:
+        if not captura.isOpened():
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail=f"La cámara «{camara.nombre}» no respondió en {timeout_segundos:g} segundos",
+            )
+        capturado, frame = captura.read()
+    finally:
+        captura.release()
+
+    if not capturado or frame is None:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=f"La cámara «{camara.nombre}» abrió el stream pero no se pudo leer un frame",
+        )
+
+    codificado, buffer = cv2.imencode(".jpg", frame)
+    if not codificado:
+        raise HTTPException(
+            status_code=500, detail="No se pudo codificar el frame capturado como JPEG"
+        )
+
+    return Response(content=buffer.tobytes(), media_type="image/jpeg")

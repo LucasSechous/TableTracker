@@ -132,6 +132,24 @@ Se traducen a castellano los códigos 200, 401, 403, 404, 453, 455 y 503, más l
 (host que no resuelve, conexión rechazada, timeout, puerto abierto que no habla RTSP) y la URL
 mal formada.
 
+## Snapshot para calibración de ROI (T26-134, RF-12)
+
+`GET /camaras/{id}/snapshot?timeout_segundos=5` (1 a 15, default 5). Devuelve un JPEG
+(`image/jpeg`) con un frame actual de la cámara, para que la pantalla de calibración de ROI
+(T26-128) tenga sobre qué dibujar el polígono.
+
+A diferencia de `test-conexion`, acá **sí hace falta decodificar el stream**: el handshake por
+socket de `rtsp.py` confirma que la cámara responde pero no entrega imagen. Por eso este endpoint
+usa `cv2.VideoCapture` (backend FFMPEG) de `opencv-python-headless`, que T26-126/T26-127
+deliberadamente evitaron. Es la primera dependencia de decodificación de video que suma el
+backend — ver el detalle de tamaño y la discusión de por qué en el PR de T26-134.
+
+No persiste nada ni mantiene el stream abierto: abre, lee un frame, cierra. El timeout se pasa en
+el constructor de `VideoCapture` (no con `.set()` después de crearlo — la propiedad se pierde en
+silencio y la apertura cae al default de OpenCV, ~30 s, en vez del pedido). Igual que
+`test-conexion`, una cámara caída o que no entrega frame no es un 500: responde `504` con mensaje
+en castellano, y la URL con contraseña nunca aparece en la respuesta ni en logs.
+
 ## Endpoints
 
 Prefijos: `/camaras` y `/roi-mesa` (la URL sigue el nombre de la entidad del ticket, `roi_mesa`).
@@ -144,6 +162,7 @@ Prefijos: `/camaras` y `/roi-mesa` (la URL sigue el nombre de la entidad del tic
 | PATCH | `/camaras/{id}` | Edición parcial |
 | DELETE | `/camaras/{id}` | **Baja lógica** (`activa=false`) |
 | POST | `/camaras/{id}/test-conexion` | Prueba RTSP |
+| GET | `/camaras/{id}/snapshot` | Frame JPEG para calibración de ROI (T26-134) |
 | GET | `/roi-mesa/` | Lista. Filtros: `mesa_id`, `camara_id`, `incluir_inactivos` |
 | GET | `/roi-mesa/{id}` | |
 | POST | `/roi-mesa/` | 409 si esa mesa ya tiene ROI en esa cámara, 400 si mesa o cámara no existen |

@@ -2,9 +2,9 @@
 // Instancia axios con interceptores JWT y manejo automático de sesión expirada.
 import axios from "axios";
 import type { AxiosError } from "axios";
-import type { Mesa, Sector, HistorialEstado, Configuracion } from "../types";
+import type { Mesa, Sector, HistorialEstado, Configuracion, Camara, RoiMesa, PuntoRoi } from "../types";
 
-export type { Mesa, Sector, HistorialEstado, Configuracion } from "../types";
+export type { Mesa, Sector, HistorialEstado, Configuracion, Camara, RoiMesa, PuntoRoi } from "../types";
 export type { Modo } from "../types";
 
 const api = axios.create({
@@ -108,5 +108,49 @@ export const configuracionApi = {
   actualizar: (datos: { ancho_salon?: number; alto_salon?: number; nombre_establecimiento?: string }) =>
     api.patch<Configuracion>("/configuracion", datos),
 };
+
+export const camarasApi = {
+  listar: (params?: { sector_id?: number; incluir_inactivas?: boolean }) =>
+    api.get<Camara[]>("/camaras/", { params }),
+
+  // responseType "blob": el endpoint devuelve JPEG crudo, no JSON. Un frame único de la
+  // cámara para calibrar sobre él, no un stream — no hay refresh automático (T26-134).
+  snapshot: (id: number, timeoutSegundos = 5) =>
+    api.get<Blob>(`/camaras/${id}/snapshot`, {
+      params: { timeout_segundos: timeoutSegundos },
+      responseType: "blob",
+    }),
+};
+
+export const roiMesaApi = {
+  listar: (params?: { mesa_id?: number; camara_id?: number; incluir_inactivos?: boolean }) =>
+    api.get<RoiMesa[]>("/roi-mesa/", { params }),
+
+  crear: (datos: { mesa_id: number; camara_id: number; coordenadas: PuntoRoi[] }) =>
+    api.post<RoiMesa>("/roi-mesa/", datos),
+};
+
+// Con responseType "blob" (ver camarasApi.snapshot), un error HTTP no trae el detail como
+// JSON directo: axios ya devolvió el cuerpo como Blob antes de que se supiera que el status
+// no era 2xx. Hay que leerlo como texto y parsearlo a mano. Para el resto de los endpoints
+// (JSON normal) el detail ya viene parseado en response.data, así que esta misma función
+// sirve para cualquier error de la API sin que el que llama tenga que distinguir el caso.
+export async function extraerDetalleApi(err: unknown, fallback: string): Promise<string> {
+  const axiosErr = err as AxiosError;
+  const data = axiosErr.response?.data;
+
+  if (data instanceof Blob) {
+    try {
+      const parsed = JSON.parse(await data.text());
+      if (typeof parsed?.detail === "string") return parsed.detail;
+    } catch {
+      // Cuerpo no era JSON (o no se pudo leer): se usa el fallback.
+    }
+    return fallback;
+  }
+
+  const detail = (data as { detail?: string } | undefined)?.detail;
+  return typeof detail === "string" ? detail : fallback;
+}
 
 export default api;

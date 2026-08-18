@@ -5,14 +5,7 @@ import { useState, useEffect, useRef } from "react"
 import type { AxiosError } from "axios"
 import type { Mesa, Modo } from "../types"
 import { mesasApi } from "../services/api"
-import { DIAMETRO_MESA } from "../constants"
-
-const COLOR_POR_ESTADO: Record<string, string> = {
-  libre: "#4caf50",
-  ocupada: "#f44336",
-  pendiente_limpieza: "#ff9800",
-  reservada: "#2196f3",
-}
+import { DIAMETRO_MESA, COLOR_POR_ESTADO } from "../constants"
 
 interface MesaVisualProps {
   mesa: Mesa

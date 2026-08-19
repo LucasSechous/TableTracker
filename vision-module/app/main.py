@@ -9,6 +9,7 @@
 # que la API no entrega (la contraseña del stream RTSP).
 
 import time
+from datetime import datetime, timezone
 
 from app import config
 from app.capture.camera import Camera
@@ -18,6 +19,7 @@ from app.mapping import politica, zonas as zonas_mod
 from app.mapping.confirmacion import Confirmador
 from app.utils import rtsp_url
 from app.utils.logger import get_logger
+from schemas.detection_output import Detection, DetectionBox, DetectionFrameResult
 
 logger = get_logger(__name__)
 
@@ -166,6 +168,48 @@ def avisar_zonas_fuera_del_frame(zonas, frame):
             )
 
 
+def publicar_deteccion_actual(cliente, camara_id, detector, detecciones, frame):
+    """Publica el resultado crudo del frame para la vista en vivo (T26-150).
+
+    A diferencia de aplicar_cambio(), esto es información secundaria: no debe
+    poder frenar ni tumbar el loop de confirmación/cambio de estado bajo ningún
+    motivo. Por eso el catch es amplio (no solo ErrorBackend) — también cubre un
+    payload que no valida (ej. un bbox degenerado) — y lo único que hace ante
+    cualquier falla es loguear y seguir con el próximo frame.
+    """
+    try:
+        alto, ancho = frame.shape[:2]
+        payload = DetectionFrameResult(
+            frame_timestamp=datetime.now(timezone.utc),
+            source_id=str(camara_id),
+            frame_width=ancho,
+            frame_height=alto,
+            model_name=config.YOLO_MODEL_PATH.stem,
+            detections=[
+                Detection(
+                    class_id=deteccion.clase,
+                    # Mismo patrón que scripts/test_condiciones.py:_nombre_clase —
+                    # el mapeo sale del propio modelo cargado, no de una tabla
+                    # COCO hardcodeada que podría desincronizarse de los pesos.
+                    class_name=detector.model.names.get(deteccion.clase, str(deteccion.clase)),
+                    confidence=deteccion.confianza,
+                    bbox=DetectionBox(
+                        x1=int(deteccion.bbox[0]),
+                        y1=int(deteccion.bbox[1]),
+                        x2=int(deteccion.bbox[2]),
+                        y2=int(deteccion.bbox[3]),
+                    ),
+                )
+                for deteccion in detecciones
+            ],
+        )
+        cliente.publicar_deteccion_actual(camara_id, payload.model_dump(mode="json"))
+    except Exception as error:
+        logger.warning(
+            "No se pudo publicar la detección actual de la cámara %s, se sigue igual: %s", camara_id, error
+        )
+
+
 def aplicar_cambio(cliente, confirmador, mesa_id, hay_gente):
     """Lleva al backend un cambio ya confirmado, si la política lo permite.
 
@@ -210,7 +254,7 @@ def reconectar(video):
             time.sleep(config.RECONEXION_SEGUNDOS)
 
 
-def bucle(video, detector, cliente, zonas, confirmador):
+def bucle(video, detector, cliente, zonas, confirmador, camara_id):
     fallidos = 0
     primer_frame = True
     while True:
@@ -234,6 +278,7 @@ def bucle(video, detector, cliente, zonas, confirmador):
             primer_frame = False
 
         detecciones = detector.detect(frame)
+        publicar_deteccion_actual(cliente, camara_id, detector, detecciones, frame)
         ocupacion = zonas_mod.resolver_ocupacion(zonas, detecciones, config.OVERLAP_MINIMO)
         for mesa_id, hay_gente in confirmador.actualizar(ocupacion, inicio).items():
             aplicar_cambio(cliente, confirmador, mesa_id, hay_gente)
@@ -277,7 +322,7 @@ def run():
     )
 
     try:
-        bucle(video, detector, cliente, zonas, Confirmador(config.CONFIRMACION_SEGUNDOS))
+        bucle(video, detector, cliente, zonas, Confirmador(config.CONFIRMACION_SEGUNDOS), camara["id"])
     except KeyboardInterrupt:
         logger.info("Módulo de visión detenido")
     finally:

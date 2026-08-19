@@ -197,6 +197,78 @@ class TestAplicarCambio:
             main.aplicar_cambio(cliente, Confirmador(6), mesa_id=221, hay_gente=True)
 
 
+class TestPublicarDeteccionActual:
+    def _deteccion(self, bbox=(10.0, 20.0, 30.0, 40.0), clase=0, confianza=0.9):
+        deteccion = MagicMock()
+        deteccion.bbox = bbox
+        deteccion.clase = clase
+        deteccion.confianza = confianza
+        return deteccion
+
+    def test_arma_el_payload_con_el_nombre_de_clase_del_modelo(self):
+        cliente = MagicMock()
+        detector = MagicMock()
+        detector.model.names = {0: "person"}
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+        main.publicar_deteccion_actual(cliente, camara_id=2, detector=detector, detecciones=[self._deteccion()], frame=frame)
+
+        cliente.publicar_deteccion_actual.assert_called_once()
+        camara_id, payload = cliente.publicar_deteccion_actual.call_args.args
+        assert camara_id == 2
+        assert payload["source_id"] == "2"
+        assert payload["frame_width"] == 640
+        assert payload["frame_height"] == 480
+        assert payload["detections"][0]["class_name"] == "person"
+        assert payload["detections"][0]["class_id"] == 0
+        assert payload["detections"][0]["bbox"] == {"x1": 10, "y1": 20, "x2": 30, "y2": 40}
+
+    def test_clase_ausente_del_modelo_cae_al_indice_como_texto(self):
+        # Mismo fallback que scripts/test_condiciones.py:_nombre_clase.
+        cliente = MagicMock()
+        detector = MagicMock()
+        detector.model.names = {}
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+        main.publicar_deteccion_actual(
+            cliente, camara_id=2, detector=detector, detecciones=[self._deteccion(clase=99)], frame=frame
+        )
+
+        payload = cliente.publicar_deteccion_actual.call_args.args[1]
+        assert payload["detections"][0]["class_name"] == "99"
+
+    def test_un_fallo_de_red_al_publicar_no_propaga(self, caplog):
+        cliente = MagicMock()
+        cliente.publicar_deteccion_actual.side_effect = ErrorBackend("backend caído")
+        detector = MagicMock()
+        detector.model.names = {}
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+        main.publicar_deteccion_actual(cliente, camara_id=2, detector=detector, detecciones=[], frame=frame)
+
+        assert "No se pudo publicar la detección" in caplog.text
+
+    def test_un_bbox_invalido_tampoco_propaga(self, caplog):
+        # x2 <= x1: DetectionBox lo rechaza con ValidationError, no con
+        # ErrorBackend — el catch de publicar_deteccion_actual es amplio a
+        # propósito y tiene que cubrir esto también, no solo fallos de red.
+        cliente = MagicMock()
+        detector = MagicMock()
+        detector.model.names = {0: "person"}
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+        main.publicar_deteccion_actual(
+            cliente,
+            camara_id=2,
+            detector=detector,
+            detecciones=[self._deteccion(bbox=(10.0, 20.0, 10.0, 40.0))],
+            frame=frame,
+        )
+
+        cliente.publicar_deteccion_actual.assert_not_called()
+        assert "No se pudo publicar la detección" in caplog.text
+
+
 class TestBucle:
     def _video(self, frames):
         video = MagicMock()
@@ -208,9 +280,11 @@ class TestBucle:
         detector.detect.return_value = list(detecciones)
         return detector
 
-    def _correr(self, video, detector, zonas, confirmador):
+    def _correr(self, video, detector, zonas, confirmador, cliente=None):
+        cliente = cliente if cliente is not None else cliente_falso()
         with patch("app.main.time.sleep"), pytest.raises(KeyboardInterrupt):
-            main.bucle(video, detector, cliente_falso(), zonas, confirmador)
+            main.bucle(video, detector, cliente, zonas, confirmador, CAMARA["id"])
+        return cliente
 
     def test_un_frame_perdido_no_cuenta_como_mesa_vacia(self, monkeypatch):
         # Sin imagen no se observa nada: el reloj de confirmación no se toca.
@@ -244,3 +318,30 @@ class TestBucle:
         self._correr(self._video([frame]), self._detector(), [Zona(1, [(0, 0), (10, 0), (10, 10)])], confirmador)
 
         assert confirmador.actualizar.call_args.args[0] == {1: False}
+
+    def test_un_fallo_al_publicar_la_deteccion_no_frena_el_cambio_de_estado(self, monkeypatch):
+        # La garantía más importante de T26-150: un POST de detección caído (ej.
+        # backend abajo, o cualquier otro ErrorBackend) nunca tiene que impedir
+        # que se confirme y aplique un cambio de estado de mesa — es información
+        # secundaria, la detección de ocupación es la función principal.
+        from app.mapping.zonas import Zona
+
+        monkeypatch.setattr(config, "OVERLAP_MINIMO", 0.3)
+        cliente = cliente_falso()
+        cliente.publicar_deteccion_actual.side_effect = ErrorBackend("backend caído")
+        cliente.obtener_mesa.return_value = {"id": 1, "numero": 1, "estado": "libre"}
+        confirmador = MagicMock()
+        confirmador.actualizar.return_value = {1: True}
+        frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+
+        self._correr(
+            self._video([frame]),
+            self._detector(),
+            [Zona(1, [(0, 0), (10, 0), (10, 10)])],
+            confirmador,
+            cliente=cliente,
+        )
+
+        cliente.publicar_deteccion_actual.assert_called_once()
+        confirmador.actualizar.assert_called_once()
+        cliente.cambiar_estado.assert_called_once_with(1, "ocupada")

@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models.camara import Camara
 from app.models.sector import Sector
 from app.schemas.camara import CamaraCreate, CamaraUpdate, CamaraResponse, CamaraTestResponse
+from app.schemas.deteccion import DetectionFrameResult
 from app.routers.auth import requiere_rol, ROL_ADMIN
 from app.services import rtsp
 
@@ -21,6 +22,18 @@ cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_SILENT)
 # la respuesta expone la topología de red del local — host, puerto y usuario de
 # cada cámara — y eso no es información para cualquier rol autenticado.
 router = APIRouter(dependencies=[Depends(requiere_rol(ROL_ADMIN))])
+
+# Última detección conocida por cámara (T26-150, vista en vivo): dict en memoria
+# del proceso, no en disco ni en Supabase — ver docs/privacidad-vision.md §3
+# (ahí está documentada la excepción: qué se guarda, dónde, cuándo se activa y
+# cómo se descarta). Solo el último valor, sin historial; se pierde al reiniciar
+# el proceso. Asume backend single-worker (docs/vision-loop.md): con más de uno
+# cada proceso tendría su propio dict y el GET podría devolver un valor viejo
+# según a cuál le llegó el último POST. Un dict simple alcanza sin lock porque
+# CPython solo tiene un hilo corriendo bytecode a la vez y __setitem__/get sobre
+# una clave son operaciones atómicas — no hay una escritura parcial que otro
+# hilo pueda ver a medio hacer.
+_ultima_deteccion: dict[int, DetectionFrameResult] = {}
 
 
 def _obtener(db: Session, camara_id: int) -> Camara:
@@ -187,3 +200,33 @@ def capturar_snapshot(
         )
 
     return Response(content=buffer.tobytes(), media_type="image/jpeg")
+
+
+@router.post("/{camara_id}/deteccion-actual", status_code=status.HTTP_204_NO_CONTENT)
+def publicar_deteccion_actual(camara_id: int, datos: DetectionFrameResult, db: Session = Depends(get_db)):
+    """Recibe el resultado de detección de un frame desde vision-module (T26-150).
+
+    Sobrescribe lo que hubiera antes: no hay historial, solo el último valor por
+    cámara (ver docs/privacidad-vision.md §3). Quien llama esto en la práctica es
+    el usuario técnico de vision-module, no un admin humano, pero el permiso
+    sigue siendo requiere_rol(ROL_ADMIN) como el resto del router — no hay un rol
+    de servicio separado todavía (hallazgo ya registrado en docs/vision-loop.md).
+    """
+    _obtener(db, camara_id)  # 404 si la cámara no existe: no guardar detecciones de una mesa fantasma
+    _ultima_deteccion[camara_id] = datos
+
+
+@router.get("/{camara_id}/deteccion-actual", response_model=DetectionFrameResult)
+def obtener_deteccion_actual(camara_id: int, db: Session = Depends(get_db)):
+    """Último resultado de detección publicado para esta cámara (T26-150), para polling del frontend.
+
+    404 si todavía no llegó ninguno —vision-module recién arrancó, no está
+    corriendo, o nunca pudo publicar— en vez de un cuerpo vacío: "no sé nada
+    todavía" y "el último frame no tenía detecciones" son cosas distintas, y
+    confundirlas le ocultaría al frontend que la vista en vivo está caída.
+    """
+    _obtener(db, camara_id)
+    resultado = _ultima_deteccion.get(camara_id)
+    if resultado is None:
+        raise HTTPException(status_code=404, detail="Todavía no llegó ninguna detección para esta cámara")
+    return resultado

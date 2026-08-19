@@ -136,6 +136,17 @@ class TestEndpoints:
         assert args == ("PATCH", "http://localhost:8000/mesas/221/estado")
         assert kwargs["json"] == {"estado": "ocupada"}
 
+    def test_publicar_deteccion_actual(self):
+        # 204 sin cuerpo: a diferencia de cambiar_estado, no hay .json() que leer
+        # de la respuesta.
+        cliente = cliente_con(respuesta(204))
+        cliente.login()
+        cliente.publicar_deteccion_actual(2, {"schema_version": "1.0"})
+
+        args, kwargs = cliente.sesion.request.call_args
+        assert args == ("POST", "http://localhost:8000/camaras/2/deteccion-actual")
+        assert kwargs["json"] == {"schema_version": "1.0"}
+
     def test_el_detalle_del_error_llega_al_mensaje(self):
         cliente = cliente_con(respuesta(404, cuerpo={"detail": "Mesa no encontrada"}))
         cliente.login()

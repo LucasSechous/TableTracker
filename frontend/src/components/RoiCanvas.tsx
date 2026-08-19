@@ -1,16 +1,24 @@
-// Frame de referencia de la cámara + overlay SVG para dibujar una zona ROI nueva
-// (T26-128 v1, solo creación — editar una zona ya guardada es T26-144).
+// Frame de referencia de la cámara + overlay SVG para dibujar o editar una zona ROI
+// (T26-128: creación; T26-144: edición de una zona ya guardada — arrastrar/borrar vértice).
 //
 // Los puntos se manejan en píxeles reales de la imagen devuelta por el backend, el mismo
-// sistema de coordenadas que espera POST /roi-mesa/ (RoiMesaCreate.coordenadas), sin
-// conversión al guardar. El único lugar donde se convierte es el click: de coordenadas de
-// pantalla (clientX/clientY) a coordenadas del frame real, usando el tamaño renderizado del
-// <img> contra su naturalWidth/naturalHeight. El <svg> superpuesto usa esas mismas dimensiones
-// reales como viewBox, así que todo lo demás (polígonos existentes, líneas en progreso) se
-// escala solo para verse bien a cualquier tamaño en pantalla.
+// sistema de coordenadas que espera la API (`coordenadas`), sin conversión al guardar. La
+// conversión pantalla→frame real (clientX/clientY contra naturalWidth/naturalHeight) se hace
+// en el click para agregar un punto (modo "crear") y en el arrastre de un vértice (modo
+// "editar"). El <svg> superpuesto usa esas mismas dimensiones reales como viewBox, así que
+// todo lo demás (polígonos existentes, líneas en progreso) se escala solo para verse bien a
+// cualquier tamaño en pantalla.
+//
+// "editar" reutiliza el mismo `draftPoints` que "crear": quien llama arranca el draft con las
+// coordenadas del ROI ya guardado en vez de vacío. Por eso el trazo (polyline + línea de
+// cierre + círculos de vértice) es el mismo bloque de JSX en los dos modos; lo único que
+// cambia es la interacción: en "crear" el click de fondo agrega un punto, en "editar" cada
+// vértice se puede arrastrar (pointer capture, no requiere estado de "cuál se está arrastrando":
+// el navegador ya dirige los eventos al círculo que hizo el pointerdown) o borrar con doble
+// click. Insertar un vértice en el medio de un lado no está soportado en ningún modo.
 
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
-import type { PuntoRoi, RoiMesa } from "../types";
+import { useEffect, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import type { DetectionFrameResult, PuntoRoi, RoiMesa } from "../types";
 
 interface Props {
   snapshotSrc: string;
@@ -21,6 +29,15 @@ interface Props {
   // RoiMesaResponse ya trae mesa_numero resuelto por el backend.
   mesaSeleccionadaNumero?: number;
   onAddPoint: (punto: PuntoRoi) => void;
+  // "crear" (default): click de fondo agrega un vértice al final. "editar": el click de fondo
+  // no hace nada, los vértices existentes se arrastran y se borran con doble click.
+  modo?: "crear" | "editar";
+  onMoverPunto?: (indice: number, punto: PuntoRoi) => void;
+  onBorrarPunto?: (indice: number) => void;
+  // Último resultado de vision-module para esta cámara (T26-150), o null/undefined si el
+  // toggle de "detecciones en vivo" está apagado o todavía no llegó ninguno. Capa de solo
+  // lectura, independiente de mesaSeleccionada: las detecciones son por cámara, no por mesa.
+  deteccionActual?: DetectionFrameResult | null;
 }
 
 // Promedio de los vértices: no es el centroide exacto de área de un polígono irregular, pero
@@ -57,7 +74,39 @@ function EtiquetaMesa({ x, y, numero, fontSize }: { x: number; y: number; numero
   );
 }
 
-export default function RoiCanvas({ snapshotSrc, roisExistentes, draftPoints, mesaSeleccionadaNumero, onAddPoint }: Props) {
+// Etiqueta chica de clase sobre un bounding box: misma técnica de contorno oscuro + relleno
+// claro que EtiquetaMesa (se lee sobre cualquier fondo), pero alineada a la izquierda y
+// pegada arriba del rect en vez de centrada — es la convención habitual para labels de
+// detección, y no depende de conocer un centroide.
+function EtiquetaDeteccion({ x, y, texto, fontSize }: { x: number; y: number; texto: string; fontSize: number }): ReactNode {
+  return (
+    <text
+      x={x}
+      y={y}
+      fontSize={fontSize}
+      fontWeight={700}
+      fill="#fff"
+      stroke="#000"
+      strokeWidth={fontSize * 0.28}
+      paintOrder="stroke"
+      style={{ pointerEvents: "none" }}
+    >
+      {texto}
+    </text>
+  );
+}
+
+export default function RoiCanvas({
+  snapshotSrc,
+  roisExistentes,
+  draftPoints,
+  mesaSeleccionadaNumero,
+  onAddPoint,
+  modo = "crear",
+  onMoverPunto,
+  onBorrarPunto,
+  deteccionActual,
+}: Props) {
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [errorCarga, setErrorCarga] = useState(false);
 
@@ -74,6 +123,48 @@ export default function RoiCanvas({ snapshotSrc, roisExistentes, draftPoints, me
     const x = ((e.clientX - rect.left) / rect.width) * naturalSize.width;
     const y = ((e.clientY - rect.top) / rect.height) * naturalSize.height;
     onAddPoint([Math.round(x), Math.round(y)]);
+  }
+
+  // Coordenadas de pantalla → coordenadas reales del frame, recortadas a los límites de la
+  // imagen: a diferencia del click (que solo puede ocurrir dentro del <svg>), un arrastre con
+  // pointer capture sigue entregando pointermove aunque el cursor salga del frame, y mandar
+  // una coordenada negativa al backend da 422 (roi_mesa.py: _validar_coordenadas).
+  function puntoDesdeEvento(e: PointerEvent<SVGCircleElement>): PuntoRoi | null {
+    if (!naturalSize) return null;
+    const svg = e.currentTarget.ownerSVGElement;
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    const x = Math.round(((e.clientX - rect.left) / rect.width) * naturalSize.width);
+    const y = Math.round(((e.clientY - rect.top) / rect.height) * naturalSize.height);
+    return [Math.min(naturalSize.width, Math.max(0, x)), Math.min(naturalSize.height, Math.max(0, y))];
+  }
+
+  function handleVerticePointerDown(e: PointerEvent<SVGCircleElement>) {
+    if (modo !== "editar") return;
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function handleVerticePointerMove(indice: number) {
+    return (e: PointerEvent<SVGCircleElement>) => {
+      if (modo !== "editar" || !e.currentTarget.hasPointerCapture(e.pointerId)) return;
+      const punto = puntoDesdeEvento(e);
+      if (punto) onMoverPunto?.(indice, punto);
+    };
+  }
+
+  function handleVerticePointerUp(e: PointerEvent<SVGCircleElement>) {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  }
+
+  function handleVerticeDoubleClick(indice: number) {
+    return (e: MouseEvent<SVGCircleElement>) => {
+      if (modo !== "editar" || draftPoints.length <= 3) return;
+      e.stopPropagation();
+      onBorrarPunto?.(indice);
+    };
   }
 
   if (errorCarga) {
@@ -106,8 +197,14 @@ export default function RoiCanvas({ snapshotSrc, roisExistentes, draftPoints, me
       {naturalSize && (
         <svg
           viewBox={`0 0 ${naturalSize.width} ${naturalSize.height}`}
-          onClick={handleClick}
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "crosshair" }}
+          onClick={modo === "editar" ? undefined : handleClick}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            cursor: modo === "editar" ? "default" : "crosshair",
+          }}
         >
           {roisExistentes.map((roi) => {
             const [cx, cy] = centroide(roi.coordenadas);
@@ -125,6 +222,39 @@ export default function RoiCanvas({ snapshotSrc, roisExistentes, draftPoints, me
               </g>
             );
           })}
+
+          {deteccionActual && deteccionActual.detections.length > 0 && (
+            <g>
+              {(() => {
+                // Los bounding boxes vienen en píxeles del frame que analizó vision-module
+                // (deteccionActual.frame_width/height), que puede no ser exactamente el mismo
+                // frame que el snapshot mostrado en pantalla. Se escala proporcionalmente
+                // contra naturalSize en vez de asumir que coinciden; cuando sí coinciden la
+                // escala es 1 y no cambia nada.
+                const escalaX = naturalSize.width / deteccionActual.frame_width;
+                const escalaY = naturalSize.height / deteccionActual.frame_height;
+                return deteccionActual.detections.map((deteccion, i) => {
+                  const { x1, y1, x2, y2 } = deteccion.bbox;
+                  const rx = x1 * escalaX;
+                  const ry = y1 * escalaY;
+                  return (
+                    <g key={i}>
+                      <rect
+                        x={rx}
+                        y={ry}
+                        width={(x2 - x1) * escalaX}
+                        height={(y2 - y1) * escalaY}
+                        fill="none"
+                        stroke="#8e24aa"
+                        strokeWidth={2}
+                      />
+                      <EtiquetaDeteccion x={rx} y={ry - 4} texto={deteccion.class_name} fontSize={Math.max(12, fontSize * 0.6)} />
+                    </g>
+                  );
+                });
+              })()}
+            </g>
+          )}
 
           {draftPoints.length > 0 && (
             <>
@@ -147,7 +277,20 @@ export default function RoiCanvas({ snapshotSrc, roisExistentes, draftPoints, me
                 />
               )}
               {draftPoints.map(([x, y], i) => (
-                <circle key={i} cx={x} cy={y} r={5} fill="#1976d2" />
+                <circle
+                  key={i}
+                  cx={x}
+                  cy={y}
+                  r={5}
+                  fill="#1976d2"
+                  style={modo === "editar" ? { cursor: "grab", touchAction: "none" } : undefined}
+                  onPointerDown={handleVerticePointerDown}
+                  onPointerMove={handleVerticePointerMove(i)}
+                  onPointerUp={handleVerticePointerUp}
+                  onDoubleClick={handleVerticeDoubleClick(i)}
+                >
+                  {modo === "editar" && <title>Arrastrar para mover · doble click para borrar (mínimo 3 puntos)</title>}
+                </circle>
               ))}
               {draftCentroide && mesaSeleccionadaNumero !== undefined && (
                 <EtiquetaMesa x={draftCentroide[0]} y={draftCentroide[1]} numero={mesaSeleccionadaNumero} fontSize={fontSize} />

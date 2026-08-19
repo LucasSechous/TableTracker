@@ -5,8 +5,11 @@ from app.schemas.sector import SectorResponse
 from app.services import rtsp
 
 # En CamaraUpdate todos los campos son Optional para poder mandar solo los que
-# cambian, pero estos no admiten null: en la base son NOT NULL, así que anularlos
-# terminaría en un error de integridad en vez de en un 422 entendible.
+# cambian, pero estos no admiten null: anularlos terminaría en un error de
+# integridad en vez de en un 422 entendible. `rtsp_url` ya no es una columna
+# —desde T26-136 se reparte en esquema/host/puerto/ruta/usuario/password_cifrada,
+# y host es NOT NULL— pero sigue siendo el campo de entrada, así que anularlo
+# tampoco tiene sentido.
 _NO_ANULABLES = ("nombre", "rtsp_url", "sector_id", "activa")
 
 

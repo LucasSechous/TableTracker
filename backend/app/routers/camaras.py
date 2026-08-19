@@ -1,4 +1,5 @@
 import cv2
+from contextlib import contextmanager
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
@@ -9,7 +10,7 @@ from app.models.sector import Sector
 from app.schemas.camara import CamaraCreate, CamaraUpdate, CamaraResponse, CamaraTestResponse
 from app.schemas.deteccion import DetectionFrameResult
 from app.routers.auth import requiere_rol, ROL_ADMIN
-from app.services import rtsp
+from app.services import cifrado, rtsp
 
 # El propio OpenCV (no solo ffmpeg) escribe warnings de conexión a stderr por su
 # cuenta; nunca incluyen la URL completa (solo host/hostname), pero de todos
@@ -67,6 +68,21 @@ def _refrescar(db: Session, camara: Camara) -> Camara:
     return camara
 
 
+@contextmanager
+def _errores_de_cifrado():
+    """Traduce un problema con CAMARA_ENCRYPTION_KEYS a un 500 explicado (T26-136).
+
+    Es un fallo de despliegue, no de quien llama: la clave falta, está mal escrita
+    o se rotó sin recifrar las filas. El mensaje del servicio ya dice qué revisar y
+    no contiene secretos, así que se devuelve tal cual — el router entero es
+    admin-only. Sin esto saldría un 500 pelado y habría que ir al log del servidor
+    para enterarse de algo que se arregla tocando el .env."""
+    try:
+        yield
+    except (cifrado.ClaveNoConfigurada, cifrado.NoSePudoDescifrar) as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+
 @router.get("/", response_model=list[CamaraResponse])
 def listar_camaras(
     sector_id: Optional[int] = Query(None),
@@ -90,7 +106,13 @@ def obtener_camara(camara_id: int, db: Session = Depends(get_db)):
 def crear_camara(datos: CamaraCreate, db: Session = Depends(get_db)):
     _validar_sector(db, datos.sector_id)
     _validar_nombre_libre(db, datos.nombre)
-    camara = Camara(**datos.model_dump())
+    campos = datos.model_dump()
+    # La URL no se guarda textual: se parte en columnas y la contraseña va cifrada
+    # (T26-136). El campo de entrada sigue siendo la URL entera para no cambiarle
+    # el contrato al frontend.
+    with _errores_de_cifrado():
+        campos.update(Camara.partes_desde_url(campos.pop("rtsp_url")))
+    camara = Camara(**campos)
     db.add(camara)
     db.commit()
     return _refrescar(db, camara)
@@ -107,6 +129,12 @@ def actualizar_camara(camara_id: int, datos: CamaraUpdate, db: Session = Depends
         _validar_sector(db, cambios["sector_id"])
     if "nombre" in cambios:
         _validar_nombre_libre(db, cambios["nombre"], excluir_id=camara.id)
+    if "rtsp_url" in cambios:
+        # Reemplaza las cinco columnas de conexión de una: mandar la URL implica
+        # mandar la contraseña, así que no hay forma de editar el host dejando la
+        # contraseña vieja sin querer.
+        with _errores_de_cifrado():
+            cambios.update(Camara.partes_desde_url(cambios.pop("rtsp_url")))
 
     for campo, valor in cambios.items():
         setattr(camara, campo, valor)
@@ -137,7 +165,14 @@ def probar_conexion_camara(
     el diagnóstico viaja en `ok` y `mensaje` para poder mostrarlo tal cual en la
     UI. Ver app/services/rtsp.py para cómo se hace la prueba."""
     camara = _obtener(db, camara_id)
-    resultado = rtsp.probar_url(camara.rtsp_url, timeout=timeout_segundos)
+    # Las partes van sueltas y no como URL armada: probar_conexion manda las
+    # credenciales en la cabecera Authorization, así que la contraseña en claro
+    # no llega a existir dentro de ninguna cadena que pudiera terminar en un log.
+    with _errores_de_cifrado():
+        password = camara.password
+    resultado = rtsp.probar_conexion(
+        camara.host, camara.puerto, camara.ruta, camara.usuario, password, timeout=timeout_segundos
+    )
     return CamaraTestResponse(
         ok=resultado.ok,
         mensaje=resultado.mensaje,
@@ -176,7 +211,12 @@ def capturar_snapshot(
         cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, timeout_ms,
         cv2.CAP_PROP_READ_TIMEOUT_MSEC, timeout_ms,
     ]
-    captura = cv2.VideoCapture(camara.rtsp_url, cv2.CAP_FFMPEG, parametros)
+    # Acá sí hace falta la URL completa: OpenCV no tiene por dónde recibir las
+    # credenciales aparte. Es el único lugar donde la contraseña en claro forma
+    # parte de una cadena; se descifra por cámara, en el momento, y no se loguea.
+    with _errores_de_cifrado():
+        url_completa = camara.rtsp_url_completa
+    captura = cv2.VideoCapture(url_completa, cv2.CAP_FFMPEG, parametros)
     try:
         if not captura.isOpened():
             raise HTTPException(

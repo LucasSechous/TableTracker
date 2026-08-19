@@ -20,8 +20,13 @@ Esto tiene dos consecuencias que conviene tener presentes:
   el error aparece recién en runtime, como columna inexistente.
 - Cualquier entorno nuevo levanta con un esquema **distinto** al de producción: `create_all` va a
   crear estas tablas desde los modelos, y los modelos no reproducen los `DEFAULT` ni la
-  precisión de tipos del DDL original. Vale un ticket para versionar el esquema (Alembic, o al
-  menos un `.sql` en [database/](../database/)).
+  precisión de tipos del DDL original.
+
+T26-136 empezó a revertirlo por el lado que le tocaba: [database/](../database/) ya tiene los
+`.sql` numerados de ese cambio, y de ahí en adelante todo cambio de esquema se versiona antes de
+aplicarse. Lo que sigue sin estar es el **estado base** —las tablas tal como las dejó T26-125— y
+no hay tabla de versiones ni Alembic, así que el orden lo lleva el
+[README de database/](../database/README.md) a mano. Sigue valiendo un ticket para eso.
 
 ### `camaras` — [backend/app/models/camara.py](../backend/app/models/camara.py)
 
@@ -29,10 +34,20 @@ Esto tiene dos consecuencias que conviene tener presentes:
 |---|---|---|
 | `id` | serial PK | |
 | `nombre` | varchar NOT NULL | **Sin UNIQUE en la base**: la unicidad se controla en el router |
-| `rtsp_url` | varchar NOT NULL | URL entera, credenciales incluidas |
+| `esquema` | varchar NOT NULL, default `rtsp` | `rtsp` o `rtsps` |
+| `host` | varchar NOT NULL | |
+| `puerto` | integer NOT NULL, default 554 | |
+| `ruta` | varchar NOT NULL, default `/` | Incluye la query cuando la hay (`?channel=1`) |
+| `usuario` | varchar NULL | En claro: no es secreto |
+| `password_cifrada` | text NULL | Token Fernet. NULL = la cámara no tiene contraseña |
 | `sector_id` | FK `sectores.id` NOT NULL | Toda cámara pertenece a un sector |
 | `activa` | bool, default true | Baja lógica |
 | `created_at` | timestamptz, default now() | |
+
+T26-125 tenía en lugar de las cinco columnas de conexión una sola, `rtsp_url varchar NOT NULL`,
+con la URL entera y la contraseña en claro. **T26-136 la reemplazó**; la migración está
+versionada en [database/](../database/) y es el primer cambio de esquema del proyecto que queda
+registrado en el repo.
 
 ### `roi_mesa` — [backend/app/models/roi_mesa.py](../backend/app/models/roi_mesa.py)
 
@@ -59,22 +74,56 @@ queda del lado del módulo de visión.
 
 ## Credenciales RTSP
 
-El formato lo fija T26-125 al tener una sola columna `rtsp_url`: la conexión va entera en una
-URL, con las credenciales embebidas.
+La API habla en URLs completas —se recibe y se devuelve un único campo `rtsp_url`— pero **la base
+no las guarda así**. Al escribir, la URL se descompone en columnas y la contraseña se cifra; al
+leer, se rearma. El frontend no sabe nada de esto.
 
 ```
-rtsp://usuario:password@host:puerto/ruta
+rtsp://usuario:password@host:puerto/ruta     lo que viaja por la API
+        └── cifrada ──┘                       lo único secreto de esa cadena
 ```
 
-Es el patrón que el ticket pedía seguir del proyecto de referencia SurveilUs (que no se
-consultó; una sola columna con la URL completa es consistente con ese patrón, pero si SurveilUs
-hace otra cosa vale revisarlo).
+### Por qué separada en columnas y no la URL entera cifrada (T26-136)
 
-Lo que sí se decidió acá es **cómo se expone**:
+Las dos opciones estaban sobre la mesa. Se eligió separar por dos motivos concretos:
+
+- **El `GET` no descifra nada.** Para enmascarar alcanza con esquema, host, puerto, ruta y
+  usuario, que están en claro. Listar veinte cámaras no pasa veinte contraseñas por memoria: la
+  contraseña solo se descifra en `test-conexion` y `snapshot`, que operan sobre una sola cámara.
+- **Perder la clave cuesta recargar contraseñas, no perder las cámaras.** Con la URL entera
+  cifrada, quedarse sin clave se lleva puesta también la configuración de red de cada cámara.
+
+Se cifra con **Fernet** (AES-128-CBC + HMAC-SHA256, de `cryptography`, que ya entraba como
+dependencia de `python-jose`) desde
+[backend/app/services/cifrado.py](../backend/app/services/cifrado.py), y **no con pgcrypto**: con
+pgcrypto la clave viaja como argumento dentro de cada sentencia SQL, así que termina en los logs
+de consultas del servidor y a la vista de cualquiera con acceso a la base — justo lo que este
+ticket venía a evitar. Cifrando en el backend, la base nunca ve la clave.
+
+La clave sale de `CAMARA_ENCRYPTION_KEYS`, **distinta de `SECRET_KEY`** (la del JWT) para que
+filtrar una no comprometa la otra. Si falta, los endpoints que la necesitan devuelven un 500 que
+dice qué revisar; **nunca hay un fallback a texto plano**, porque guardar en claro sin que nadie
+se entere es peor que fallar.
+
+**`esquema` se guarda aparte** porque `rtsps` es RTSP sobre TLS: reconstruir siempre como `rtsp`
+degradaría en silencio un stream cifrado a uno en claro.
+
+### Rotación
+
+`CAMARA_ENCRYPTION_KEYS` admite varias claves separadas por coma. **La primera cifra; las demás
+solo descifran**, así que se rota sin ventana de indisponibilidad: se agrega la nueva adelante, la
+API sigue leyendo lo viejo, `backend/scripts/rotar_clave_camaras.py` recifra las filas, y recién
+ahí se saca la vieja del `.env`. Si se saca la vieja antes de recifrar, las contraseñas dejan de
+abrir y el 500 explica exactamente cómo volver atrás. El procedimiento paso a paso está en la
+cabecera del script y en [database/README.md](../database/README.md).
+
+### Cómo se expone
+
+Esto no cambió con T26-136 — el contrato de la API es el mismo de T26-126/127:
 
 - **La contraseña nunca sale de la API.** `GET /camaras/` devuelve `rtsp_url` enmascarada
   (`rtsp://admin:***@host:puerto/ruta`) más `tiene_credenciales`. El enmascarado está en
-  `rtsp.enmascarar_url()`.
+  `rtsp.enmascarar_partes()`.
 - **Reenviar la URL enmascarada da 422.** Como la respuesta y el campo de escritura se llaman
   igual, un cliente podría hacer `GET`, editar el nombre y `PATCH`ear todo de vuelta, guardando
   `***` como contraseña real. El validador rechaza cualquier URL cuya contraseña sea `***` y
@@ -82,10 +131,15 @@ Lo que sí se decidió acá es **cómo se expone**:
 - **La URL se valida al escribirla** (esquema `rtsp://`/`rtsps://`, host presente, puerto
   numérico) para no guardar cadenas que después fallen recién al probar la conexión.
 
-> **Hallazgo, no corregido acá: la contraseña queda en claro en la base.** Un volcado de la tabla
-> `camaras` entrega el acceso al video del local. Cambiarlo requiere tocar el esquema de T26-125
-> (cifrar `rtsp_url`, o separar las credenciales en columnas propias y cifrar la contraseña), así
-> que corresponde a un ticket aparte y no a estos dos.
+- **La URL se valida al escribirla** (esquema `rtsp://`/`rtsps://`, host presente, puerto
+  numérico) para no guardar cadenas que después fallen recién al probar la conexión. Desde T26-136
+  esa validación además decide cómo se reparte en columnas.
+
+El enmascarado se arma desde las columnas (`rtsp.enmascarar_partes`) y no desde una URL guardada,
+pero produce **exactamente la misma cadena** que antes. Eso importa más de lo que parece: el
+centinela `***` no puede pasar por `quote()` —lo escaparía como `%2A%2A%2A`— y
+`ModalEditarCamara.tsx` compara texto para decidir si manda `rtsp_url` en el `PATCH`, así que
+cualquier diferencia de un carácter haría que la UI reenviara la URL enmascarada en cada edición.
 
 ## Prueba de conexión
 
@@ -186,8 +240,8 @@ Detalles de comportamiento que no se deducen de la tabla:
 
 ## Fuera de alcance (hallazgos, no corregidos acá)
 
-- **El esquema de T26-125 no está versionado** y **la contraseña RTSP queda en claro** — los dos
-  detallados más arriba.
+- **El esquema base de T26-125 sigue sin estar versionado** — detallado más arriba. La contraseña
+  RTSP en claro, que era el otro hallazgo de acá, la resolvió T26-136.
 - **El módulo de visión todavía no consume estos endpoints.** Sigue leyendo los ROI de un archivo
   local (`ZONES_FILE`, ver [vision-module/app/config.py](../vision-module/app/config.py)); nadie
   lee `roi_mesa` ni `camaras` fuera de la API. Conectar el pipeline a la base necesita un ticket
@@ -198,12 +252,14 @@ Detalles de comportamiento que no se deducen de la tabla:
 - **No hay prueba de conexión previa al alta.** `test-conexion` opera sobre una cámara ya
   guardada; para que la UI pueda validar los datos antes de crearla haría falta una variante que
   reciba la URL en el cuerpo.
-- **Sin tests automatizados en el repo.** La implementación se verificó de punta a punta contra
-  SQLite y un servidor RTSP falso (Digest con y sin `qop`, Basic, contraseña incorrecta, 404,
-  timeout, puerto cerrado, URL inválida), más un smoke test contra Supabase con el backend
-  levantado, pero esos scripts quedaron fuera del repo: el proyecto no tiene suite de tests de
-  backend, solo la de Playwright en `e2e/`. Vale un ticket para sumar `/camaras` y `/roi-mesa`
-  ahí.
+- **Sin suite de tests de backend.** El proyecto no tiene pytest del lado del backend, solo la de
+  Playwright en `e2e/`. La implementación de T26-126/127 se verificó contra SQLite y un servidor
+  RTSP falso (Digest con y sin `qop`, Basic, contraseña incorrecta, 404, timeout, puerto cerrado,
+  URL inválida), pero esos scripts quedaron fuera del repo. T26-136 sí dejó el suyo:
+  [backend/scripts/verificar_cifrado_camaras.py](../backend/scripts/verificar_cifrado_camaras.py)
+  levanta la API con `TestClient` contra un SQLite temporal y corre 65 chequeos. Es un script, no
+  una suite: hay que acordarse de correrlo. Sigue valiendo un ticket para montar pytest y sumar
+  `/camaras` y `/roi-mesa` ahí.
 - **SSRF por diseño.** `test-conexion` hace que el backend abra una conexión TCP a un host y
   puerto que elige el usuario. Es inherente a la función (las cámaras están en la red interna) y
   está acotado a `admin`, pero conviene tenerlo presente si el endpoint se abriera a otro rol.

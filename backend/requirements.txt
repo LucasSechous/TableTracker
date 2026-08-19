@@ -4,6 +4,11 @@ SQLAlchemy==2.0.50
 psycopg2-binary==2.9.12
 bcrypt==4.3.0
 python-jose[cryptography]==3.5.0
+# Fernet, para cifrar las contraseñas RTSP (T26-136). Ya venía instalada como
+# dependencia de python-jose[cryptography]; se pinea aparte porque ahora
+# app/services/cifrado.py la importa directo y no queremos que se vaya si algún
+# día cambia cómo python-jose declara sus extras.
+cryptography==49.0.0
 python-dotenv==1.2.2
 email-validator==2.3.0
 opencv-python-headless==5.0.0.93

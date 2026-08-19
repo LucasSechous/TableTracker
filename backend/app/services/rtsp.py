@@ -61,6 +61,10 @@ class DatosConexion:
     ruta: str
     usuario: Optional[str]
     password: Optional[str]
+    # Se conserva porque `rtsps` es RTSP sobre TLS: reconstruir siempre como
+    # `rtsp` degradaría en silencio un stream cifrado a uno en claro (T26-136,
+    # desde que la URL se guarda separada en columnas y ya no textual).
+    esquema: str = "rtsp"
 
 
 @dataclass
@@ -79,21 +83,52 @@ class _PruebaFallida(Exception):
         self.codigo_rtsp = codigo_rtsp
 
 
-def construir_url(host, puerto, ruta, usuario=None, password=None) -> str:
-    # URL RTSP completa. Con credenciales solo para consumo interno (por ejemplo
-    # pasársela a un reproductor): para mostrar en la UI está Camara.url_rtsp,
-    # que va enmascarada.
+def _armar(esquema, host, puerto, ruta, usuario_codificado, password_codificada) -> str:
     credenciales = ""
-    if usuario:
-        credenciales = quote(usuario, safe="")
-        if password:
-            credenciales += f":{quote(password, safe='')}"
+    if usuario_codificado:
+        credenciales = usuario_codificado
+        if password_codificada:
+            credenciales += f":{password_codificada}"
         credenciales += "@"
-    return f"rtsp://{credenciales}{host}:{puerto}{ruta}"
+    return f"{esquema}://{credenciales}{host}:{puerto}{ruta}"
+
+
+def construir_url(host, puerto, ruta, usuario=None, password=None, esquema="rtsp") -> str:
+    # URL RTSP completa. Con credenciales solo para consumo interno (por ejemplo
+    # pasársela a OpenCV en el snapshot): para mostrar en la UI está
+    # Camara.rtsp_url_enmascarada, que va sin contraseña.
+    return _armar(
+        esquema,
+        host,
+        puerto,
+        ruta,
+        quote(usuario, safe="") if usuario else None,
+        quote(password, safe="") if password else None,
+    )
+
+
+def enmascarar_partes(host, puerto, ruta, usuario=None, tiene_password=False, esquema="rtsp") -> str:
+    # La misma URL que construir_url pero con la contraseña tapada, armada desde
+    # las columnas de la cámara (T26-136) en vez de desde una URL ya guardada.
+    #
+    # El centinela NO puede pasar por construir_url: quote() escapa el asterisco
+    # («%2A%2A%2A»), y la URL enmascarada dejaría de coincidir con la que el
+    # frontend ya tiene en pantalla —ModalEditarCamara compara texto para decidir
+    # si manda rtsp_url en el PATCH— además de no volver a disparar el validador
+    # que rechaza reenviar la URL enmascarada.
+    return _armar(
+        esquema,
+        host,
+        puerto,
+        ruta,
+        quote(usuario, safe="") if usuario else None,
+        PASSWORD_ENMASCARADA if tiene_password else None,
+    )
 
 
 def parsear_url(rtsp_url) -> DatosConexion:
-    # Descompone la URL guardada en camaras.rtsp_url. Lanza ValueError con un
+    # Descompone la URL que llega por la API en las partes que guarda `camaras`
+    # (una columna por parte desde T26-136). Lanza ValueError con un
     # mensaje mostrable si no sirve como URL de cámara.
     try:
         partes = urlsplit(rtsp_url.strip())
@@ -117,6 +152,7 @@ def parsear_url(rtsp_url) -> DatosConexion:
         ruta=ruta,
         usuario=unquote(partes.username) if partes.username else None,
         password=unquote(partes.password) if partes.password else None,
+        esquema=partes.scheme.lower(),
     )
 
 

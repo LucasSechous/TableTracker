@@ -50,6 +50,16 @@ export interface Camara {
   created_at: string
 }
 
+// Respuesta de POST /camaras/{id}/test-conexion. Siempre HTTP 200 (que la cámara no
+// responda no es un error de la API): el resultado real viaja en ok/mensaje.
+export interface CamaraTestResponse {
+  ok: boolean
+  mensaje: string
+  codigo_rtsp: number | null
+  latencia_ms: number | null
+  rtsp_url: string
+}
+
 // [x, y] en píxeles reales del frame devuelto por GET /camaras/{id}/snapshot.
 export type PuntoRoi = [number, number]
 
@@ -62,4 +72,34 @@ export interface RoiMesa {
   coordenadas: PuntoRoi[]
   activa: boolean
   created_at: string
+}
+
+// Bounding box de una detección, en píxeles reales del frame que la generó
+// (frame_width/frame_height de DetectionFrameResult) — no necesariamente el mismo
+// frame que el snapshot mostrado en pantalla, ver DetectionFrameResult.
+export interface DetectionBox {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
+
+export interface Detection {
+  class_id: number
+  class_name: string
+  confidence: number
+  bbox: DetectionBox
+}
+
+// Respuesta de GET /camaras/{id}/deteccion-actual (T26-150): último resultado de
+// detección que publicó vision-module para esa cámara. 404 (no un cuerpo con
+// detections: []) si todavía no llegó ninguno — ver useDeteccionActual.
+export interface DetectionFrameResult {
+  schema_version: string
+  frame_timestamp: string
+  source_id: string
+  frame_width: number
+  frame_height: number
+  model_name: string
+  detections: Detection[]
 }

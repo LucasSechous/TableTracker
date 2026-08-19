@@ -117,6 +117,15 @@ class BackendClient:
         # estado: libre | ocupada | pendiente_limpieza | reservada
         return self._request("PATCH", f"/mesas/{mesa_id}/estado", json={"estado": estado}).json()
 
+    def publicar_deteccion_actual(self, camara_id, payload):
+        # POST /camaras/{camara_id}/deteccion-actual — resultado crudo del frame
+        # para la vista en vivo (T26-150). 204 sin cuerpo: nada que parsear de
+        # vuelta. Igual que el resto de los métodos, no atrapa sus propios
+        # errores: quien llama (main.publicar_deteccion_actual) decide qué hacer
+        # con ErrorBackend/CredencialesInvalidas — acá es información secundaria,
+        # así que ese llamador la trata distinto de un cambio de estado.
+        self._request("POST", f"/camaras/{camara_id}/deteccion-actual", json=payload)
+
 
 def _detalle(respuesta):
     # El backend contesta los errores como {"detail": "..."}; si no, se muestra

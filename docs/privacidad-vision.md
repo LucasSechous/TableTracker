@@ -25,6 +25,16 @@ Tanto la captura de frames (`Camera.read_frame`) como la detección (`Detector.d
 
 Esta situación responde en parte al estado incompleto del pipeline (sección 2) y no debe interpretarse todavía como una garantía permanente. Se establece como **decisión de diseño explícita para lo que resta del Sprint 5**: al implementar `main.py` y `zonas.py`, el pipeline completo deberá mantener este mismo comportamiento —no persistir imágenes ni video— salvo que una necesidad justificada de evidencia puntual (por ejemplo, para depuración durante pruebas controladas) requiera lo contrario, en cuyo caso dicha excepción deberá quedar documentada aquí mismo, indicando ubicación, condición de activación y criterio de retención antes de integrarse al código.
 
+### Excepción documentada: vista en vivo de detecciones (T26-150)
+
+**Qué se persiste.** El último resultado de detección de cada cámara —los bounding boxes, la clase y la confianza de cada detección del frame, más el timestamp de captura (`DetectionFrameResult`, el contrato de `vision-module/schemas/detection_output.py` escrito en este mismo Sprint 5)— deja de descartarse apenas se evalúa y queda disponible un momento más. No es un dato nuevo: es exactamente el mismo resultado que el pipeline ya calculaba y tiraba (sección 2 de este documento, `main.py`), solo que ahora se conserva en vez de perderse antes de llegar a `mapping.zonas`.
+
+**Dónde.** Un diccionario en memoria del proceso del backend (`{camara_id: DetectionFrameResult}`, `backend/app/routers/camaras.py`), poblado por `POST /camaras/{id}/deteccion-actual` —que llama `vision-module` en cada frame— y leído por `GET /camaras/{id}/deteccion-actual` para que el frontend haga polling. Sigue sin escribirse a disco ni a Supabase: no hay tabla ni archivo nuevo para esto.
+
+**Condición de activación.** No es opt-in por pedido: mientras el módulo de visión esté corriendo, publica el resultado de cada frame sin que nadie lo pida explícitamente. Los dos endpoints están siempre activos y protegidos por `requiere_rol(ROL_ADMIN)`, igual que el resto del router de cámaras (`docs/roles-permisos.md`). Un fallo al publicar (backend caído, red, lo que sea) se descarta en silencio del lado de `vision-module` y nunca frena el loop de confirmación ni el cambio de estado de mesa: es información secundaria, no la función principal del sistema (`docs/vision-loop.md`).
+
+**Criterio de retención.** Solo el último valor por cámara: cada `POST` sobrescribe la entrada anterior, no se guarda historial de detecciones ni se persiste entre pedidos más allá de la vida del proceso. Se pierde por completo al reiniciar el backend, y asume que corre en un solo worker —con más de uno, cada proceso tendría su propio diccionario y el `GET` podría devolver un valor desactualizado según a cuál le haya llegado el último `POST` (la misma limitación single-worker que ya deja constancia `docs/vision-loop.md` para el resto del pipeline).
+
 ## 4. Verificación: reconocimiento facial o re-identificación de personas
 
 Se revisaron las dependencias declaradas en `requirements.txt` y se realizó una búsqueda de términos asociados a biometría (reconocimiento facial, re-identificación, embeddings de identidad) en todo el código del módulo.

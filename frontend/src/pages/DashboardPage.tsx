@@ -220,6 +220,23 @@ export default function DashboardPage() {
           </button>
           {user?.rol === "admin" && (
             <button
+              onClick={() => navigate("/camaras")}
+              style={{
+                padding: "6px 14px",
+                borderRadius: 6,
+                border: "1px solid #1976d2",
+                fontSize: 13,
+                cursor: "pointer",
+                backgroundColor: "#fff",
+                color: "#1976d2",
+                fontWeight: 500,
+              }}
+            >
+              Cámaras
+            </button>
+          )}
+          {user?.rol === "admin" && (
+            <button
               onClick={() => navigate("/calibracion-roi")}
               style={{
                 padding: "6px 14px",

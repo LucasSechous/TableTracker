@@ -2,9 +2,29 @@
 // Instancia axios con interceptores JWT y manejo automático de sesión expirada.
 import axios from "axios";
 import type { AxiosError } from "axios";
-import type { Mesa, Sector, HistorialEstado, Configuracion, Camara, RoiMesa, PuntoRoi } from "../types";
+import type {
+  Mesa,
+  Sector,
+  HistorialEstado,
+  Configuracion,
+  Camara,
+  RoiMesa,
+  PuntoRoi,
+  CamaraTestResponse,
+  DetectionFrameResult,
+} from "../types";
 
-export type { Mesa, Sector, HistorialEstado, Configuracion, Camara, RoiMesa, PuntoRoi } from "../types";
+export type {
+  Mesa,
+  Sector,
+  HistorialEstado,
+  Configuracion,
+  Camara,
+  RoiMesa,
+  PuntoRoi,
+  CamaraTestResponse,
+  DetectionFrameResult,
+} from "../types";
 export type { Modo } from "../types";
 
 const api = axios.create({
@@ -118,6 +138,26 @@ export const camarasApi = {
   listar: (params?: { sector_id?: number; incluir_inactivas?: boolean }) =>
     api.get<Camara[]>("/camaras/", { params }),
 
+  obtener: (id: number) => api.get<Camara>(`/camaras/${id}`),
+
+  // La barra final apunta al path exacto del router y evita el 307 de FastAPI (ver mesasApi.crear).
+  crear: (datos: { nombre: string; rtsp_url: string; sector_id: number; activa?: boolean }) =>
+    api.post<Camara>("/camaras/", datos),
+
+  actualizar: (
+    id: number,
+    datos: { nombre?: string; rtsp_url?: string; sector_id?: number; activa?: boolean }
+  ) => api.patch<Camara>(`/camaras/${id}`, datos),
+
+  // Baja lógica: el backend deja activa=false, no borra la fila (ver camaras.py).
+  desactivar: (id: number) => api.delete(`/camaras/${id}`),
+
+  // Sin body: el backend recibe el timeout por query param, no por el cuerpo del POST.
+  testConexion: (id: number, timeoutSegundos?: number) =>
+    api.post<CamaraTestResponse>(`/camaras/${id}/test-conexion`, undefined, {
+      params: { timeout_segundos: timeoutSegundos },
+    }),
+
   // responseType "blob": el endpoint devuelve JPEG crudo, no JSON. Un frame único de la
   // cámara para calibrar sobre él, no un stream — no hay refresh automático (T26-134).
   snapshot: (id: number, timeoutSegundos = 5) =>
@@ -125,6 +165,11 @@ export const camarasApi = {
       params: { timeout_segundos: timeoutSegundos },
       responseType: "blob",
     }),
+
+  // Último resultado de detección publicado por vision-module para esta cámara
+  // (T26-150). 404 si todavía no llegó ninguno: no es un error de red, lo trata
+  // así useDeteccionActual, no este cliente.
+  deteccionActual: (id: number) => api.get<DetectionFrameResult>(`/camaras/${id}/deteccion-actual`),
 };
 
 export const roiMesaApi = {
@@ -133,6 +178,12 @@ export const roiMesaApi = {
 
   crear: (datos: { mesa_id: number; camara_id: number; coordenadas: PuntoRoi[] }) =>
     api.post<RoiMesa>("/roi-mesa/", datos),
+
+  actualizar: (id: number, datos: { coordenadas?: PuntoRoi[]; activa?: boolean }) =>
+    api.patch<RoiMesa>(`/roi-mesa/${id}`, datos),
+
+  // Baja lógica: el backend deja activa=false, no borra la fila (ver roi.py).
+  eliminar: (id: number) => api.delete(`/roi-mesa/${id}`),
 };
 
 // Con responseType "blob" (ver camarasApi.snapshot), un error HTTP no trae el detail como

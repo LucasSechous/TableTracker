@@ -345,3 +345,31 @@ class TestBucle:
         cliente.publicar_deteccion_actual.assert_called_once()
         confirmador.actualizar.assert_called_once()
         cliente.cambiar_estado.assert_called_once_with(1, "ocupada")
+
+
+class TestMain:
+    # Todo fallo de arranque tiene que salir por SystemExit con el mismo mensaje
+    # entendible: el operador que levanta el módulo lee la última línea de la
+    # consola, no un traceback (T26-135).
+    @pytest.mark.parametrize(
+        "fallo",
+        [
+            main.ConfiguracionInvalida("falta SECTOR_ID"),
+            # ErrorBackend antes se escapaba: era el caso del backend caído.
+            ErrorBackend("No se pudo contactar la API en http://localhost:8000"),
+            CredencialesInvalidas("rol insuficiente"),
+        ],
+    )
+    def test_un_fallo_de_arranque_sale_con_mensaje_limpio(self, fallo):
+        with patch("app.main.run", side_effect=fallo):
+            with pytest.raises(SystemExit) as salida:
+                main.main()
+
+        assert str(salida.value) == f"No se puede arrancar: {fallo}"
+
+    def test_un_error_inesperado_sigue_propagando(self):
+        # Solo se traducen los fallos previstos: un bug del módulo tiene que
+        # dejar el traceback completo para poder diagnosticarlo.
+        with patch("app.main.run", side_effect=RuntimeError("bug")):
+            with pytest.raises(RuntimeError):
+                main.main()

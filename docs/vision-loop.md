@@ -143,6 +143,11 @@ vivo:
 - `ErrorBackend` (red caída, 5xx, timeout) — se loguea y se sigue con el próximo frame. Un backend
   que se reinicia no debería matar el módulo de visión.
 
+Esa distinción vale **una vez que el pipeline está andando**. En el arranque no hay próximo frame al
+que seguir: `main()` atrapa `ErrorBackend` entera —`CredencialesInvalidas` incluida, porque hereda de
+ella— y sale por `SystemExit` con `No se puede arrancar: …`. Cualquier motivo por el que la API no
+responda al levantar el módulo da el mismo mensaje de una línea y no un traceback (T26-135).
+
 **La contraseña del stream RTSP la pone el módulo, no la API.** `GET /camaras/` devuelve la URL con
 la contraseña tapada (`rtsp://admin:***@host:puerto/ruta`), que es una decisión deliberada de
 [camaras-roi.md](camaras-roi.md): el secreto no viaja por HTTP. Del backend salen host, puerto, ruta
@@ -230,10 +235,6 @@ detecciones se procesan en memoria y se descartan; lo único que se escribe es e
 - **No se probó contra una cámara IP real.** El end-to-end usó `VIDEO_SOURCE`, y ese camino corta
   antes de reconstruir la URL RTSP, así que la ruta cámara-registrada → `CAMARA_PASSWORD` → stream
   está cubierta solo por pruebas unitarias. Falta una corrida contra la cámara del local.
-- **Un backend caído al arrancar tira un traceback.** `__main__` atrapa `ConfiguracionInvalida` y
-  `CredencialesInvalidas`, pero el `ErrorBackend` del `login()` inicial no está contemplado: en vez
-  del mensaje entendible que reciben los otros fallos de arranque, sale el stack completo. Durante
-  el loop el mismo error sí se maneja bien.
 - **Una instancia procesa una sola cámara.** Un sector con varias cámaras necesita un proceso por
   cámara, cada uno con su `CAMARA_ID`. Alcanza para el sector piloto; escalar a todo el local pide
   decidir si se paraleliza dentro del proceso o se orquestan varios.

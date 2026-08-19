@@ -329,8 +329,18 @@ def run():
         video.release()
 
 
-if __name__ == "__main__":
+def main():
+    """Arranque desde la línea de comandos: traduce los fallos a un mensaje limpio."""
     try:
         run()
-    except (ConfiguracionInvalida, CredencialesInvalidas) as error:
+    except (ConfiguracionInvalida, ErrorBackend) as error:
+        # ErrorBackend cubre también a CredencialesInvalidas, que hereda de ella:
+        # cualquier fallo de arranque contra la API —backend caído, 5xx, timeout,
+        # credenciales o rol— sale con el mismo mensaje entendible y no con el
+        # traceback crudo (T26-135). Un backend que se cae *durante* el loop no
+        # llega acá: lo maneja aplicar_cambio() reintentando.
         raise SystemExit(f"No se puede arrancar: {error}")
+
+
+if __name__ == "__main__":
+    main()

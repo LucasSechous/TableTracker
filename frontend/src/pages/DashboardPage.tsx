@@ -10,6 +10,13 @@ import SalonCanvas from "../components/SalonCanvas"
 import ModalAltaSector from "../components/ModalAltaSector"
 import ModalAltaMesa from "../components/ModalAltaMesa"
 
+// Cada cuánto se refresca el estado de las mesas en modo monitoreo, para reflejar
+// los cambios que escribe vision-module sin que alguien tenga que recargar la
+// página. 3s da margen de sobra frente a los 6s de CONFIRMACION_SEGUNDOS por
+// defecto del módulo de visión (docs/vision-loop.md): el cambio nunca tarda más
+// de un intervalo en aparecer una vez confirmado.
+const INTERVALO_REFRESCO_MESAS_MS = 3000
+
 export default function DashboardPage() {
   const [user, setUser] = useState<UserResponse | null>(null)
   const [sectores, setSectores] = useState<Sector[]>([])
@@ -48,6 +55,40 @@ export default function DashboardPage() {
       })
       .finally(() => setLoading(false))
   }, [])
+
+  // Solo en monitoreo: en modo edición el usuario puede estar arrastrando una mesa
+  // o un sector, y pisar `sectores` con lo que devuelve el servidor a mitad de un
+  // drag se sentiría como que el canvas "tira para atrás" lo que se está moviendo.
+  useEffect(() => {
+    if (modo !== "monitoreo") return
+
+    let cancelado = false
+
+    async function refrescarMesas() {
+      try {
+        const { data: mesas } = await mesasApi.listar()
+        if (cancelado) return
+        const mesasBySector = new Map<number, Mesa[]>()
+        mesas.forEach((m) => {
+          const arr = mesasBySector.get(m.sector.id) ?? []
+          arr.push(m)
+          mesasBySector.set(m.sector.id, arr)
+        })
+        setSectores((prev) =>
+          prev.map((s) => ({ ...s, mesas: mesasBySector.get(s.id) ?? [] }))
+        )
+      } catch {
+        // Fallo de red puntual: se reintenta solo en el próximo tick, sin mostrar
+        // un error intrusivo por algo que se resuelve solo la mayoría de las veces.
+      }
+    }
+
+    const intervalId = setInterval(refrescarMesas, INTERVALO_REFRESCO_MESAS_MS)
+    return () => {
+      cancelado = true
+      clearInterval(intervalId)
+    }
+  }, [modo])
 
   function extraerDetalle(err: unknown, fallback: string) {
     return (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? fallback

@@ -8,6 +8,7 @@ export interface Mesa {
   activa: boolean
   pos_x: number
   pos_y: number
+  created_at: string
   sector: { id: number; nombre: string }
 }
 

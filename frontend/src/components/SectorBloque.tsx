@@ -19,13 +19,12 @@ interface SectorBloqueProps {
   modo: Modo
   anchoSalon: number
   altoSalon: number
-  onMesaEstadoChange: (mesaId: number, nuevoEstado: string) => void
+  onMesaClick: (mesa: Mesa) => void
   onMesaPosicionChange: (mesaId: number, pos_x: number, pos_y: number) => void
   onSectorDrag: (sectorId: number, pos_x: number, pos_y: number) => void
   onSectorResize: (sectorId: number, ancho: number, alto: number) => void
   onSectorActualizado: (sector: Sector) => void
   onSectorEliminado: (sectorId: number) => void
-  onMesaActualizada: (mesa: Mesa) => void
   onMesaEliminada: (mesaId: number) => void
 }
 
@@ -34,13 +33,12 @@ export default function SectorBloque({
   modo,
   anchoSalon,
   altoSalon,
-  onMesaEstadoChange,
+  onMesaClick,
   onMesaPosicionChange,
   onSectorDrag,
   onSectorResize,
   onSectorActualizado,
   onSectorEliminado,
-  onMesaActualizada,
   onMesaEliminada,
 }: SectorBloqueProps) {
   const [modalEditarAbierto, setModalEditarAbierto] = useState(false)
@@ -264,9 +262,8 @@ export default function SectorBloque({
               modo={modo}
               anchoSector={localSize.ancho}
               altoSector={localSize.alto}
-              onEstadoChange={onMesaEstadoChange}
+              onMesaClick={onMesaClick}
               onPosicionChange={onMesaPosicionChange}
-              onMesaActualizada={onMesaActualizada}
               onMesaEliminada={onMesaEliminada}
             />
           ))}

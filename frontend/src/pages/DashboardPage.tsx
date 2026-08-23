@@ -3,12 +3,14 @@
 
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { Pencil, Menu } from "lucide-react"
 import { authApi, mesasApi, sectoresApi, configuracionApi } from "../services/api"
 import type { UserResponse } from "../services/api"
 import type { Mesa, Sector, Modo, Configuracion } from "../types"
 import SalonCanvas from "../components/SalonCanvas"
 import ModalAltaSector from "../components/ModalAltaSector"
 import ModalAltaMesa from "../components/ModalAltaMesa"
+import MenuLateral from "../components/MenuLateral"
 
 // Cada cuánto se refresca el estado de las mesas en modo monitoreo, para reflejar
 // los cambios que escribe vision-module sin que alguien tenga que recargar la
@@ -16,6 +18,11 @@ import ModalAltaMesa from "../components/ModalAltaMesa"
 // defecto del módulo de visión (docs/vision-loop.md): el cambio nunca tarda más
 // de un intervalo en aparecer una vez confirmado.
 const INTERVALO_REFRESCO_MESAS_MS = 3000
+
+// El header pasó a position:fixed para quedar visible al scrollear un salón
+// grande; con altura fija se puede compensar con un spacer del mismo tamaño
+// en vez de medirla en runtime.
+const ALTURA_HEADER = 68
 
 export default function DashboardPage() {
   const [user, setUser] = useState<UserResponse | null>(null)
@@ -25,6 +32,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [modo, setModo] = useState<Modo>("monitoreo")
   const [modalAbierto, setModalAbierto] = useState<"sector" | "mesa" | null>(null)
+  const [menuAbierto, setMenuAbierto] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -226,6 +234,12 @@ export default function DashboardPage() {
     <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
       <header
         style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 150,
+          height: ALTURA_HEADER,
           backgroundColor: "#fff",
           boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
           padding: "12px 24px",
@@ -237,130 +251,88 @@ export default function DashboardPage() {
         <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>
           TableTracker
         </h1>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {user && (
-            <span style={{ fontSize: 14, color: "#666" }}>
-              {user.nombre} ·{" "}
-              <span style={{ textTransform: "capitalize" }}>{user.rol}</span>
-            </span>
-          )}
-          <button
-            onClick={() => navigate("/historial")}
-            style={{
-              padding: "6px 14px",
-              borderRadius: 6,
-              border: "1px solid #1976d2",
-              fontSize: 13,
-              cursor: "pointer",
-              backgroundColor: "#fff",
-              color: "#1976d2",
-              fontWeight: 500,
-            }}
-          >
-            Ver historial
-          </button>
-          {user?.rol === "admin" && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {modo === "monitoreo" && (
             <button
-              onClick={() => navigate("/camaras")}
+              onClick={() => setModo("edicion")}
               style={{
-                padding: "6px 14px",
-                borderRadius: 6,
-                border: "1px solid #1976d2",
-                fontSize: 13,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                minHeight: 44,
+                padding: "0 16px",
+                borderRadius: 8,
+                border: "none",
+                backgroundColor: "#1976d2",
+                color: "#fff",
+                fontSize: 14,
+                fontWeight: 600,
                 cursor: "pointer",
-                backgroundColor: "#fff",
-                color: "#1976d2",
-                fontWeight: 500,
+                whiteSpace: "nowrap",
               }}
             >
-              Cámaras
-            </button>
-          )}
-          {user?.rol === "admin" && (
-            <button
-              onClick={() => navigate("/calibracion-roi")}
-              style={{
-                padding: "6px 14px",
-                borderRadius: 6,
-                border: "1px solid #1976d2",
-                fontSize: 13,
-                cursor: "pointer",
-                backgroundColor: "#fff",
-                color: "#1976d2",
-                fontWeight: 500,
-              }}
-            >
-              Calibrar ROI
+              <Pencil size={16} />
+              Editar disposición
             </button>
           )}
           <button
-            onClick={() => setModo((m) => (m === "monitoreo" ? "edicion" : "monitoreo"))}
+            onClick={() => setMenuAbierto(true)}
+            aria-label="Abrir menú"
             style={{
-              padding: "6px 14px",
-              borderRadius: 6,
-              border: "1px solid #1976d2",
-              fontSize: 13,
-              cursor: "pointer",
-              backgroundColor: modo === "edicion" ? "#1976d2" : "#fff",
-              color: modo === "edicion" ? "#fff" : "#1976d2",
-              fontWeight: 500,
-              transition: "background-color 0.15s, color 0.15s",
-            }}
-          >
-            {modo === "monitoreo" ? "Editar disposición" : "Ver monitoreo"}
-          </button>
-          {modo === "edicion" && (
-            <>
-              <button
-                onClick={() => setModalAbierto("sector")}
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: 6,
-                  border: "1px solid #1976d2",
-                  fontSize: 13,
-                  cursor: "pointer",
-                  backgroundColor: "#fff",
-                  color: "#1976d2",
-                  fontWeight: 500,
-                }}
-              >
-                + Nuevo sector
-              </button>
-              <button
-                onClick={() => setModalAbierto("mesa")}
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: 6,
-                  border: "1px solid #1976d2",
-                  fontSize: 13,
-                  cursor: "pointer",
-                  backgroundColor: "#fff",
-                  color: "#1976d2",
-                  fontWeight: 500,
-                }}
-              >
-                + Nueva mesa
-              </button>
-            </>
-          )}
-          <button
-            onClick={handleLogout}
-            style={{
-              fontSize: 13,
-              color: "#e53935",
-              background: "none",
+              width: 44,
+              height: 44,
+              flexShrink: 0,
               border: "none",
+              borderRadius: 10,
+              backgroundColor: "#f1f5f9",
+              color: "#1a1a1a",
               cursor: "pointer",
-              textDecoration: "underline",
-              padding: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            Cerrar sesión
+            <Menu size={20} />
           </button>
         </div>
       </header>
 
-      <main style={{ padding: 24 }}>
+      {/* Compensa el header fijo: sin esto el contenido de abajo arrancaría tapado. */}
+      <div style={{ height: ALTURA_HEADER }} />
+
+      {modo === "edicion" && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            padding: "8px 16px",
+            backgroundColor: "#eff6ff",
+            borderBottom: "1px solid #bfdbfe",
+            color: "#1d4ed8",
+            fontSize: 13,
+            fontWeight: 700,
+          }}
+        >
+          <Pencil size={14} />
+          Editando disposición del salón
+        </div>
+      )}
+
+      {modo === "edicion" && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 300,
+            border: "4px solid #1d4ed8",
+            pointerEvents: "none",
+          }}
+        />
+      )}
+
+      <main style={{ padding: 24, paddingBottom: modo === "edicion" ? 96 : 24 }}>
         {loading && (
           <p style={{ fontSize: 14, color: "#888" }}>Cargando salón...</p>
         )}
@@ -398,6 +370,48 @@ export default function DashboardPage() {
         )}
       </main>
 
+      {modo === "edicion" && (
+        <div
+          style={{
+            position: "fixed",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 97,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            padding: "12px 16px",
+            backgroundColor: "#fff",
+            borderTop: "2px solid #e2e8f0",
+            boxShadow: "0 -4px 12px rgba(0,0,0,0.08)",
+          }}
+        >
+          <button onClick={() => setModalAbierto("sector")} style={editActionBtnStyle}>
+            + Nuevo sector
+          </button>
+          <button onClick={() => setModalAbierto("mesa")} style={editActionBtnStyle}>
+            + Nueva mesa
+          </button>
+          <button onClick={() => setModo("monitoreo")} style={editExitBtnStyle}>
+            Salir de edición
+          </button>
+        </div>
+      )}
+
+      <MenuLateral
+        abierto={menuAbierto}
+        onClose={() => setMenuAbierto(false)}
+        nombre={user?.nombre ?? ""}
+        rol={user?.rol ?? ""}
+        esAdmin={user?.rol === "admin"}
+        onVerHistorial={() => navigate("/historial")}
+        onCamaras={() => navigate("/camaras")}
+        onCalibrarRoi={() => navigate("/calibracion-roi")}
+        onLogout={handleLogout}
+      />
+
       {modalAbierto === "sector" && (
         <ModalAltaSector onClose={() => setModalAbierto(null)} onSectorCreado={handleSectorCreado} />
       )}
@@ -406,4 +420,28 @@ export default function DashboardPage() {
       )}
     </div>
   )
+}
+
+const editActionBtnStyle: React.CSSProperties = {
+  minHeight: 44,
+  padding: "0 18px",
+  borderRadius: 8,
+  border: "2px solid #1976d2",
+  backgroundColor: "#fff",
+  color: "#1976d2",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+}
+
+const editExitBtnStyle: React.CSSProperties = {
+  minHeight: 44,
+  padding: "0 18px",
+  borderRadius: 8,
+  border: "none",
+  backgroundColor: "#1a1a1a",
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
 }

@@ -7,11 +7,14 @@ from app.models.roi_mesa import RoiMesa
 from app.models.mesa import Mesa
 from app.models.camara import Camara
 from app.schemas.roi_mesa import RoiMesaCreate, RoiMesaUpdate, RoiMesaResponse
-from app.routers.auth import requiere_rol, ROL_ADMIN
+from app.routers.auth import requiere_rol, ROL_ADMIN, ROL_VISION_MODULE
 
-# Definir los ROI es configuración del sistema de visión: solo admin, igual que
-# las cámaras (T26-116, docs/roles-permisos.md).
-router = APIRouter(dependencies=[Depends(requiere_rol(ROL_ADMIN))])
+# Definir los ROI es configuración del sistema de visión: admin, igual que las
+# cámaras (T26-116, docs/roles-permisos.md). vision_module (T26-152) se suma acá
+# porque el módulo lee este router al arrancar (GET /roi-mesa/); ROL_ADMIN queda
+# explícito aunque ya pase implícito en requiere_rol(), por la misma razón que en
+# camaras.py.
+router = APIRouter(dependencies=[Depends(requiere_rol(ROL_ADMIN, ROL_VISION_MODULE))])
 
 _CARGA_CONTEXTO = (joinedload(RoiMesa.mesa), joinedload(RoiMesa.camara))
 

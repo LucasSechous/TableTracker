@@ -8,7 +8,7 @@ from app.models.sector import Sector
 from app.models.historial import HistorialEstado
 from app.schemas.mesa import MesaCreate, MesaUpdate, MesaResponse, EstadoUpdate, PosicionUpdate
 from app.models.user import User
-from app.routers.auth import get_usuario_actual, requiere_rol, ROL_ADMIN
+from app.routers.auth import get_usuario_actual, requiere_rol, ROL_ADMIN, ROL_VISION_MODULE
 
 router = APIRouter(dependencies=[Depends(get_usuario_actual)])
 
@@ -91,7 +91,10 @@ def cambiar_estado_mesa(
     mesa_id: int,
     datos: EstadoUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(requiere_rol("encargado", "mozo")),
+    # ROL_VISION_MODULE (T26-152) cubre lo mismo que ya cubría mozo antes de la
+    # promoción temporal a admin en T26-138: este es el único PATCH que el módulo
+    # llama sobre mesas.
+    _: User = Depends(requiere_rol("encargado", "mozo", ROL_VISION_MODULE)),
 ):
     mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
     if not mesa:

@@ -102,6 +102,12 @@ def get_usuario_actual(
 # endpoint protegido por rol acepta admin implícitamente (ver docs/roles-permisos.md).
 ROL_ADMIN = "admin"
 
+# Usuario técnico de vision-module (T26-152): reemplaza el admin temporal que se le
+# dio en T26-138 para destrabar GET /camaras/ y GET /roi-mesa/. Cubre exactamente lo
+# que el módulo usa hoy — nada más — para no seguir corriendo con más privilegio del
+# necesario.
+ROL_VISION_MODULE = "vision_module"
+
 
 def requiere_rol(*roles_permitidos: str):
     """Dependencia adicional sobre get_usuario_actual: exige que el usuario autenticado

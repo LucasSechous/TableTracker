@@ -1,6 +1,7 @@
 import cv2
 from contextlib import contextmanager
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 
@@ -49,17 +50,48 @@ def _validar_sector(db: Session, sector_id: Optional[int]) -> None:
         raise HTTPException(status_code=400, detail="El sector indicado no existe")
 
 
+# Nombre de la constraint en la base, fijado por la revisión 6597e37ddeab.
+_UNIQUE_NOMBRE = "camaras_nombre_unique"
+
+
+def _nombre_ocupado(nombre: str) -> HTTPException:
+    return HTTPException(
+        status_code=409, detail=f"Ya existe una cámara con el nombre «{nombre}» (puede estar inactiva)"
+    )
+
+
 def _validar_nombre_libre(db: Session, nombre: str, excluir_id: Optional[int] = None) -> None:
-    # La base no tiene UNIQUE sobre camaras.nombre (T26-125), así que la unicidad
-    # se controla acá. Sin respaldo del motor: dos altas simultáneas con el mismo
-    # nombre podrían pasar las dos.
+    # Este chequeo da el mensaje lindo; el que garantiza la regla es el UNIQUE de
+    # la base (T26-141), porque entre esta consulta y el commit se puede colar
+    # otra alta con el mismo nombre. Ver _commit_sin_choque_de_nombre.
     query = db.query(Camara).filter(Camara.nombre == nombre)
     if excluir_id is not None:
         query = query.filter(Camara.id != excluir_id)
     if query.first():
-        raise HTTPException(
-            status_code=409, detail=f"Ya existe una cámara con el nombre «{nombre}» (puede estar inactiva)"
-        )
+        raise _nombre_ocupado(nombre)
+
+
+@contextmanager
+def _commit_sin_choque_de_nombre(db: Session, nombre: str):
+    """Commitea traduciendo el choque contra camaras_nombre_unique al mismo 409.
+
+    Es el otro extremo de _validar_nombre_libre: la consulta previa cubre el caso
+    normal y esto cubre la carrera que la consulta no puede ver. Sin esto, agregar
+    el UNIQUE habría cambiado un duplicado silencioso por un 500.
+
+    Se mira el nombre de la constraint en vez de atrapar cualquier IntegrityError
+    porque `camaras` también tiene la FK a `sectores`: si el sector desapareciera
+    entre la validación y el commit, contestar «ya existe una cámara con ese
+    nombre» sería mentir sobre lo que pasó.
+    """
+    try:
+        yield
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        if _UNIQUE_NOMBRE not in str(error.orig):
+            raise
+        raise _nombre_ocupado(nombre) from error
 
 
 def _refrescar(db: Session, camara: Camara) -> Camara:
@@ -113,8 +145,8 @@ def crear_camara(datos: CamaraCreate, db: Session = Depends(get_db)):
     with _errores_de_cifrado():
         campos.update(Camara.partes_desde_url(campos.pop("rtsp_url")))
     camara = Camara(**campos)
-    db.add(camara)
-    db.commit()
+    with _commit_sin_choque_de_nombre(db, datos.nombre):
+        db.add(camara)
     return _refrescar(db, camara)
 
 
@@ -136,9 +168,9 @@ def actualizar_camara(camara_id: int, datos: CamaraUpdate, db: Session = Depends
         with _errores_de_cifrado():
             cambios.update(Camara.partes_desde_url(cambios.pop("rtsp_url")))
 
-    for campo, valor in cambios.items():
-        setattr(camara, campo, valor)
-    db.commit()
+    with _commit_sin_choque_de_nombre(db, cambios.get("nombre", camara.nombre)):
+        for campo, valor in cambios.items():
+            setattr(camara, campo, valor)
     return _refrescar(db, camara)
 
 

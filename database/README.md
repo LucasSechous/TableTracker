@@ -55,6 +55,7 @@ declara, que es exactamente el drift que este ticket vino a cerrar.
 |---|---|
 | `e72cc6e493dc` | Estado inicial: retrato del esquema tal como estaba en Supabase |
 | `903cf408bb66` | Agrega `ix_camaras_id` e `ix_roi_mesa_id`, que la base no tenía |
+| `6597e37ddeab` | Agrega los UNIQUE de `camaras.nombre` y `roi_mesa(mesa_id, camara_id)` (T26-141) |
 
 La inicial refleja **la base real y no los modelos**, incluidas sus imperfecciones: `camaras` y
 `roi_mesa` —las dos tablas que T26-125 creó a mano— no tenían el índice sobre `id` que los modelos
@@ -64,6 +65,13 @@ que mentía (faltaban 11 `server_default`).
 
 Sobre una base que ya existía, la inicial se aplica con `alembic stamp e72cc6e493dc`, que sólo anota
 la versión sin correr DDL. Ya se hizo en Supabase.
+
+`6597e37ddeab` está en la misma situación por otro motivo: sus dos constraints se habían aplicado a
+mano en Supabase antes de que la revisión existiera, así que en producción también se anotó con
+`alembic stamp 6597e37ddeab` en vez de correr el upgrade, que habría fallado con «already exists».
+Es la última vez que debería hacer falta: el esquema ya lo gobierna Alembic, y el atajo de tocar la
+base por afuera es justo lo que deja a un entorno nuevo distinto de producción — que es como se
+detectó esto, con el script de verificación de acá abajo.
 
 ## Verificación
 

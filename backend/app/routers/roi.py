@@ -1,4 +1,6 @@
+from contextlib import contextmanager
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 
@@ -30,14 +32,45 @@ def _validar_referencias(db: Session, mesa_id: Optional[int], camara_id: Optiona
         raise HTTPException(status_code=400, detail="La cámara indicada no existe")
 
 
+# Nombre de la constraint en la base, fijado por la revisión 6597e37ddeab.
+_UNIQUE_PAR = "roi_mesa_mesa_camara_unique"
+
+
 def _buscar_par(db: Session, mesa_id: int, camara_id: int, excluir_id: Optional[int] = None):
-    # "Una mesa tiene un solo ROI por cámara" se aplica solo acá: la base no tiene
-    # UNIQUE sobre (mesa_id, camara_id) (T26-125). Sin respaldo del motor, dos
-    # altas simultáneas del mismo par podrían pasar las dos.
+    # "Una mesa tiene un solo ROI por cámara". Buscar el par acá es lo que permite
+    # reutilizar un ROI dado de baja y dar mensajes con el id del que estorba; que
+    # la regla se cumpla siempre lo garantiza el UNIQUE de la base (T26-141), que
+    # cierra la ventana entre esta consulta y el commit. Ver _commit_sin_choque_de_par.
+    # No filtra por `activa` a propósito: el UNIQUE tampoco distingue, y un ROI
+    # inactivo sigue ocupando el par.
     query = db.query(RoiMesa).filter(RoiMesa.mesa_id == mesa_id, RoiMesa.camara_id == camara_id)
     if excluir_id is not None:
         query = query.filter(RoiMesa.id != excluir_id)
     return query.first()
+
+
+@contextmanager
+def _commit_sin_choque_de_par(db: Session):
+    """Commitea traduciendo el choque contra roi_mesa_mesa_camara_unique a un 409.
+
+    El mensaje es más pelado que el de _buscar_par —no puede nombrar el id del ROI
+    que estorba, porque la fila que lo causó se insertó en otra transacción— pero
+    el estado sigue siendo el mismo que ve quien llama: ese par ya está tomado.
+
+    Se mira el nombre de la constraint y no cualquier IntegrityError porque
+    `roi_mesa` también tiene las FK a `mesas` y `camaras`.
+    """
+    try:
+        yield
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        if _UNIQUE_PAR not in str(error.orig):
+            raise
+        raise HTTPException(
+            status_code=409,
+            detail="Esa mesa ya tiene un ROI definido en esa cámara",
+        ) from error
 
 
 def _refrescar(db: Session, roi: RoiMesa) -> RoiMesa:
@@ -87,8 +120,8 @@ def crear_roi(datos: RoiMesaCreate, db: Session = Depends(get_db)):
         return _refrescar(db, existente)
 
     roi = RoiMesa(**datos.model_dump())
-    db.add(roi)
-    db.commit()
+    with _commit_sin_choque_de_par(db):
+        db.add(roi)
     return _refrescar(db, roi)
 
 
@@ -110,9 +143,9 @@ def actualizar_roi(roi_id: int, datos: RoiMesaUpdate, db: Session = Depends(get_
                 detail=f"Ya hay un ROI para esa mesa en esa cámara (id {choque.id})",
             )
 
-    for campo, valor in cambios.items():
-        setattr(roi, campo, valor)
-    db.commit()
+    with _commit_sin_choque_de_par(db):
+        for campo, valor in cambios.items():
+            setattr(roi, campo, valor)
     return _refrescar(db, roi)
 
 

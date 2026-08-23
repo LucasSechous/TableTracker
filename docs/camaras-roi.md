@@ -38,7 +38,7 @@ producción.
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | serial PK | |
-| `nombre` | varchar NOT NULL | **Sin UNIQUE en la base**: la unicidad se controla en el router |
+| `nombre` | varchar NOT NULL, UNIQUE | `camaras_nombre_unique` (T26-141) |
 | `esquema` | varchar NOT NULL, default `rtsp` | `rtsp` o `rtsps` |
 | `host` | varchar NOT NULL | |
 | `puerto` | integer NOT NULL, default 554 | |
@@ -65,10 +65,10 @@ registrado en el repo.
 | `activa` | bool, default true | Baja lógica |
 | `created_at` | timestamptz, default now() | |
 
-**No hay UNIQUE sobre (`mesa_id`, `camara_id`)**. La regla "una mesa tiene un solo ROI por
-cámara" se aplica únicamente en el router, así que no tiene respaldo del motor: dos altas
-simultáneas del mismo par podrían pasar las dos. Una mesa sí puede tener ROI en varias cámaras
-distintas (mesas en el límite entre dos campos de visión), eso es intencional.
+**UNIQUE sobre (`mesa_id`, `camara_id`)** — `roi_mesa_mesa_camara_unique` (T26-141). Una mesa sí
+puede tener ROI en varias cámaras distintas (mesas en el límite entre dos campos de visión), eso es
+intencional: lo que el UNIQUE prohíbe es el par repetido. Aplica esté la fila activa o no, que es lo
+que hace que volver a dar de alta un ROI dado de baja reutilice la fila en vez de duplicarla.
 
 El contenido de `coordenadas` usa el mismo formato que ya consume el módulo de visión en
 [vision-module/config/zonas.example.json](../vision-module/config/zonas.example.json) bajo la

@@ -4,19 +4,27 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 
-from app.database import get_db
+from app.database import es_violacion_unique, get_db
 from app.models.roi_mesa import RoiMesa
 from app.models.mesa import Mesa
 from app.models.camara import Camara
 from app.schemas.roi_mesa import RoiMesaCreate, RoiMesaUpdate, RoiMesaResponse
-from app.routers.auth import requiere_rol, ROL_ADMIN, ROL_VISION_MODULE
+from app.routers.auth import get_usuario_actual, requiere_rol, ROL_ADMIN, ROL_VISION_MODULE
 
 # Definir los ROI es configuración del sistema de visión: admin, igual que las
-# cámaras (T26-116, docs/roles-permisos.md). vision_module (T26-152) se suma acá
-# porque el módulo lee este router al arrancar (GET /roi-mesa/); ROL_ADMIN queda
-# explícito aunque ya pase implícito en requiere_rol(), por la misma razón que en
-# camaras.py.
-router = APIRouter(dependencies=[Depends(requiere_rol(ROL_ADMIN, ROL_VISION_MODULE))])
+# cámaras (T26-116, docs/roles-permisos.md).
+#
+# El permiso va por endpoint y no en el APIRouter (T26-164, igual que camaras.py):
+# vision_module solo necesita leer el listado, y ponerlo en el router le daba también
+# POST, PATCH y DELETE sobre los ROI. Al agregar un endpoint nuevo acordate del
+# `dependencies=`, o queda abierto a cualquier usuario autenticado.
+router = APIRouter(dependencies=[Depends(get_usuario_actual)])
+
+SOLO_ADMIN = [Depends(requiere_rol(ROL_ADMIN))]
+
+# El módulo lee este listado al arrancar, filtrado por cámara, para saber qué
+# polígono corresponde a cada mesa. Es lo único que consume de este router.
+ADMIN_O_VISION = [Depends(requiere_rol(ROL_ADMIN, ROL_VISION_MODULE))]
 
 _CARGA_CONTEXTO = (joinedload(RoiMesa.mesa), joinedload(RoiMesa.camara))
 
@@ -60,15 +68,15 @@ def _commit_sin_choque_de_par(db: Session):
     que estorba, porque la fila que lo causó se insertó en otra transacción— pero
     el estado sigue siendo el mismo que ve quien llama: ese par ya está tomado.
 
-    Se mira el nombre de la constraint y no cualquier IntegrityError porque
-    `roi_mesa` también tiene las FK a `mesas` y `camaras`.
+    Se mira exactamente qué constraint falló y no cualquier IntegrityError porque
+    `roi_mesa` también tiene las FK a `mesas` y `camaras` (ver es_violacion_unique).
     """
     try:
         yield
         db.commit()
     except IntegrityError as error:
         db.rollback()
-        if _UNIQUE_PAR not in str(error.orig):
+        if not es_violacion_unique(error, _UNIQUE_PAR, "mesa_id", "camara_id"):
             raise
         raise HTTPException(
             status_code=409,
@@ -82,7 +90,7 @@ def _refrescar(db: Session, roi: RoiMesa) -> RoiMesa:
     return roi
 
 
-@router.get("/", response_model=list[RoiMesaResponse])
+@router.get("/", response_model=list[RoiMesaResponse], dependencies=ADMIN_O_VISION)
 def listar_rois(
     mesa_id: Optional[int] = Query(None),
     camara_id: Optional[int] = Query(None),
@@ -99,12 +107,12 @@ def listar_rois(
     return query.order_by(RoiMesa.id).all()
 
 
-@router.get("/{roi_id}", response_model=RoiMesaResponse)
+@router.get("/{roi_id}", response_model=RoiMesaResponse, dependencies=SOLO_ADMIN)
 def obtener_roi(roi_id: int, db: Session = Depends(get_db)):
     return _obtener(db, roi_id)
 
 
-@router.post("/", response_model=RoiMesaResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=RoiMesaResponse, status_code=status.HTTP_201_CREATED, dependencies=SOLO_ADMIN)
 def crear_roi(datos: RoiMesaCreate, db: Session = Depends(get_db)):
     _validar_referencias(db, datos.mesa_id, datos.camara_id)
 
@@ -128,7 +136,7 @@ def crear_roi(datos: RoiMesaCreate, db: Session = Depends(get_db)):
     return _refrescar(db, roi)
 
 
-@router.patch("/{roi_id}", response_model=RoiMesaResponse)
+@router.patch("/{roi_id}", response_model=RoiMesaResponse, dependencies=SOLO_ADMIN)
 def actualizar_roi(roi_id: int, datos: RoiMesaUpdate, db: Session = Depends(get_db)):
     roi = _obtener(db, roi_id)
     cambios = datos.model_dump(exclude_unset=True)
@@ -152,7 +160,7 @@ def actualizar_roi(roi_id: int, datos: RoiMesaUpdate, db: Session = Depends(get_
     return _refrescar(db, roi)
 
 
-@router.delete("/{roi_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{roi_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=SOLO_ADMIN)
 def desactivar_roi(roi_id: int, db: Session = Depends(get_db)):
     """Baja lógica: el ROI queda inactivo y deja de entregarse en el listado, pero
     la fila se conserva para no perder el polígono ya dibujado. Volver a crearlo

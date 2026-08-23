@@ -13,27 +13,32 @@ pero **no están en el repo**: T26-125 se aplicó como DDL directo sobre la base
 SQLAlchemy ni migración versionada. Como `Base.metadata.create_all` solo crea tablas que faltan y
 nunca altera las que existen, los modelos de acá **reflejan** ese esquema, no lo deciden.
 
-Esto tiene dos consecuencias que conviene tener presentes:
+Eso tenía dos consecuencias, **las dos resueltas por T26-137**:
 
-- El esquema real no está bajo control de versiones. Si alguien lo cambia en Supabase, los
-  modelos de [backend/app/models/](../backend/app/models/) quedan desincronizados en silencio y
-  el error aparece recién en runtime, como columna inexistente.
-- Cualquier entorno nuevo levanta con un esquema **distinto** al de producción: `create_all` va a
-  crear estas tablas desde los modelos, y los modelos no reproducen los `DEFAULT` ni la
-  precisión de tipos del DDL original.
+- El esquema real no estaba bajo control de versiones, así que un cambio en Supabase dejaba los
+  modelos de [backend/app/models/](../backend/app/models/) desincronizados en silencio y el error
+  aparecía recién en runtime, como columna inexistente.
+- Cualquier entorno nuevo levantaba con un esquema **distinto** al de producción: `create_all`
+  creaba las tablas desde los modelos, que no reproducían los `DEFAULT` del DDL original.
 
-T26-136 empezó a revertirlo por el lado que le tocaba: [database/](../database/) ya tiene los
-`.sql` numerados de ese cambio, y de ahí en adelante todo cambio de esquema se versiona antes de
-aplicarse. Lo que sigue sin estar es el **estado base** —las tablas tal como las dejó T26-125— y
-no hay tabla de versiones ni Alembic, así que el orden lo lleva el
-[README de database/](../database/README.md) a mano. Sigue valiendo un ticket para eso.
+Hoy el esquema lo gobierna **Alembic** desde [database/versions/](../database/versions/), y
+`main.py` ya no llama a `create_all` — levantar un entorno nuevo requiere
+`alembic -c database/alembic.ini upgrade head`. Ver el
+[README de database/](../database/README.md).
+
+T26-137 midió el drift que ya se había acumulado y lo cerró: a `camaras` y `roi_mesa` —las dos
+tablas creadas a mano— les faltaba el índice sobre `id` que los modelos declaran, y once columnas
+tenían `DEFAULT` en la base que los modelos sólo declaraban del lado de Python. Que un
+`--autogenerate` salga vacío es ahora la prueba de que modelos y base coinciden, y
+`backend/scripts/verificar_esquema_versionado.py` comprueba que un entorno nuevo nace idéntico a
+producción.
 
 ### `camaras` — [backend/app/models/camara.py](../backend/app/models/camara.py)
 
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | serial PK | |
-| `nombre` | varchar NOT NULL | **Sin UNIQUE en la base**: la unicidad se controla en el router |
+| `nombre` | varchar NOT NULL, UNIQUE | `camaras_nombre_unique` (T26-141) |
 | `esquema` | varchar NOT NULL, default `rtsp` | `rtsp` o `rtsps` |
 | `host` | varchar NOT NULL | |
 | `puerto` | integer NOT NULL, default 554 | |
@@ -60,10 +65,10 @@ registrado en el repo.
 | `activa` | bool, default true | Baja lógica |
 | `created_at` | timestamptz, default now() | |
 
-**No hay UNIQUE sobre (`mesa_id`, `camara_id`)**. La regla "una mesa tiene un solo ROI por
-cámara" se aplica únicamente en el router, así que no tiene respaldo del motor: dos altas
-simultáneas del mismo par podrían pasar las dos. Una mesa sí puede tener ROI en varias cámaras
-distintas (mesas en el límite entre dos campos de visión), eso es intencional.
+**UNIQUE sobre (`mesa_id`, `camara_id`)** — `roi_mesa_mesa_camara_unique` (T26-141). Una mesa sí
+puede tener ROI en varias cámaras distintas (mesas en el límite entre dos campos de visión), eso es
+intencional: lo que el UNIQUE prohíbe es el par repetido. Aplica esté la fila activa o no, que es lo
+que hace que volver a dar de alta un ROI dado de baja reutilice la fila en vez de duplicarla.
 
 El contenido de `coordenadas` usa el mismo formato que ya consume el módulo de visión en
 [vision-module/config/zonas.example.json](../vision-module/config/zonas.example.json) bajo la
@@ -240,8 +245,8 @@ Detalles de comportamiento que no se deducen de la tabla:
 
 ## Fuera de alcance (hallazgos, no corregidos acá)
 
-- **El esquema base de T26-125 sigue sin estar versionado** — detallado más arriba. La contraseña
-  RTSP en claro, que era el otro hallazgo de acá, la resolvió T26-136.
+- ~~**El esquema base de T26-125 no está versionado**~~ — lo resolvió T26-137, que dejó el esquema
+  entero bajo Alembic. La contraseña RTSP en claro, el otro hallazgo de acá, la resolvió T26-136.
 - **El módulo de visión todavía no consume estos endpoints.** Sigue leyendo los ROI de un archivo
   local (`ZONES_FILE`, ver [vision-module/app/config.py](../vision-module/app/config.py)); nadie
   lee `roi_mesa` ni `camaras` fuera de la API. Conectar el pipeline a la base necesita un ticket

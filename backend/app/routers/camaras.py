@@ -1,15 +1,16 @@
 import cv2
 from contextlib import contextmanager
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 
-from app.database import get_db
+from app.database import es_violacion_unique, get_db
 from app.models.camara import Camara
 from app.models.sector import Sector
 from app.schemas.camara import CamaraCreate, CamaraUpdate, CamaraResponse, CamaraTestResponse
 from app.schemas.deteccion import DetectionFrameResult
-from app.routers.auth import requiere_rol, ROL_ADMIN, ROL_VISION_MODULE
+from app.routers.auth import get_usuario_actual, requiere_rol, ROL_ADMIN, ROL_VISION_MODULE
 from app.services import cifrado, rtsp
 
 # El propio OpenCV (no solo ffmpeg) escribe warnings de conexión a stderr por su
@@ -22,11 +23,26 @@ cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_SILENT)
 # El listado también queda restringido porque la respuesta expone la topología de red
 # del local — host, puerto y usuario de cada cámara — y eso no es información para
 # cualquier rol autenticado.
-# vision_module (T26-152) se suma acá, no solo al GET, porque el router protege el
-# archivo entero de una sola vez: el módulo también llama POST /deteccion-actual más
-# abajo, gobernado por esta misma dependencia. ROL_ADMIN queda explícito aunque ya
-# pase implícito en requiere_rol(): no depender de ese comportamiento en silencio.
-router = APIRouter(dependencies=[Depends(requiere_rol(ROL_ADMIN, ROL_VISION_MODULE))])
+#
+# El permiso va por endpoint y no en el APIRouter (T26-164, patrón de mesas.py). Con
+# la dependencia a nivel de router, sumar vision_module para los dos endpoints que el
+# módulo necesita se lo daba también a POST, PATCH y DELETE: el usuario técnico podía
+# dar de alta y borrar cámaras. Acá el router solo exige estar autenticado y cada
+# operación declara su rol.
+#
+# OJO al agregar un endpoint nuevo: sin `dependencies=` queda abierto a cualquier
+# usuario autenticado. Todos los de este archivo llevan uno; que no sea el tuyo el
+# primero que falte.
+router = APIRouter(dependencies=[Depends(get_usuario_actual)])
+
+# ROL_ADMIN queda explícito aunque requiere_rol() ya lo deje pasar siempre: no
+# depender de ese comportamiento en silencio.
+SOLO_ADMIN = [Depends(requiere_rol(ROL_ADMIN))]
+
+# Lo único que vision-module consume de este router (T26-152, T26-164): el listado
+# para descubrir las cámaras del sector al arrancar, y el POST con el resultado de
+# cada frame. Ver vision-module/app/client/backend_client.py.
+ADMIN_O_VISION = [Depends(requiere_rol(ROL_ADMIN, ROL_VISION_MODULE))]
 
 # Última detección conocida por cámara (T26-150, vista en vivo): dict en memoria
 # del proceso, no en disco ni en Supabase — ver docs/privacidad-vision.md §3
@@ -53,17 +69,49 @@ def _validar_sector(db: Session, sector_id: Optional[int]) -> None:
         raise HTTPException(status_code=400, detail="El sector indicado no existe")
 
 
+# Nombre de la constraint en la base, fijado por la revisión 6597e37ddeab.
+_UNIQUE_NOMBRE = "camaras_nombre_unique"
+
+
+def _nombre_ocupado(nombre: str) -> HTTPException:
+    return HTTPException(
+        status_code=409, detail=f"Ya existe una cámara con el nombre «{nombre}» (puede estar inactiva)"
+    )
+
+
 def _validar_nombre_libre(db: Session, nombre: str, excluir_id: Optional[int] = None) -> None:
-    # La base no tiene UNIQUE sobre camaras.nombre (T26-125), así que la unicidad
-    # se controla acá. Sin respaldo del motor: dos altas simultáneas con el mismo
-    # nombre podrían pasar las dos.
+    # Este chequeo da el mensaje lindo; el que garantiza la regla es el UNIQUE de
+    # la base (T26-141), porque entre esta consulta y el commit se puede colar
+    # otra alta con el mismo nombre. Ver _commit_sin_choque_de_nombre.
     query = db.query(Camara).filter(Camara.nombre == nombre)
     if excluir_id is not None:
         query = query.filter(Camara.id != excluir_id)
     if query.first():
-        raise HTTPException(
-            status_code=409, detail=f"Ya existe una cámara con el nombre «{nombre}» (puede estar inactiva)"
-        )
+        raise _nombre_ocupado(nombre)
+
+
+@contextmanager
+def _commit_sin_choque_de_nombre(db: Session, nombre: str):
+    """Commitea traduciendo el choque contra camaras_nombre_unique al mismo 409.
+
+    Es el otro extremo de _validar_nombre_libre: la consulta previa cubre el caso
+    normal y esto cubre la carrera que la consulta no puede ver. Sin esto, agregar
+    el UNIQUE habría cambiado un duplicado silencioso por un 500.
+
+    Se mira exactamente qué constraint falló en vez de atrapar cualquier
+    IntegrityError porque `camaras` también tiene la FK a `sectores`: si el sector
+    desapareciera entre la validación y el commit, contestar «ya existe una cámara
+    con ese nombre» sería mentir sobre lo que pasó. De eso se ocupa
+    es_violacion_unique, que sabe que cada motor nombra el choque a su manera.
+    """
+    try:
+        yield
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        if not es_violacion_unique(error, _UNIQUE_NOMBRE, "nombre"):
+            raise
+        raise _nombre_ocupado(nombre) from error
 
 
 def _refrescar(db: Session, camara: Camara) -> Camara:
@@ -87,7 +135,7 @@ def _errores_de_cifrado():
         raise HTTPException(status_code=500, detail=str(error)) from error
 
 
-@router.get("/", response_model=list[CamaraResponse])
+@router.get("/", response_model=list[CamaraResponse], dependencies=ADMIN_O_VISION)
 def listar_camaras(
     sector_id: Optional[int] = Query(None),
     incluir_inactivas: bool = Query(False),
@@ -101,12 +149,12 @@ def listar_camaras(
     return query.order_by(Camara.id).all()
 
 
-@router.get("/{camara_id}", response_model=CamaraResponse)
+@router.get("/{camara_id}", response_model=CamaraResponse, dependencies=SOLO_ADMIN)
 def obtener_camara(camara_id: int, db: Session = Depends(get_db)):
     return _obtener(db, camara_id)
 
 
-@router.post("/", response_model=CamaraResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=CamaraResponse, status_code=status.HTTP_201_CREATED, dependencies=SOLO_ADMIN)
 def crear_camara(datos: CamaraCreate, db: Session = Depends(get_db)):
     _validar_sector(db, datos.sector_id)
     _validar_nombre_libre(db, datos.nombre)
@@ -117,12 +165,12 @@ def crear_camara(datos: CamaraCreate, db: Session = Depends(get_db)):
     with _errores_de_cifrado():
         campos.update(Camara.partes_desde_url(campos.pop("rtsp_url")))
     camara = Camara(**campos)
-    db.add(camara)
-    db.commit()
+    with _commit_sin_choque_de_nombre(db, datos.nombre):
+        db.add(camara)
     return _refrescar(db, camara)
 
 
-@router.patch("/{camara_id}", response_model=CamaraResponse)
+@router.patch("/{camara_id}", response_model=CamaraResponse, dependencies=SOLO_ADMIN)
 def actualizar_camara(camara_id: int, datos: CamaraUpdate, db: Session = Depends(get_db)):
     camara = _obtener(db, camara_id)
     # exclude_unset (y no exclude_none como en mesas/sectores) para distinguir
@@ -140,13 +188,13 @@ def actualizar_camara(camara_id: int, datos: CamaraUpdate, db: Session = Depends
         with _errores_de_cifrado():
             cambios.update(Camara.partes_desde_url(cambios.pop("rtsp_url")))
 
-    for campo, valor in cambios.items():
-        setattr(camara, campo, valor)
-    db.commit()
+    with _commit_sin_choque_de_nombre(db, cambios.get("nombre", camara.nombre)):
+        for campo, valor in cambios.items():
+            setattr(camara, campo, valor)
     return _refrescar(db, camara)
 
 
-@router.delete("/{camara_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{camara_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=SOLO_ADMIN)
 def desactivar_camara(camara_id: int, db: Session = Depends(get_db)):
     """Baja lógica: la cámara queda inactiva pero la fila no se borra, porque los
     ROI definidos sobre ella la siguen referenciando. Para reactivarla: PATCH con
@@ -157,7 +205,7 @@ def desactivar_camara(camara_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 
-@router.post("/{camara_id}/test-conexion", response_model=CamaraTestResponse)
+@router.post("/{camara_id}/test-conexion", response_model=CamaraTestResponse, dependencies=SOLO_ADMIN)
 def probar_conexion_camara(
     camara_id: int,
     timeout_segundos: float = Query(rtsp.TIMEOUT_DEFECTO, ge=1, le=15),
@@ -186,7 +234,7 @@ def probar_conexion_camara(
     )
 
 
-@router.get("/{camara_id}/snapshot")
+@router.get("/{camara_id}/snapshot", dependencies=SOLO_ADMIN)
 def capturar_snapshot(
     camara_id: int,
     timeout_segundos: float = Query(rtsp.TIMEOUT_DEFECTO, ge=1, le=15),
@@ -246,21 +294,20 @@ def capturar_snapshot(
     return Response(content=buffer.tobytes(), media_type="image/jpeg")
 
 
-@router.post("/{camara_id}/deteccion-actual", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/{camara_id}/deteccion-actual", status_code=status.HTTP_204_NO_CONTENT, dependencies=ADMIN_O_VISION)
 def publicar_deteccion_actual(camara_id: int, datos: DetectionFrameResult, db: Session = Depends(get_db)):
     """Recibe el resultado de detección de un frame desde vision-module (T26-150).
 
     Sobrescribe lo que hubiera antes: no hay historial, solo el último valor por
     cámara (ver docs/privacidad-vision.md §3). Quien llama esto en la práctica es
-    el usuario técnico de vision-module, no un admin humano, pero el permiso
-    sigue siendo requiere_rol(ROL_ADMIN) como el resto del router — no hay un rol
-    de servicio separado todavía (hallazgo ya registrado en docs/vision-loop.md).
+    el usuario técnico de vision-module, no un admin humano: es uno de los dos
+    endpoints del archivo que acepta el rol vision_module (T26-152, T26-164).
     """
     _obtener(db, camara_id)  # 404 si la cámara no existe: no guardar detecciones de una mesa fantasma
     _ultima_deteccion[camara_id] = datos
 
 
-@router.get("/{camara_id}/deteccion-actual", response_model=DetectionFrameResult)
+@router.get("/{camara_id}/deteccion-actual", response_model=DetectionFrameResult, dependencies=SOLO_ADMIN)
 def obtener_deteccion_actual(camara_id: int, db: Session = Depends(get_db)):
     """Último resultado de detección publicado para esta cámara (T26-150), para polling del frontend.
 

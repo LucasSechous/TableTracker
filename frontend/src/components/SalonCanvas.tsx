@@ -1,10 +1,14 @@
 // Canvas 2D que representa el salón del restaurante con sectores y mesas posicionados.
 // Presentacional salvo por el resize de su propio borde (solo admin, en modo edición): mantiene
 // un estado local optimista durante el arrastre, igual que SectorBloque con sus sectores.
+// El click en una mesa (modo monitoreo) abre PanelMesa con el detalle y la corrección manual
+// de estado (RF-17), en vez del selector inline que había antes directamente sobre el canvas.
 
 import { useState, useRef, useEffect } from "react"
+import type { CSSProperties } from "react"
 import type { Sector, Mesa, Modo } from "../types"
 import SectorBloque from "./SectorBloque"
+import PanelMesa from "./PanelMesa"
 import { COLOR_POR_ESTADO } from "../constants"
 
 // Tamaño mínimo del salón sin sectores, para evitar que el resize lo colapse a 0.
@@ -56,6 +60,9 @@ export default function SalonCanvas({
   const [localSize, setLocalSize] = useState({ ancho: anchoSalon, alto: altoSalon })
   const isResizing = useRef(false)
   const resizeStart = useRef<{ mouseX: number; mouseY: number; ancho: number; alto: number } | null>(null)
+
+  const [sectorFiltrado, setSectorFiltrado] = useState<number | null>(null)
+  const [mesaSeleccionadaId, setMesaSeleccionadaId] = useState<number | null>(null)
 
   useEffect(() => {
     if (!isResizing.current) {
@@ -115,6 +122,15 @@ export default function SalonCanvas({
     resizeStart.current = { mouseX: e.clientX, mouseY: e.clientY, ancho: localSize.ancho, alto: localSize.alto }
   }
 
+  const sectoresActivos = sectores.filter((s) => s.activo)
+  const sectoresVisibles =
+    sectorFiltrado === null ? sectoresActivos : sectoresActivos.filter((s) => s.id === sectorFiltrado)
+
+  const mesaSeleccionada =
+    mesaSeleccionadaId === null
+      ? null
+      : sectores.flatMap((s) => s.mesas ?? []).find((m) => m.id === mesaSeleccionadaId) ?? null
+
   return (
     <div>
       <div
@@ -122,22 +138,48 @@ export default function SalonCanvas({
           display: "flex",
           flexWrap: "wrap",
           gap: 16,
-          marginBottom: 8,
+          marginBottom: 12,
         }}
       >
         {Object.entries(COLOR_POR_ESTADO).map(([estado, color]) => (
           <div key={estado} style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span
               style={{
-                width: 12,
-                height: 12,
-                borderRadius: "50%",
+                width: 14,
+                height: 14,
+                borderRadius: 3,
                 backgroundColor: color,
                 display: "inline-block",
+                flexShrink: 0,
               }}
             />
-            <span style={{ fontSize: 12, color: "#555" }}>{ETIQUETA_POR_ESTADO[estado] ?? estado}</span>
+            <span style={{ fontSize: 13, color: "#475569", fontWeight: 500 }}>
+              {ETIQUETA_POR_ESTADO[estado] ?? estado}
+            </span>
           </div>
+        ))}
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          overflowX: "auto",
+          marginBottom: 16,
+          paddingBottom: 4,
+        }}
+      >
+        <button onClick={() => setSectorFiltrado(null)} style={estiloTab(sectorFiltrado === null)}>
+          Todos
+        </button>
+        {sectoresActivos.map((sector) => (
+          <button
+            key={sector.id}
+            onClick={() => setSectorFiltrado(sector.id)}
+            style={estiloTab(sectorFiltrado === sector.id)}
+          >
+            {sector.nombre}
+          </button>
         ))}
       </div>
 
@@ -152,20 +194,19 @@ export default function SalonCanvas({
           overflow: "hidden",
         }}
       >
-        {sectores.filter((sector) => sector.activo).map((sector) => (
+        {sectoresVisibles.map((sector) => (
           <SectorBloque
             key={sector.id}
             sector={sector}
             modo={modo}
             anchoSalon={localSize.ancho}
             altoSalon={localSize.alto}
-            onMesaEstadoChange={onMesaEstadoChange}
+            onMesaClick={(mesa) => setMesaSeleccionadaId(mesa.id)}
             onMesaPosicionChange={onMesaPosicionChange}
             onSectorDrag={onSectorPosicionChange}
             onSectorResize={onSectorResize}
             onSectorActualizado={onSectorActualizado}
             onSectorEliminado={onSectorEliminado}
-            onMesaActualizada={onMesaActualizada}
             onMesaEliminada={onMesaEliminada}
           />
         ))}
@@ -188,6 +229,29 @@ export default function SalonCanvas({
           />
         )}
       </div>
+
+      <PanelMesa
+        mesa={mesaSeleccionada}
+        onClose={() => setMesaSeleccionadaId(null)}
+        onEstadoChange={onMesaEstadoChange}
+        onMesaActualizada={onMesaActualizada}
+      />
     </div>
   )
+}
+
+function estiloTab(activo: boolean): CSSProperties {
+  return {
+    padding: "10px 18px",
+    minHeight: 44,
+    borderRadius: 8,
+    border: activo ? "2px solid #1976d2" : "2px solid #cbd5e1",
+    backgroundColor: activo ? "#1976d2" : "#fff",
+    color: activo ? "#fff" : "#64748b",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+  }
 }

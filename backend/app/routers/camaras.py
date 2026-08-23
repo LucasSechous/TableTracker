@@ -10,7 +10,7 @@ from app.models.camara import Camara
 from app.models.sector import Sector
 from app.schemas.camara import CamaraCreate, CamaraUpdate, CamaraResponse, CamaraTestResponse
 from app.schemas.deteccion import DetectionFrameResult
-from app.routers.auth import requiere_rol, ROL_ADMIN
+from app.routers.auth import requiere_rol, ROL_ADMIN, ROL_VISION_MODULE
 from app.services import cifrado, rtsp
 
 # El propio OpenCV (no solo ffmpeg) escribe warnings de conexión a stderr por su
@@ -19,11 +19,15 @@ from app.services import cifrado, rtsp
 # problema del backend.
 cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_SILENT)
 
-# Configuración de cámaras: solo admin en todos los verbos, incluido el GET
-# (T26-116, docs/roles-permisos.md). El listado también queda restringido porque
-# la respuesta expone la topología de red del local — host, puerto y usuario de
-# cada cámara — y eso no es información para cualquier rol autenticado.
-router = APIRouter(dependencies=[Depends(requiere_rol(ROL_ADMIN))])
+# Configuración de cámaras: admin en todos los verbos (T26-116, docs/roles-permisos.md).
+# El listado también queda restringido porque la respuesta expone la topología de red
+# del local — host, puerto y usuario de cada cámara — y eso no es información para
+# cualquier rol autenticado.
+# vision_module (T26-152) se suma acá, no solo al GET, porque el router protege el
+# archivo entero de una sola vez: el módulo también llama POST /deteccion-actual más
+# abajo, gobernado por esta misma dependencia. ROL_ADMIN queda explícito aunque ya
+# pase implícito en requiere_rol(): no depender de ese comportamiento en silencio.
+router = APIRouter(dependencies=[Depends(requiere_rol(ROL_ADMIN, ROL_VISION_MODULE))])
 
 # Última detección conocida por cámara (T26-150, vista en vivo): dict en memoria
 # del proceso, no en disco ni en Supabase — ver docs/privacidad-vision.md §3

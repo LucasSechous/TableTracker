@@ -6,7 +6,7 @@
 # repo: este modelo lo refleja, no lo decide. Notar que la base NO tiene un UNIQUE
 # sobre (mesa_id, camara_id) — esa regla se aplica solo en el router.
 
-from sqlalchemy import Column, Integer, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, Boolean, DateTime, ForeignKey, JSON, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -25,7 +25,7 @@ class RoiMesa(Base):
     # Se reasigna entero en cada edición, nunca se muta in place (SQLAlchemy no
     # detecta cambios dentro de una columna JSON).
     coordenadas = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
-    activa = Column(Boolean, default=True)
+    activa = Column(Boolean, default=True, server_default=text("true"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     mesa = relationship("Mesa")

@@ -1,4 +1,9 @@
 -- T26-136 — fase 3: cerrar la migración y borrar la columna en claro.
+-- YA APLICADO. Movido a database/historico/ por T26-137, que pasó el esquema a
+-- Alembic: las rutas «database/00X_...» que se nombran más abajo eran las de
+-- cuando esto se corrió. No hay que volver a ejecutarlo; su resultado está
+-- reflejado en la revisión inicial de database/versions/.
+--
 --
 -- Corré esto SOLO después de 001, del script de migración, y de haber verificado
 -- que la app funciona: listar cámaras, probar conexión y sacar un snapshot. Esta

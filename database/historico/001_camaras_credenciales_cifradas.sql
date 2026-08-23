@@ -1,4 +1,9 @@
 -- T26-136 — fase 1: columnas nuevas en `camaras`.
+-- YA APLICADO. Movido a database/historico/ por T26-137, que pasó el esquema a
+-- Alembic: las rutas «database/00X_...» que se nombran más abajo eran las de
+-- cuando esto se corrió. No hay que volver a ejecutarlo; su resultado está
+-- reflejado en la revisión inicial de database/versions/.
+--
 --
 -- Hasta acá la conexión iba entera en `camaras.rtsp_url`, con la contraseña en
 -- claro (esquema de T26-125). Esta fase agrega las columnas separadas y deja la

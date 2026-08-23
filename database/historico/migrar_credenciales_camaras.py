@@ -1,5 +1,8 @@
 # T26-136 — fase 2: llena las columnas nuevas de `camaras` a partir de rtsp_url.
 #
+# YA APLICADO. Queda como registro de la migración de T26-136; el esquema del
+# proyecto pasó a versionarse con Alembic en database/versions/ (T26-137).
+#
 # Lee cada fila, parsea la URL con el mismo app.services.rtsp que usa la API
 # (para que la migración no interprete las URLs distinto que el código que después
 # las va a usar), y escribe esquema/host/puerto/ruta/usuario más la contraseña
@@ -16,8 +19,8 @@
 # Uso (desde la raíz del repo, con el venv del backend activado y
 # CAMARA_ENCRYPTION_KEYS ya cargada en backend/.env):
 #
-#   python database/migrar_credenciales_camaras.py --dry-run   # muestra qué haría
-#   python database/migrar_credenciales_camaras.py             # escribe
+#   python database/historico/migrar_credenciales_camaras.py --dry-run   # muestra qué haría
+#   python database/historico/migrar_credenciales_camaras.py             # escribe
 
 import argparse
 import os
@@ -27,7 +30,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
-RAIZ_BACKEND = Path(__file__).resolve().parent.parent / "backend"
+RAIZ_BACKEND = Path(__file__).resolve().parent.parent.parent / "backend"
 sys.path.insert(0, str(RAIZ_BACKEND))
 
 from app.services import cifrado, rtsp  # noqa: E402

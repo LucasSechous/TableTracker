@@ -8,7 +8,7 @@ from typing import Optional
 from app.database import es_violacion_unique, get_db
 from app.models.camara import Camara
 from app.models.sector import Sector
-from app.schemas.camara import CamaraCreate, CamaraUpdate, CamaraResponse, CamaraTestResponse
+from app.schemas.camara import CamaraCreate, CamaraUpdate, CamaraResponse, CamaraTestResponse, CamaraTestUrlRequest
 from app.schemas.deteccion import DetectionFrameResult
 from app.routers.auth import get_usuario_actual, requiere_rol, ROL_ADMIN, ROL_VISION_MODULE
 from app.services import cifrado, rtsp
@@ -231,6 +231,29 @@ def probar_conexion_camara(
         codigo_rtsp=resultado.codigo_rtsp,
         latencia_ms=resultado.latencia_ms,
         rtsp_url=camara.rtsp_url_enmascarada,
+    )
+
+
+@router.post("/test-conexion", response_model=CamaraTestResponse, dependencies=SOLO_ADMIN)
+def probar_conexion_url(
+    datos: CamaraTestUrlRequest,
+    timeout_segundos: float = Query(rtsp.TIMEOUT_DEFECTO, ge=1, le=15),
+):
+    """Prueba una URL RTSP antes de dar de alta la cámara (T26-142).
+
+    Mismo resultado que POST /{camara_id}/test-conexion pero sin cámara guardada
+    de por medio: la UI puede probar la URL que el usuario está cargando en el
+    formulario de alta antes de mandar el POST que la persiste. No hay nada que
+    descifrar acá (la contraseña viaja en el propio body, no en una columna
+    cifrada), así que a diferencia del endpoint con {camara_id} no hace falta
+    _errores_de_cifrado."""
+    resultado = rtsp.probar_url(datos.rtsp_url, timeout=timeout_segundos)
+    return CamaraTestResponse(
+        ok=resultado.ok,
+        mensaje=resultado.mensaje,
+        codigo_rtsp=resultado.codigo_rtsp,
+        latencia_ms=resultado.latencia_ms,
+        rtsp_url=rtsp.enmascarar_url(datos.rtsp_url),
     )
 
 

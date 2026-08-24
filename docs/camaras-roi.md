@@ -257,14 +257,16 @@ Detalles de comportamiento que no se deducen de la tabla:
 - **No hay prueba de conexión previa al alta.** `test-conexion` opera sobre una cámara ya
   guardada; para que la UI pueda validar los datos antes de crearla haría falta una variante que
   reciba la URL en el cuerpo.
-- **Sin suite de tests de backend.** El proyecto no tiene pytest del lado del backend, solo la de
-  Playwright en `e2e/`. La implementación de T26-126/127 se verificó contra SQLite y un servidor
-  RTSP falso (Digest con y sin `qop`, Basic, contraseña incorrecta, 404, timeout, puerto cerrado,
-  URL inválida), pero esos scripts quedaron fuera del repo. T26-136 sí dejó el suyo:
-  [backend/scripts/verificar_cifrado_camaras.py](../backend/scripts/verificar_cifrado_camaras.py)
-  levanta la API con `TestClient` contra un SQLite temporal y corre 65 chequeos. Es un script, no
-  una suite: hay que acordarse de correrlo. Sigue valiendo un ticket para montar pytest y sumar
-  `/camaras` y `/roi-mesa` ahí.
+- ~~**Sin suite de tests de backend.**~~ Lo resolvió T26-140:
+  [backend/tests/](../backend/tests/) tiene ahora la suite real con `pytest` + `TestClient`,
+  incluido el servidor RTSP falso (Digest con y sin `qop`, Basic, contraseña incorrecta, 404,
+  timeout, puerto cerrado, URL inválida) como fixture reutilizable en
+  [backend/tests/fixtures/rtsp_fake_server.py](../backend/tests/fixtures/rtsp_fake_server.py). Se
+  corre con `pytest` desde `backend/`. Los scripts de verificación de T26-136 y T26-141
+  ([verificar_cifrado_camaras.py](../backend/scripts/verificar_cifrado_camaras.py),
+  [verificar_permisos_y_unicidad.py](../backend/scripts/verificar_permisos_y_unicidad.py)) quedan
+  igual: son anteriores a esta suite y no se portaron a pytest como parte de T26-140, que se
+  limitó a los chequeos de T26-126/127 que el ticket pedía versionar.
 - **SSRF por diseño.** `test-conexion` hace que el backend abra una conexión TCP a un host y
   puerto que elige el usuario. Es inherente a la función (las cámaras están en la red interna) y
   está acotado a `admin`, pero conviene tenerlo presente si el endpoint se abriera a otro rol.

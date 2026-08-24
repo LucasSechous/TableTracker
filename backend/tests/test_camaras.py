@@ -84,6 +84,20 @@ def test_crear_ok(client, como, crear_sector):
     assert cuerpo["sector"]["id"] == sector.id
 
 
+def test_crear_recorta_espacios_de_sobra_en_el_nombre(client, como, crear_sector):
+    como("admin")
+    respuesta = client.post(
+        "/camaras/",
+        json={
+            "nombre": "  Cocina  ",
+            "rtsp_url": "rtsp://10.0.0.1:554/s1",
+            "sector_id": crear_sector().id,
+        },
+    )
+    assert respuesta.status_code == 201
+    assert respuesta.json()["nombre"] == "Cocina"
+
+
 def test_crear_sin_credenciales(client, como, crear_sector):
     sector = crear_sector()
     como("admin")
@@ -119,13 +133,13 @@ def test_crear_rtsp_url_invalida(client, como, crear_sector, rtsp_url):
     assert respuesta.status_code == 422
 
 
-# "   " (sólo espacios) NO está acá a propósito: CamaraCreate.validar_nombre()
-# hace `.strip()` en un @field_validator normal (modo "after"), que en Pydantic
-# v2 corre DESPUÉS de que Field(min_length=1) ya validó el string CRUDO — un
-# nombre de puros espacios tiene longitud > 0 antes del strip, así que pasa la
-# validación y termina guardado como "" en la base. Hallazgo real, no corregido
-# acá: T26-140 es la suite, no un fix de schemas.
-@pytest.mark.parametrize("nombre", ["", "x" * 101])
+# "   " (sólo espacios) es la regresión de T26-166: CamaraCreate.validar_nombre()
+# hace `.strip()` en un @field_validator en modo "after", que en Pydantic v2
+# corre DESPUÉS de que Field(min_length=1) ya validó el string CRUDO — un nombre
+# de puros espacios tiene longitud > 0 antes del strip, así que sin el chequeo
+# explícito de _validar_nombre_no_vacio() pasaría la validación y terminaría
+# guardado como "" en la base.
+@pytest.mark.parametrize("nombre", ["", "   ", "x" * 101])
 def test_crear_nombre_invalido(client, como, crear_sector, nombre):
     como("admin")
     respuesta = client.post(
@@ -135,18 +149,13 @@ def test_crear_nombre_invalido(client, como, crear_sector, nombre):
     assert respuesta.status_code == 422
 
 
-def test_crear_nombre_de_solo_espacios_termina_vacio_en_la_base(client, como, crear_sector):
-    """Documenta el hallazgo de arriba como test, no sólo como comentario: si
-    algún día CamaraCreate pasa a validar con mode="before" (o el orden cambia
-    por otro motivo), este test empieza a fallar y avisa que hay que revisar
-    también el comentario de más arriba."""
+def test_actualizar_a_nombre_de_solo_espacios_da_422(client, como, crear_camara):
+    """Mismo hallazgo que test_crear_nombre_invalido, del lado de CamaraUpdate —
+    _validar_nombre_no_vacio() es compartido entre las dos clases."""
+    camara = crear_camara()
     como("admin")
-    respuesta = client.post(
-        "/camaras/",
-        json={"nombre": "   ", "rtsp_url": "rtsp://10.0.0.1:554/s", "sector_id": crear_sector().id},
-    )
-    assert respuesta.status_code == 201
-    assert respuesta.json()["nombre"] == ""
+    respuesta = client.patch(f"/camaras/{camara.id}", json={"nombre": "   "})
+    assert respuesta.status_code == 422
 
 
 def test_crear_nombre_duplicado(client, como, crear_camara):

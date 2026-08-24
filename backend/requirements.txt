@@ -16,3 +16,10 @@ cryptography==49.0.0
 python-dotenv==1.2.2
 email-validator==2.3.0
 opencv-python-headless==5.0.0.93
+# Suite de tests (T26-140). httpx no era dependencia declarada de nada —
+# TestClient la necesita pero fastapi/starlette no la traen sola desde que
+# dejaron de traer los extras "all"— así que hasta ahora estaba instalada de
+# pura casualidad, arrastrada por algo del venv de quien la haya instalado
+# antes. pytest==9.1.1 es la misma versión que ya pinea vision-module/requirements.txt.
+pytest==9.1.1
+httpx==0.28.1

@@ -104,3 +104,11 @@ class CamaraTestResponse(BaseModel):
     codigo_rtsp: Optional[int] = None
     latencia_ms: Optional[int] = None
     rtsp_url: str
+
+
+class CamaraTestUrlRequest(BaseModel):
+    # Sin pasar por _validar_rtsp_url a propósito (T26-142): este endpoint prueba
+    # la URL ANTES de dar de alta la cámara, así que si no es una URL RTSP válida
+    # no corresponde un 422 sino el mismo diagnóstico que da rtsp.probar_url()
+    # para cualquier otra falla de conexión (ok=False con el mensaje puesto).
+    rtsp_url: str = Field(min_length=1)

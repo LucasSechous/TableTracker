@@ -3,14 +3,17 @@
 #
 # La mayoría corre directo contra app.services.rtsp.probar_conexion() con el
 # servidor falso de fixtures/rtsp_fake_server.py — es lo mismo que ejercita el
-# endpoint, más rápido de escribir y de correr sin pasar por HTTP. Dos tests al
-# final sí van por POST /camaras/{id}/test-conexion, para probar que el router
-# arma la respuesta y traduce _errores_de_cifrado correctamente.
+# endpoint, más rápido de escribir y de correr sin pasar por HTTP. Los tests del
+# final sí van por HTTP, contra los dos endpoints que envuelven rtsp.probar_url()/
+# probar_conexion(): POST /camaras/{id}/test-conexion (sobre una cámara guardada,
+# T26-126) y POST /camaras/test-conexion (con la URL en el body, sin persistir
+# nada, T26-142) — para probar que el router arma bien la respuesta.
 
 import socket
 
 import pytest
 
+from app.models.camara import Camara
 from app.services import rtsp
 from fixtures.rtsp_fake_server import (
     ServidorRtspFalso,
@@ -209,3 +212,65 @@ def test_endpoint_test_conexion_timeout_fuera_de_rango(client, como, crear_camar
     como("admin")
     respuesta = client.post(f"/camaras/{camara.id}/test-conexion", params={"timeout_segundos": timeout})
     assert respuesta.status_code == 422
+
+
+# ------------------------------------------------- vía el router, sin {camara_id}
+
+def test_endpoint_test_conexion_url_ok(client, como):
+    with ServidorRtspFalso(escenario_ok()) as servidor:
+        como("admin")
+        respuesta = client.post(
+            "/camaras/test-conexion",
+            json={"rtsp_url": f"rtsp://{servidor.host}:{servidor.puerto}/s"},
+            params={"timeout_segundos": TIMEOUT_TEST},
+        )
+    assert respuesta.status_code == 200
+    cuerpo = respuesta.json()
+    assert cuerpo["ok"] is True
+    assert cuerpo["codigo_rtsp"] == 200
+
+
+def test_endpoint_test_conexion_url_no_persiste_nada(client, como, db):
+    with ServidorRtspFalso(escenario_ok()) as servidor:
+        como("admin")
+        client.post(
+            "/camaras/test-conexion",
+            json={"rtsp_url": f"rtsp://admin:s3cr3t0@{servidor.host}:{servidor.puerto}/s"},
+            params={"timeout_segundos": TIMEOUT_TEST},
+        )
+    assert db.query(Camara).count() == 0
+
+
+def test_endpoint_test_conexion_url_tapa_la_password_en_la_respuesta(client, como):
+    with ServidorRtspFalso(escenario_digest("admin", "correcta", con_qop=False)) as servidor:
+        como("admin")
+        respuesta = client.post(
+            "/camaras/test-conexion",
+            json={"rtsp_url": f"rtsp://admin:incorrecta@{servidor.host}:{servidor.puerto}/s"},
+            params={"timeout_segundos": TIMEOUT_TEST},
+        )
+    assert respuesta.status_code == 200  # mismo contrato que el endpoint con {camara_id}: 200 con ok=False
+    cuerpo = respuesta.json()
+    assert cuerpo["ok"] is False
+    assert cuerpo["codigo_rtsp"] == 401
+    assert "incorrecta" not in cuerpo["rtsp_url"]
+    assert "***" in cuerpo["rtsp_url"]
+
+
+def test_endpoint_test_conexion_url_invalida_da_200_con_ok_false(client, como):
+    como("admin")
+    respuesta = client.post("/camaras/test-conexion", json={"rtsp_url": "no-es-una-url"})
+    assert respuesta.status_code == 200
+    cuerpo = respuesta.json()
+    assert cuerpo["ok"] is False
+    assert "no es válida" in cuerpo["mensaje"]
+
+
+def test_endpoint_test_conexion_url_vacia_da_422(client, como):
+    como("admin")
+    assert client.post("/camaras/test-conexion", json={"rtsp_url": ""}).status_code == 422
+
+
+def test_endpoint_test_conexion_url_sin_body_da_422(client, como):
+    como("admin")
+    assert client.post("/camaras/test-conexion", json={}).status_code == 422

@@ -191,6 +191,18 @@ Se traducen a castellano los códigos 200, 401, 403, 404, 453, 455 y 503, más l
 (host que no resuelve, conexión rechazada, timeout, puerto abierto que no habla RTSP) y la URL
 mal formada.
 
+### Prueba previa al alta (T26-142)
+
+`POST /camaras/test-conexion?timeout_segundos=5`, con `{"rtsp_url": "..."}` en el cuerpo en vez
+de un `{id}` en la ruta: para que la UI pueda probar la URL que el usuario está cargando en el
+formulario de alta antes de mandar el `POST /camaras/` que la persiste (el flujo natural es
+cargar, probar, recién ahí guardar). Reutiliza `rtsp.probar_url()` — el mismo parseo y la misma
+sonda por socket que usa `test-conexion` sobre una cámara guardada — así que responde con el
+mismo contrato: siempre HTTP 200, con `ok`/`mensaje`/`codigo_rtsp`/`latencia_ms`, y `rtsp_url` con
+la contraseña tapada (`rtsp.enmascarar_url`, a partir de la URL del cuerpo en vez de las columnas
+de una cámara). Si la URL ni siquiera es RTSP válida, eso también es un resultado de la prueba
+(`ok: false`) y no un 422 — el 422 queda solo para el caso de no mandar `rtsp_url`.
+
 ## Snapshot para calibración de ROI (T26-134, RF-12)
 
 `GET /camaras/{id}/snapshot?timeout_segundos=5` (1 a 15, default 5). Devuelve un JPEG
@@ -221,6 +233,7 @@ Prefijos: `/camaras` y `/roi-mesa` (la URL sigue el nombre de la entidad del tic
 | PATCH | `/camaras/{id}` | Edición parcial |
 | DELETE | `/camaras/{id}` | **Baja lógica** (`activa=false`) |
 | POST | `/camaras/{id}/test-conexion` | Prueba RTSP |
+| POST | `/camaras/test-conexion` | Prueba RTSP con la URL en el body, sin persistir (T26-142) |
 | GET | `/camaras/{id}/snapshot` | Frame JPEG para calibración de ROI (T26-134) |
 | GET | `/roi-mesa/` | Lista. Filtros: `mesa_id`, `camara_id`, `incluir_inactivos` |
 | GET | `/roi-mesa/{id}` | |
@@ -254,9 +267,10 @@ Detalles de comportamiento que no se deducen de la tabla:
   `admin`, así que el usuario de servicio del módulo tendría que ser admin o habría que abrir un
   rol de lectura para visión. (El usuario `vision-module@tabletracker.com` que existe hoy en la
   base tiene rol `mozo`, así que recibiría 403.)
-- **No hay prueba de conexión previa al alta.** `test-conexion` opera sobre una cámara ya
-  guardada; para que la UI pueda validar los datos antes de crearla haría falta una variante que
-  reciba la URL en el cuerpo.
+- ~~**No hay prueba de conexión previa al alta.**~~ Lo resolvió T26-142: `POST
+  /camaras/test-conexion` (sin `{id}`) recibe la URL en el cuerpo y reutiliza
+  `rtsp.probar_url()` sin persistir nada — ver [Prueba previa al alta](#prueba-previa-al-alta-t26-142)
+  más arriba.
 - ~~**Sin suite de tests de backend.**~~ Lo resolvió T26-140:
   [backend/tests/](../backend/tests/) tiene ahora la suite real con `pytest` + `TestClient`,
   incluido el servidor RTSP falso (Digest con y sin `qop`, Basic, contraseña incorrecta, 404,

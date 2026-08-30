@@ -274,6 +274,7 @@ def test_roles_sin_permiso_dan_403_en_todo(client, como, crear_camara, rol):
     assert client.patch(f"/camaras/{camara.id}", json={}).status_code == 403
     assert client.delete(f"/camaras/{camara.id}").status_code == 403
     assert client.post(f"/camaras/{camara.id}/test-conexion").status_code == 403
+    assert client.post("/camaras/test-conexion", json={"rtsp_url": RTSP_ALT}).status_code == 403
 
 
 def test_sin_autenticar_da_401(client, crear_camara):

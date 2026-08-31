@@ -1,6 +1,7 @@
 # Pruebas de app.capture.camera: clasificación de la fuente y ciclo de vida
 # de Camera (open/read_frame/release) para cada tipo soportado.
 
+import time
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -110,3 +111,38 @@ class TestCameraVideoCapture:
 
         mock_capture.release.assert_called_once()
         assert camara.capture is None
+
+    def test_rtsp_entrega_siempre_el_ultimo_frame_y_no_uno_encolado(self):
+        # El hilo de captura drena el stream sin parar: aunque el mock genere
+        # frames más rápido de lo que el test los pide, read_frame() nunca
+        # debería devolver uno viejo (el bug que esto reemplaza: cv2 sin
+        # drenar iba acumulando delay).
+        frames = [np.full((2, 2, 3), i, dtype=np.uint8) for i in range(5)]
+        mock_capture = MagicMock()
+        mock_capture.isOpened.return_value = True
+        mock_capture.read.side_effect = [(True, f) for f in frames] + [(True, frames[-1])] * 1000
+
+        with patch("app.capture.camera.cv2.VideoCapture", return_value=mock_capture):
+            camara = Camera("rtsp://host/stream")
+            camara.open()
+            try:
+                # Le da tiempo al hilo a consumir de sobra los 5 frames iniciales.
+                for _ in range(20):
+                    if camara.read_frame() is not None:
+                        break
+                    time.sleep(0.01)
+                time.sleep(0.1)
+                assert np.array_equal(camara.read_frame(), frames[-1])
+            finally:
+                camara.release()
+
+    def test_rtsp_no_arranca_hilo_para_video_o_webcam(self):
+        mock_capture = MagicMock()
+        mock_capture.isOpened.return_value = True
+        mock_capture.read.return_value = (True, np.zeros((2, 2, 3), dtype=np.uint8))
+
+        with patch("app.capture.camera.cv2.VideoCapture", return_value=mock_capture):
+            camara = Camera("video.mp4")
+            camara.open()
+            assert camara._hilo is None
+            camara.release()

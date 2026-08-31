@@ -1,6 +1,9 @@
 // Panel lateral deslizante con el detalle de una mesa: estado actual, tiempo
 // transcurrido en ese estado y la corrección manual (RF-17), colapsada por
 // defecto para no competir visualmente con la detección automática.
+// Excepción: "Confirmar limpieza" se muestra sin colapsar cuando la mesa está
+// pendiente_limpieza, porque es el cierre esperado de ese estado y no una
+// corrección.
 // No muestra origen automático/manual: ese dato no existe todavía en el
 // modelo (ver ticket de backend pendiente para T26-138).
 
@@ -187,6 +190,29 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                 </div>
               </div>
 
+              {mesa.estado === "pendiente_limpieza" && (
+                <button
+                  disabled={accionando}
+                  onClick={() => ejecutarAccion(() => mesasApi.confirmarLimpieza(mesa.id))}
+                  style={{
+                    width: "100%",
+                    minHeight: 44,
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    border: "none",
+                    backgroundColor: "#4caf50",
+                    color: "#fff",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: accionando ? "default" : "pointer",
+                    opacity: accionando ? 0.6 : 1,
+                    marginBottom: 24,
+                  }}
+                >
+                  Confirmar limpieza
+                </button>
+              )}
+
               <div>
                 <button
                   onClick={() => setExpandido((v) => !v)}
@@ -207,15 +233,6 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
 
                 {expandido && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-                    {mesa.estado === "pendiente_limpieza" && (
-                      <button
-                        disabled={accionando}
-                        onClick={() => ejecutarAccion(() => mesasApi.confirmarLimpieza(mesa.id))}
-                        style={estiloBotonAccion("#cbd5e1", accionando)}
-                      >
-                        Confirmar limpieza
-                      </button>
-                    )}
                     {mesa.estado !== "reservada" && (
                       <button
                         disabled={accionando}

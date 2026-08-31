@@ -6,6 +6,7 @@ class ConfiguracionResponse(BaseModel):
     ancho_salon: int
     alto_salon: int
     nombre_establecimiento: Optional[str]
+    cantidad_mesas_referencia: Optional[int]
 
     model_config = {"from_attributes": True}
 
@@ -14,3 +15,4 @@ class ConfiguracionUpdate(BaseModel):
     ancho_salon: Optional[int] = Field(None, gt=0)
     alto_salon: Optional[int] = Field(None, gt=0)
     nombre_establecimiento: Optional[str] = None
+    cantidad_mesas_referencia: Optional[int] = Field(None, gt=0)

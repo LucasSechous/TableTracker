@@ -16,3 +16,10 @@ class OcupacionResponse(BaseModel):
     total_mesas: int
     porcentaje_ocupacion: float
     conteo_por_estado: ConteoPorEstado
+
+
+class RotacionMesaResponse(BaseModel):
+    mesa_id: int
+    numero: int
+    sector_id: int
+    rotaciones: int

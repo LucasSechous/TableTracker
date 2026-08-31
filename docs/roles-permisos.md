@@ -39,6 +39,8 @@ un `String` libre) — ver "Fuera de alcance" más abajo.
 | DELETE | `/mesas/{id}` | `admin` | Cualquier rol autenticado |
 | GET | `/historial/` | Cualquier rol autenticado | Sin cambios |
 | GET | `/metricas/ocupacion` | Cualquier rol autenticado | No existía (RF-22) |
+| GET | `/metricas/rotacion` | Cualquier rol autenticado | No existía (RF-23) |
+| GET | `/estados/` | Cualquier rol autenticado | No existía (RF-29) |
 | GET | `/camaras/` | `admin`, `vision_module` | No existía (RF-30, RF-31) |
 | POST | `/camaras/{id}/deteccion-actual` | `admin`, `vision_module` | No existía (T26-150) |
 | * | resto de `/camaras/*` | `admin` | No existía (RF-30, RF-31) |

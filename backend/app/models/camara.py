@@ -17,7 +17,7 @@
 #     URL entera cifrada, quedarse sin clave se lleva puesta también la
 #     configuración de red de cada cámara.
 
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, UniqueConstraint, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -26,6 +26,13 @@ from app.services import cifrado, rtsp
 
 class Camara(Base):
     __tablename__ = "camaras"
+
+    # El UNIQUE sobre `nombre` lo agrega T26-141. Hasta ahí la regla vivía sólo en
+    # el router, que consulta y devuelve 409: sin respaldo del motor, dos altas
+    # simultáneas del mismo nombre podían pasar las dos. El nombre de la
+    # constraint se declara a mano para que sea el mismo que el de la base y que
+    # --autogenerate no la vea como una diferencia.
+    __table_args__ = (UniqueConstraint("nombre", name="camaras_nombre_unique"),)
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, nullable=False)
@@ -43,7 +50,7 @@ class Camara(Base):
     # contraseña, que no es lo mismo que tener una vacía.
     password_cifrada = Column(Text, nullable=True)
     sector_id = Column(Integer, ForeignKey("sectores.id"), nullable=False)
-    activa = Column(Boolean, default=True)
+    activa = Column(Boolean, default=True, server_default=text("true"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     sector = relationship("Sector")

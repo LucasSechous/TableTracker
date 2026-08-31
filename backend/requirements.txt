@@ -1,6 +1,10 @@
 fastapi==0.136.3
 uvicorn==0.49.0
 SQLAlchemy==2.0.50
+# Migraciones de esquema (T26-137). El esquema dejó de crearse solo al arrancar
+# —main.py ya no llama a create_all— y pasó a ser responsabilidad de las
+# revisiones en database/versions/. Ver database/README.md.
+alembic==1.19.1
 psycopg2-binary==2.9.12
 bcrypt==4.3.0
 python-jose[cryptography]==3.5.0
@@ -12,3 +16,10 @@ cryptography==49.0.0
 python-dotenv==1.2.2
 email-validator==2.3.0
 opencv-python-headless==5.0.0.93
+# Suite de tests (T26-140). httpx no era dependencia declarada de nada —
+# TestClient la necesita pero fastapi/starlette no la traen sola desde que
+# dejaron de traer los extras "all"— así que hasta ahora estaba instalada de
+# pura casualidad, arrastrada por algo del venv de quien la haya instalado
+# antes. pytest==9.1.1 es la misma versión que ya pinea vision-module/requirements.txt.
+pytest==9.1.1
+httpx==0.28.1

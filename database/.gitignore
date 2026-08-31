@@ -1,0 +1,3 @@
+# Bytecode de Python (env.py y las revisiones se importan al correr Alembic)
+__pycache__/
+*.py[cod]

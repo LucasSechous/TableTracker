@@ -1,27 +1,28 @@
-# Punto de entrada principal de la API. Inicializa FastAPI,
-# conecta la base de datos y registra las rutas del sistema.
+# Punto de entrada principal de la API. Inicializa FastAPI y registra las rutas
+# del sistema.
+#
+# Acá NO se crea el esquema. Hasta T26-137 este módulo llamaba a
+# `Base.metadata.create_all(bind=engine)` al importarse, y esa era justamente la
+# causa del drift silencioso que el ticket vino a cerrar: create_all crea las
+# tablas que faltan pero nunca altera las que ya están, así que un entorno nuevo
+# nacía con el esquema de los modelos y producción seguía con el suyo, sin que
+# nadie se enterara. El esquema ahora lo gobiernan las revisiones de Alembic:
+#
+#   alembic -c database/alembic.ini upgrade head
+#
+# Ver database/README.md. Los modelos tampoco se importan más desde acá: los
+# siete routers ya importan los siete, y quien necesita el metadata completo
+# (Alembic) lo arma en database/env.py.
 
 import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import auth, sectores, mesas, historial, camaras, roi, configuracion
-from app.database import Base, engine
-from app.models import (  # noqa: F401 — registra modelos para create_all
-    user,
-    sector,
-    mesa,
-    historial as historial_model,
-    camara,
-    roi_mesa,
-    configuracion as configuracion_model,
-)
+from app.routers import auth, sectores, mesas, historial, camaras, roi, configuracion, metricas, estados
 from dotenv import load_dotenv
 
 load_dotenv()
-
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="TableTracker API")
 
@@ -45,6 +46,8 @@ app.include_router(auth.router, prefix="/auth", tags=["Autenticación"])
 app.include_router(sectores.router, prefix="/sectores", tags=["Sectores"])
 app.include_router(mesas.router, prefix="/mesas", tags=["Mesas"])
 app.include_router(historial.router, prefix="/historial", tags=["Historial"])
+app.include_router(metricas.router, prefix="/metricas", tags=["Métricas"])
+app.include_router(estados.router, prefix="/estados", tags=["Estados"])
 
 app.include_router(camaras.router, prefix="/camaras", tags=["Cámaras"])
 app.include_router(roi.router, prefix="/roi-mesa", tags=["ROI por mesa"])

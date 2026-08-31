@@ -38,8 +38,14 @@ un `String` libre) — ver "Fuera de alcance" más abajo.
 | PATCH | `/mesas/{id}/posicion` | `admin`, `encargado` | Cualquier rol autenticado |
 | DELETE | `/mesas/{id}` | `admin` | Cualquier rol autenticado |
 | GET | `/historial/` | Cualquier rol autenticado | Sin cambios |
-| * | `/camaras/*` | `admin` | No existía (RF-30, RF-31) |
-| * | `/roi-mesa/*` | `admin` | No existía (RF-12) |
+| GET | `/metricas/ocupacion` | Cualquier rol autenticado | No existía (RF-22) |
+| GET | `/metricas/rotacion` | Cualquier rol autenticado | No existía (RF-23) |
+| GET | `/estados/` | Cualquier rol autenticado | No existía (RF-29) |
+| GET | `/camaras/` | `admin`, `vision_module` | No existía (RF-30, RF-31) |
+| POST | `/camaras/{id}/deteccion-actual` | `admin`, `vision_module` | No existía (T26-150) |
+| * | resto de `/camaras/*` | `admin` | No existía (RF-30, RF-31) |
+| GET | `/roi-mesa/` | `admin`, `vision_module` | No existía (RF-12) |
+| * | resto de `/roi-mesa/*` | `admin` | No existía (RF-12) |
 
 ## Criterios usados donde el ticket no daba un ejemplo directo
 
@@ -62,6 +68,17 @@ confirmado con el reporter del ticket ante la falta de acceso al Capítulo 1 (an
   exclusivo de admin, y a diferencia de mesas y sectores acá el listado tampoco es inocuo: expone
   la topología de red del local (host, puerto y usuario de cada cámara). Ver
   [camaras-roi.md](camaras-roi.md).
+
+  La única excepción es `vision_module` (T26-152), el usuario técnico del módulo de visión, y
+  llega **exactamente** a los tres endpoints que el módulo consume: `GET /camaras/`,
+  `POST /camaras/{id}/deteccion-actual` y `GET /roi-mesa/`. No es un rol de lectura general —
+  `GET /camaras/{id}` y el snapshot le dan 403 igual que a cualquier otro rol.
+
+  Ese recorte se aplica **por endpoint** y no en el `APIRouter` (T26-164). Ponerlo en el router
+  alcanzaba para que el módulo funcionara, pero le daba también `POST`, `PATCH` y `DELETE` sobre
+  cámaras y ROI: el router protege el archivo entero de una sola vez y no distingue verbos. Al
+  agregar un endpoint nuevo a esos dos archivos hay que declararle su `dependencies=`, porque el
+  router ya solo exige estar autenticado.
 
 ## Bootstrap del primer admin
 

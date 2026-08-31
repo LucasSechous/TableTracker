@@ -30,6 +30,17 @@ def _validar_rtsp_url(valor: str) -> str:
     return url
 
 
+def _validar_nombre_no_vacio(valor: str) -> str:
+    # Field(min_length=1) valida el string CRUDO, antes de que este validador —en
+    # modo "after", el default— corra el strip(). Un nombre de puros espacios
+    # (p. ej. "   ") tiene longitud > 0 y pasa esa constraint sin problema; sin
+    # este chequeo quedaría "" en la base sin que el 422 lo avisara (T26-166).
+    limpio = valor.strip()
+    if not limpio:
+        raise ValueError("El nombre no puede quedar vacío después de sacar los espacios")
+    return limpio
+
+
 class CamaraCreate(BaseModel):
     nombre: str = Field(min_length=1, max_length=100)
     # rtsp://usuario:password@host:puerto/ruta
@@ -40,7 +51,7 @@ class CamaraCreate(BaseModel):
     @field_validator("nombre")
     @classmethod
     def validar_nombre(cls, valor):
-        return valor.strip()
+        return _validar_nombre_no_vacio(valor)
 
     @field_validator("rtsp_url")
     @classmethod
@@ -57,7 +68,7 @@ class CamaraUpdate(BaseModel):
     @field_validator("nombre")
     @classmethod
     def validar_nombre(cls, valor):
-        return valor if valor is None else valor.strip()
+        return valor if valor is None else _validar_nombre_no_vacio(valor)
 
     @field_validator("rtsp_url")
     @classmethod
@@ -93,3 +104,11 @@ class CamaraTestResponse(BaseModel):
     codigo_rtsp: Optional[int] = None
     latencia_ms: Optional[int] = None
     rtsp_url: str
+
+
+class CamaraTestUrlRequest(BaseModel):
+    # Sin pasar por _validar_rtsp_url a propósito (T26-142): este endpoint prueba
+    # la URL ANTES de dar de alta la cámara, así que si no es una URL RTSP válida
+    # no corresponde un 422 sino el mismo diagnóstico que da rtsp.probar_url()
+    # para cualquier otra falla de conexión (ok=False con el mensaje puesto).
+    rtsp_url: str = Field(min_length=1)

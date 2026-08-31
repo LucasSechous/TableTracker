@@ -13,27 +13,32 @@ pero **no están en el repo**: T26-125 se aplicó como DDL directo sobre la base
 SQLAlchemy ni migración versionada. Como `Base.metadata.create_all` solo crea tablas que faltan y
 nunca altera las que existen, los modelos de acá **reflejan** ese esquema, no lo deciden.
 
-Esto tiene dos consecuencias que conviene tener presentes:
+Eso tenía dos consecuencias, **las dos resueltas por T26-137**:
 
-- El esquema real no está bajo control de versiones. Si alguien lo cambia en Supabase, los
-  modelos de [backend/app/models/](../backend/app/models/) quedan desincronizados en silencio y
-  el error aparece recién en runtime, como columna inexistente.
-- Cualquier entorno nuevo levanta con un esquema **distinto** al de producción: `create_all` va a
-  crear estas tablas desde los modelos, y los modelos no reproducen los `DEFAULT` ni la
-  precisión de tipos del DDL original.
+- El esquema real no estaba bajo control de versiones, así que un cambio en Supabase dejaba los
+  modelos de [backend/app/models/](../backend/app/models/) desincronizados en silencio y el error
+  aparecía recién en runtime, como columna inexistente.
+- Cualquier entorno nuevo levantaba con un esquema **distinto** al de producción: `create_all`
+  creaba las tablas desde los modelos, que no reproducían los `DEFAULT` del DDL original.
 
-T26-136 empezó a revertirlo por el lado que le tocaba: [database/](../database/) ya tiene los
-`.sql` numerados de ese cambio, y de ahí en adelante todo cambio de esquema se versiona antes de
-aplicarse. Lo que sigue sin estar es el **estado base** —las tablas tal como las dejó T26-125— y
-no hay tabla de versiones ni Alembic, así que el orden lo lleva el
-[README de database/](../database/README.md) a mano. Sigue valiendo un ticket para eso.
+Hoy el esquema lo gobierna **Alembic** desde [database/versions/](../database/versions/), y
+`main.py` ya no llama a `create_all` — levantar un entorno nuevo requiere
+`alembic -c database/alembic.ini upgrade head`. Ver el
+[README de database/](../database/README.md).
+
+T26-137 midió el drift que ya se había acumulado y lo cerró: a `camaras` y `roi_mesa` —las dos
+tablas creadas a mano— les faltaba el índice sobre `id` que los modelos declaran, y once columnas
+tenían `DEFAULT` en la base que los modelos sólo declaraban del lado de Python. Que un
+`--autogenerate` salga vacío es ahora la prueba de que modelos y base coinciden, y
+`backend/scripts/verificar_esquema_versionado.py` comprueba que un entorno nuevo nace idéntico a
+producción.
 
 ### `camaras` — [backend/app/models/camara.py](../backend/app/models/camara.py)
 
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | serial PK | |
-| `nombre` | varchar NOT NULL | **Sin UNIQUE en la base**: la unicidad se controla en el router |
+| `nombre` | varchar NOT NULL, UNIQUE | `camaras_nombre_unique` (T26-141) |
 | `esquema` | varchar NOT NULL, default `rtsp` | `rtsp` o `rtsps` |
 | `host` | varchar NOT NULL | |
 | `puerto` | integer NOT NULL, default 554 | |
@@ -60,10 +65,10 @@ registrado en el repo.
 | `activa` | bool, default true | Baja lógica |
 | `created_at` | timestamptz, default now() | |
 
-**No hay UNIQUE sobre (`mesa_id`, `camara_id`)**. La regla "una mesa tiene un solo ROI por
-cámara" se aplica únicamente en el router, así que no tiene respaldo del motor: dos altas
-simultáneas del mismo par podrían pasar las dos. Una mesa sí puede tener ROI en varias cámaras
-distintas (mesas en el límite entre dos campos de visión), eso es intencional.
+**UNIQUE sobre (`mesa_id`, `camara_id`)** — `roi_mesa_mesa_camara_unique` (T26-141). Una mesa sí
+puede tener ROI en varias cámaras distintas (mesas en el límite entre dos campos de visión), eso es
+intencional: lo que el UNIQUE prohíbe es el par repetido. Aplica esté la fila activa o no, que es lo
+que hace que volver a dar de alta un ROI dado de baja reutilice la fila en vez de duplicarla.
 
 El contenido de `coordenadas` usa el mismo formato que ya consume el módulo de visión en
 [vision-module/config/zonas.example.json](../vision-module/config/zonas.example.json) bajo la
@@ -186,6 +191,18 @@ Se traducen a castellano los códigos 200, 401, 403, 404, 453, 455 y 503, más l
 (host que no resuelve, conexión rechazada, timeout, puerto abierto que no habla RTSP) y la URL
 mal formada.
 
+### Prueba previa al alta (T26-142)
+
+`POST /camaras/test-conexion?timeout_segundos=5`, con `{"rtsp_url": "..."}` en el cuerpo en vez
+de un `{id}` en la ruta: para que la UI pueda probar la URL que el usuario está cargando en el
+formulario de alta antes de mandar el `POST /camaras/` que la persiste (el flujo natural es
+cargar, probar, recién ahí guardar). Reutiliza `rtsp.probar_url()` — el mismo parseo y la misma
+sonda por socket que usa `test-conexion` sobre una cámara guardada — así que responde con el
+mismo contrato: siempre HTTP 200, con `ok`/`mensaje`/`codigo_rtsp`/`latencia_ms`, y `rtsp_url` con
+la contraseña tapada (`rtsp.enmascarar_url`, a partir de la URL del cuerpo en vez de las columnas
+de una cámara). Si la URL ni siquiera es RTSP válida, eso también es un resultado de la prueba
+(`ok: false`) y no un 422 — el 422 queda solo para el caso de no mandar `rtsp_url`.
+
 ## Snapshot para calibración de ROI (T26-134, RF-12)
 
 `GET /camaras/{id}/snapshot?timeout_segundos=5` (1 a 15, default 5). Devuelve un JPEG
@@ -216,6 +233,7 @@ Prefijos: `/camaras` y `/roi-mesa` (la URL sigue el nombre de la entidad del tic
 | PATCH | `/camaras/{id}` | Edición parcial |
 | DELETE | `/camaras/{id}` | **Baja lógica** (`activa=false`) |
 | POST | `/camaras/{id}/test-conexion` | Prueba RTSP |
+| POST | `/camaras/test-conexion` | Prueba RTSP con la URL en el body, sin persistir (T26-142) |
 | GET | `/camaras/{id}/snapshot` | Frame JPEG para calibración de ROI (T26-134) |
 | GET | `/roi-mesa/` | Lista. Filtros: `mesa_id`, `camara_id`, `incluir_inactivos` |
 | GET | `/roi-mesa/{id}` | |
@@ -240,8 +258,8 @@ Detalles de comportamiento que no se deducen de la tabla:
 
 ## Fuera de alcance (hallazgos, no corregidos acá)
 
-- **El esquema base de T26-125 sigue sin estar versionado** — detallado más arriba. La contraseña
-  RTSP en claro, que era el otro hallazgo de acá, la resolvió T26-136.
+- ~~**El esquema base de T26-125 no está versionado**~~ — lo resolvió T26-137, que dejó el esquema
+  entero bajo Alembic. La contraseña RTSP en claro, el otro hallazgo de acá, la resolvió T26-136.
 - **El módulo de visión todavía no consume estos endpoints.** Sigue leyendo los ROI de un archivo
   local (`ZONES_FILE`, ver [vision-module/app/config.py](../vision-module/app/config.py)); nadie
   lee `roi_mesa` ni `camaras` fuera de la API. Conectar el pipeline a la base necesita un ticket
@@ -249,17 +267,20 @@ Detalles de comportamiento que no se deducen de la tabla:
   `admin`, así que el usuario de servicio del módulo tendría que ser admin o habría que abrir un
   rol de lectura para visión. (El usuario `vision-module@tabletracker.com` que existe hoy en la
   base tiene rol `mozo`, así que recibiría 403.)
-- **No hay prueba de conexión previa al alta.** `test-conexion` opera sobre una cámara ya
-  guardada; para que la UI pueda validar los datos antes de crearla haría falta una variante que
-  reciba la URL en el cuerpo.
-- **Sin suite de tests de backend.** El proyecto no tiene pytest del lado del backend, solo la de
-  Playwright en `e2e/`. La implementación de T26-126/127 se verificó contra SQLite y un servidor
-  RTSP falso (Digest con y sin `qop`, Basic, contraseña incorrecta, 404, timeout, puerto cerrado,
-  URL inválida), pero esos scripts quedaron fuera del repo. T26-136 sí dejó el suyo:
-  [backend/scripts/verificar_cifrado_camaras.py](../backend/scripts/verificar_cifrado_camaras.py)
-  levanta la API con `TestClient` contra un SQLite temporal y corre 65 chequeos. Es un script, no
-  una suite: hay que acordarse de correrlo. Sigue valiendo un ticket para montar pytest y sumar
-  `/camaras` y `/roi-mesa` ahí.
+- ~~**No hay prueba de conexión previa al alta.**~~ Lo resolvió T26-142: `POST
+  /camaras/test-conexion` (sin `{id}`) recibe la URL en el cuerpo y reutiliza
+  `rtsp.probar_url()` sin persistir nada — ver [Prueba previa al alta](#prueba-previa-al-alta-t26-142)
+  más arriba.
+- ~~**Sin suite de tests de backend.**~~ Lo resolvió T26-140:
+  [backend/tests/](../backend/tests/) tiene ahora la suite real con `pytest` + `TestClient`,
+  incluido el servidor RTSP falso (Digest con y sin `qop`, Basic, contraseña incorrecta, 404,
+  timeout, puerto cerrado, URL inválida) como fixture reutilizable en
+  [backend/tests/fixtures/rtsp_fake_server.py](../backend/tests/fixtures/rtsp_fake_server.py). Se
+  corre con `pytest` desde `backend/`. Los scripts de verificación de T26-136 y T26-141
+  ([verificar_cifrado_camaras.py](../backend/scripts/verificar_cifrado_camaras.py),
+  [verificar_permisos_y_unicidad.py](../backend/scripts/verificar_permisos_y_unicidad.py)) quedan
+  igual: son anteriores a esta suite y no se portaron a pytest como parte de T26-140, que se
+  limitó a los chequeos de T26-126/127 que el ticket pedía versionar.
 - **SSRF por diseño.** `test-conexion` hace que el backend abra una conexión TCP a un host y
   puerto que elige el usuario. Es inherente a la función (las cámaras están en la red interna) y
   está acotado a `admin`, pero conviene tenerlo presente si el endpoint se abriera a otro rol.

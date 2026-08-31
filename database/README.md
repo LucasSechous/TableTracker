@@ -1,63 +1,95 @@
 # Migraciones de base de datos
 
-El esquema de TableTracker vive en Supabase y hasta ahora se venía aplicando a mano, sin quedar
-registrado en el repo — es un hallazgo anotado en
-[docs/camaras-roi.md](../docs/camaras-roi.md). Esta carpeta arranca a revertir eso: **de acá en
-adelante, todo cambio de esquema se versiona como un `.sql` numerado antes de aplicarse.**
+El esquema de TableTracker vive en Supabase y hasta T26-137 se venía aplicando a mano, sin quedar
+registrado en el repo. **Desde T26-137 el esquema lo gobierna Alembic**: las revisiones de
+[versions/](versions/) son la única fuente de verdad, y `backend/app/main.py` ya no llama a
+`Base.metadata.create_all`.
 
-No hay Alembic ni tabla de versiones todavía. Los archivos se corren a mano, en orden, una sola
-vez, y son idempotentes donde se pudo (`ADD COLUMN IF NOT EXISTS`). Lo que ya existía antes de
-esta carpeta (T26-125 y anterior) no está acá: solo lo nuevo.
+Ese `create_all` era justamente el problema: crea las tablas que faltan pero **nunca altera las que
+ya existen**, así que un entorno nuevo nacía con el esquema de los modelos mientras producción
+seguía con el suyo, y la diferencia sólo aparecía en runtime como una columna inexistente.
 
-## Cómo correr un `.sql`
+## Puesta en marcha
 
-Desde el SQL Editor de Supabase (pegar y ejecutar), o con psql:
+Desde la raíz del repo, con `DATABASE_URL` cargada en `backend/.env`:
 
 ```bash
-psql "$DATABASE_URL" -f database/001_camaras_credenciales_cifradas.sql
+alembic -c database/alembic.ini upgrade head
 ```
 
-## Migraciones
+Eso deja la base lista para levantar la API. Es un paso obligatorio en un entorno nuevo: sin él no
+hay tablas.
 
-### T26-136 — cifrar las credenciales RTSP
+## Comandos de uso diario
 
-Reemplaza `camaras.rtsp_url` (la conexión entera, con la contraseña en claro) por una columna por
-parte, con la contraseña cifrada con Fernet. El detalle de por qué se separó en columnas en vez de
-cifrar la URL entera está en [docs/camaras-roi.md](../docs/camaras-roi.md).
+| Qué querés | Comando |
+|---|---|
+| Ver en qué revisión está la base | `alembic -c database/alembic.ini current` |
+| Ver el historial | `alembic -c database/alembic.ini history` |
+| Aplicar lo que falte | `alembic -c database/alembic.ini upgrade head` |
+| Volver una revisión atrás | `alembic -c database/alembic.ini downgrade -1` |
+| Ver el SQL sin ejecutarlo | `alembic -c database/alembic.ini upgrade head --sql` |
 
-**Antes de empezar**, generá la clave de cifrado y ponela en `backend/.env`:
+## Crear una revisión
+
+Después de tocar un modelo en `backend/app/models/`:
+
+```bash
+alembic -c database/alembic.ini revision --autogenerate -m "lo que cambia"
+```
+
+**Revisá siempre el archivo generado antes de aplicarlo.** El autogenerate detecta columnas, tipos,
+constraints e índices, pero no adivina renombres (los ve como un DROP y un ADD, que pierde datos) ni
+escribe migraciones de datos.
+
+`env.py` corre con `compare_type` y `compare_server_default` activados a propósito: sin eso el
+autogenerate ignora que una columna cambió de tipo o que la base tiene un `DEFAULT` que el modelo no
+declara, que es exactamente el drift que este ticket vino a cerrar.
+
+> Un `--autogenerate` que sale **vacío** significa que los modelos y la base coinciden. Es la forma
+> más rápida de comprobar que no hay drift, y conviene correrlo antes de cada PR que toque modelos.
+
+## Revisiones
+
+| Revisión | Qué hace |
+|---|---|
+| `e72cc6e493dc` | Estado inicial: retrato del esquema tal como estaba en Supabase |
+| `903cf408bb66` | Agrega `ix_camaras_id` e `ix_roi_mesa_id`, que la base no tenía |
+| `6597e37ddeab` | Agrega los UNIQUE de `camaras.nombre` y `roi_mesa(mesa_id, camara_id)` (T26-141) |
+| `841471d74b5b` | Agrega `configuracion_general.cantidad_mesas_referencia` (T26-156, RF-28) |
+
+La inicial refleja **la base real y no los modelos**, incluidas sus imperfecciones: `camaras` y
+`roi_mesa` —las dos tablas que T26-125 creó a mano— no tenían el índice sobre `id` que los modelos
+declaran, y el CHECK de `configuracion_general` se llama `configuracion_general_singleton`. La
+segunda revisión agrega los índices; el resto del drift se corrigió del lado del modelo, que era el
+que mentía (faltaban 11 `server_default`).
+
+Sobre una base que ya existía, la inicial se aplica con `alembic stamp e72cc6e493dc`, que sólo anota
+la versión sin correr DDL. Ya se hizo en Supabase.
+
+`6597e37ddeab` está en la misma situación por otro motivo: sus dos constraints se habían aplicado a
+mano en Supabase antes de que la revisión existiera, así que en producción también se anotó con
+`alembic stamp 6597e37ddeab` en vez de correr el upgrade, que habría fallado con «already exists».
+Es la última vez que debería hacer falta: el esquema ya lo gobierna Alembic, y el atajo de tocar la
+base por afuera es justo lo que deja a un entorno nuevo distinto de producción — que es como se
+detectó esto, con el script de verificación de acá abajo.
+
+## Verificación
 
 ```bash
 cd backend
-python scripts/rotar_clave_camaras.py --generar-clave   # imprime la clave
-# pegarla en backend/.env:  CAMARA_ENCRYPTION_KEYS=<clave>
+python scripts/verificar_esquema_versionado.py
 ```
 
-Sin esa variable el backend no puede leer ni guardar contraseñas de cámaras, y lo dice con un 500
-explicado en vez de caer en texto plano.
+Crea un schema descartable en la misma base, corre `upgrade head` desde cero, y compara columna por
+columna, constraint por constraint e índice por índice contra `public`. Es la prueba de que **un
+entorno nuevo levanta idéntico a producción**, que es lo que antes no se podía afirmar.
 
-Después, en este orden:
+## Histórico
 
-| # | Paso | Qué hace | ¿Destructivo? |
-|---|------|----------|---------------|
-| 1 | `001_camaras_credenciales_cifradas.sql` | Agrega las columnas nuevas y saca el `NOT NULL` de `rtsp_url` | No |
-| 2 | `python database/migrar_credenciales_camaras.py --dry-run` | Muestra qué se migraría, sin escribir | No |
-| 3 | `python database/migrar_credenciales_camaras.py` | Llena las columnas nuevas y cifra las contraseñas | No (no toca `rtsp_url`) |
-| 4 | *Verificar la app* | Listar cámaras, `test-conexion` y snapshot contra una cámara real | — |
-| 5 | `002_camaras_baja_rtsp_url.sql` | Pone `host` en `NOT NULL` y **borra** `rtsp_url` | **Sí** |
+[historico/](historico/) guarda los `.sql` numerados de T26-136, la convención anterior a Alembic.
+**Ya están aplicados**; quedan como registro de lo que se corrió y no hay que volver a ejecutarlos.
+Su contenido está reflejado en la revisión inicial.
 
-Entre el paso 1 y el 5 la base queda en un estado intermedio perfectamente usable: las columnas
-nuevas y la vieja conviven, y el backend nuevo ya funciona contra las nuevas. Eso es a propósito —
-permite verificar con datos reales antes del paso que no se puede deshacer.
-
-El paso 5 es el que elimina la última copia de las contraseñas en claro. **Tomá un backup desde
-Supabase (Database → Backups) antes de correrlo.** El script de migración no deja una copia en
-disco a propósito: un archivo con las contraseñas en claro sería exactamente lo que este ticket
-viene a eliminar.
-
-### Rotar la clave
-
-`backend/scripts/rotar_clave_camaras.py` recifra las filas con la clave activa.
-`CAMARA_ENCRYPTION_KEYS` admite varias claves separadas por coma: la primera cifra, las demás solo
-descifran, así que se rota sin ventana de indisponibilidad. El procedimiento paso a paso está en la
-cabecera del propio script.
+El estado base anterior a T26-136 (T26-125 y previo) nunca tuvo DDL en el repo: lo que hay es el
+retrato que tomó la revisión inicial de este ticket.

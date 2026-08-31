@@ -17,5 +17,9 @@ class ConfiguracionGeneral(Base):
     # server_default: la base ya los tenía y el modelo no los declaraba (T26-137).
     ancho_salon = Column(Integer, nullable=False, default=1200, server_default=text("1200"))
     alto_salon = Column(Integer, nullable=False, default=700, server_default=text("700"))
+    # RF-28 (T26-156): dato de referencia informativo, no una constraint sobre la
+    # cantidad real de mesas activas — por eso nullable, sin default ni relación
+    # con COUNT(mesas).
+    cantidad_mesas_referencia = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now())

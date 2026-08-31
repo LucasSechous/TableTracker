@@ -56,6 +56,7 @@ declara, que es exactamente el drift que este ticket vino a cerrar.
 | `e72cc6e493dc` | Estado inicial: retrato del esquema tal como estaba en Supabase |
 | `903cf408bb66` | Agrega `ix_camaras_id` e `ix_roi_mesa_id`, que la base no tenía |
 | `6597e37ddeab` | Agrega los UNIQUE de `camaras.nombre` y `roi_mesa(mesa_id, camara_id)` (T26-141) |
+| `841471d74b5b` | Agrega `configuracion_general.cantidad_mesas_referencia` (T26-156, RF-28) |
 
 La inicial refleja **la base real y no los modelos**, incluidas sus imperfecciones: `camaras` y
 `roi_mesa` —las dos tablas que T26-125 creó a mano— no tenían el índice sobre `id` que los modelos

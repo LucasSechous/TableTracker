@@ -19,7 +19,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import auth, sectores, mesas, historial, camaras, roi, configuracion
+from app.routers import auth, sectores, mesas, historial, camaras, roi, configuracion, metricas
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -46,6 +46,7 @@ app.include_router(auth.router, prefix="/auth", tags=["Autenticación"])
 app.include_router(sectores.router, prefix="/sectores", tags=["Sectores"])
 app.include_router(mesas.router, prefix="/mesas", tags=["Mesas"])
 app.include_router(historial.router, prefix="/historial", tags=["Historial"])
+app.include_router(metricas.router, prefix="/metricas", tags=["Métricas"])
 
 app.include_router(camaras.router, prefix="/camaras", tags=["Cámaras"])
 app.include_router(roi.router, prefix="/roi-mesa", tags=["ROI por mesa"])

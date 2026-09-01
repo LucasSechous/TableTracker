@@ -5,6 +5,7 @@ import { type JSX } from "react";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import HistorialPage from "./pages/HistorialPage";
+import OcupacionPage from "./pages/OcupacionPage";
 import CalibracionRoiPage from "./pages/CalibracionRoiPage";
 import CamarasPage from "./pages/CamarasPage";
 import AdminRoute from "./components/AdminRoute";
@@ -24,6 +25,16 @@ export default function App() {
           element={
             <PrivateRoute>
               <HistorialPage />
+            </PrivateRoute>
+          }
+        />
+        {/* Sin AdminRoute a propósito: el panel de ocupación lo consultan todos los roles
+            (mozo incluido), igual que GET /metricas/ocupacion, que pide sesión pero no rol. */}
+        <Route
+          path="/ocupacion"
+          element={
+            <PrivateRoute>
+              <OcupacionPage />
             </PrivateRoute>
           }
         />

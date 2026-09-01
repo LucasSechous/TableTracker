@@ -104,3 +104,29 @@ export interface DetectionFrameResult {
   model_name: string
   detections: Detection[]
 }
+
+// Conteo de mesas activas por estado. Los cuatro buckets vienen siempre, en 0 si no
+// hay mesas en ese estado (el backend los inicializa), así que la UI nunca tiene que
+// distinguir "cero mesas" de "campo ausente".
+export interface ConteoPorEstado {
+  libre: number
+  ocupada: number
+  pendiente_limpieza: number
+  reservada: number
+}
+
+// Respuesta de GET /metricas/ocupacion (RF-22).
+//
+// porcentaje_ocupacion cuenta SOLO las mesas en estado "ocupada" (decisión de T26-154,
+// ver backend/app/routers/metricas.py): una mesa reservada todavía está físicamente
+// libre, así que sumarla sobreestimaría cuánto salón está realmente en uso. Sigue
+// viniendo en conteo_por_estado como bucket aparte, y el panel la muestra ahí sin
+// mezclarla con el %.
+//
+// Con total_mesas == 0 el backend devuelve 0.0, que no significa "salón desocupado"
+// sino "no hay nada que medir": OcupacionPage lo trata como empty state, no como 0%.
+export interface OcupacionResponse {
+  total_mesas: number
+  porcentaje_ocupacion: number
+  conteo_por_estado: ConteoPorEstado
+}

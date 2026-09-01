@@ -12,6 +12,7 @@ import type {
   PuntoRoi,
   CamaraTestResponse,
   DetectionFrameResult,
+  OcupacionResponse,
 } from "../types";
 
 export type {
@@ -24,6 +25,8 @@ export type {
   PuntoRoi,
   CamaraTestResponse,
   DetectionFrameResult,
+  ConteoPorEstado,
+  OcupacionResponse,
 } from "../types";
 export type { Modo } from "../types";
 
@@ -184,6 +187,13 @@ export const roiMesaApi = {
 
   // Baja lógica: el backend deja activa=false, no borra la fila (ver roi.py).
   eliminar: (id: number) => api.delete(`/roi-mesa/${id}`),
+};
+
+export const metricasApi = {
+  // Agregado calculado en el momento sobre mesas activas, no un recurso persistido:
+  // cada llamada devuelve la foto actual del salón (T26-158, RF-22). El endpoint acepta
+  // un sector_id opcional que esta UI todavía no expone (fuera del alcance del ticket).
+  ocupacion: () => api.get<OcupacionResponse>("/metricas/ocupacion"),
 };
 
 // Con responseType "blob" (ver camarasApi.snapshot), un error HTTP no trae el detail como

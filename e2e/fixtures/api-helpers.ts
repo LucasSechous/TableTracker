@@ -257,6 +257,29 @@ export interface HistorialResponse {
   created_at: string;
 }
 
+export interface ConteoPorEstadoResponse {
+  libre: number;
+  ocupada: number;
+  pendiente_limpieza: number;
+  reservada: number;
+}
+
+export interface OcupacionMetricaResponse {
+  total_mesas: number;
+  porcentaje_ocupacion: number;
+  conteo_por_estado: ConteoPorEstadoResponse;
+}
+
+export async function obtenerOcupacion(
+  request: APIRequestContext,
+  token: string,
+  params?: { sector_id?: number }
+): Promise<OcupacionMetricaResponse> {
+  const res = await request.get(`${BACKEND_URL}/metricas/ocupacion`, { headers: authHeaders(token), params });
+  if (!res.ok()) throw new Error(`No se pudo obtener ocupación: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
 export async function listarHistorial(
   request: APIRequestContext,
   token: string,

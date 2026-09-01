@@ -133,6 +133,83 @@ export function getLimpiarFiltrosButton(page: Page): Locator {
   return page.getByRole("button", { name: "Limpiar filtros" });
 }
 
+export async function gotoOcupacionAuthed(page: Page, token: string): Promise<void> {
+  await injectToken(page, token);
+  await page.goto("/ocupacion");
+  await waitForOcupacionLoaded(page);
+}
+
+export async function waitForOcupacionLoaded(page: Page): Promise<void> {
+  await page.getByText("Cargando métricas...").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
+}
+
+/**
+ * Los locators del panel de ocupación van por data-testid y se indexan por la CLAVE del
+ * estado (libre, ocupada, ...), no por su etiqueta visible. Dos razones, las dos de
+ * T26-161: no navegar el DOM por posición (los XPath posicionales fueron los que
+ * rompieron en el Sprint 5) y no acoplar el spec al texto de la UI, que puede cambiar
+ * sin que cambie el comportamiento.
+ */
+export const ESTADOS_OCUPACION = ["libre", "ocupada", "pendiente_limpieza", "reservada"] as const;
+
+/** Etiqueta (en plural) de la card de cada estado, para los asserts de texto visible. */
+export const ETIQUETA_CARD_OCUPACION: Record<string, string> = {
+  libre: "Libres",
+  ocupada: "Ocupadas",
+  pendiente_limpieza: "Pendientes de limpieza",
+  reservada: "Reservadas",
+};
+
+/** Card completa de un estado en el panel de ocupación. */
+export function getOcupacionCard(page: Page, estado: string): Locator {
+  return page.getByTestId(`ocupacion-card-${estado}`);
+}
+
+/** El número grande de la card de un estado. */
+export function getOcupacionCardCount(page: Page, estado: string): Locator {
+  return page.getByTestId(`ocupacion-count-${estado}`);
+}
+
+/** El cuadradito de color de la card, que debe usar la paleta del salón. */
+export function getOcupacionCardSwatch(page: Page, estado: string): Locator {
+  return page.getByTestId(`ocupacion-swatch-${estado}`);
+}
+
+/** La etiqueta de texto de la card de un estado. */
+export function getOcupacionCardEtiqueta(page: Page, estado: string): Locator {
+  return page.getByTestId(`ocupacion-etiqueta-${estado}`);
+}
+
+/** El porcentaje general (el número grande del encabezado). */
+export function getOcupacionPorcentaje(page: Page): Locator {
+  return page.getByTestId("ocupacion-porcentaje");
+}
+
+/** El "N de M mesas ocupadas" que acompaña al porcentaje. */
+export function getOcupacionResumen(page: Page): Locator {
+  return page.getByTestId("ocupacion-resumen");
+}
+
+/** El "N mesas activas en total" del encabezado de la grilla de cards. */
+export function getOcupacionTotal(page: Page): Locator {
+  return page.getByTestId("ocupacion-total");
+}
+
+/** El empty state que reemplaza al panel cuando no hay ninguna mesa activa. */
+export function getOcupacionEmptyState(page: Page): Locator {
+  return page.getByTestId("ocupacion-empty");
+}
+
+/** La aclaración pegada al porcentaje sobre qué mesas cuenta y cuáles no. */
+export function getOcupacionNotaPorcentaje(page: Page): Locator {
+  return page.getByTestId("ocupacion-nota-porcentaje");
+}
+
+/** El recordatorio dentro de la card de Reservadas. */
+export function getOcupacionNotaReservada(page: Page): Locator {
+  return page.getByTestId("ocupacion-nota-reservada");
+}
+
 /** Todas las filas del cuerpo de la tabla de historial. */
 export function getHistorialRows(page: Page): Locator {
   return page.locator("table tbody tr");

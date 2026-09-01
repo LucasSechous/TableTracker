@@ -311,7 +311,7 @@ def run():
     detector = Detector(config.YOLO_MODEL_PATH, config.YOLO_CONFIDENCE, config.YOLO_CLASSES)
     detector.load()
 
-    video = Camera(fuente)
+    video = Camera(fuente, antiguedad_maxima=config.FRAME_ANTIGUEDAD_MAXIMA_SEGUNDOS)
     video.open()
     logger.info(
         "Procesando %s cada %ss — overlap mínimo %.2f, confirmación a los %ss",

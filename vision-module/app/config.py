@@ -59,6 +59,17 @@ CONFIRMACION_SEGUNDOS = float(os.getenv("CONFIRMACION_SEGUNDOS", "6"))
 FRAMES_FALLIDOS_MAXIMOS = int(os.getenv("FRAMES_FALLIDOS_MAXIMOS", "5"))
 RECONEXION_SEGUNDOS = float(os.getenv("RECONEXION_SEGUNDOS", "5"))
 
+# Cuántos intervalos de frame se toleran sin imagen NUEVA antes de dar el stream por
+# caído (T26-177). Se expresa como múltiplo y no como una constante en segundos para
+# que acompañe si se cambia la cadencia del pipeline.
+#
+# El hilo lector de Camera drena el stream a la velocidad de la cámara, así que en
+# operación normal el último frame tiene decenas de milisegundos: cualquier valor por
+# encima de un par de intervalos ya distingue "hipo momentáneo" de "stream muerto",
+# sin producir reconexiones espurias.
+INTERVALOS_TOLERADOS_SIN_FRAME = float(os.getenv("INTERVALOS_TOLERADOS_SIN_FRAME", "3"))
+FRAME_ANTIGUEDAD_MAXIMA_SEGUNDOS = FRAME_INTERVAL_SECONDS * INTERVALOS_TOLERADOS_SIN_FRAME
+
 # API de TableTracker. El módulo se loguea con su propio usuario (T26-129) en vez
 # de llevar un token pegado en el .env: el token del backend vence a los 30 minutos.
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")

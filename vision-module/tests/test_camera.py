@@ -148,6 +148,56 @@ class TestCameraVideoCapture:
             camara.release()
 
 
+class TestCameraNoFiltraCredenciales:
+    # rtsp_url.enmascarar() existe justamente para que la contraseña de la cámara no
+    # salga nunca al log, y su docstring lo pide explícitamente. camera.py era el único
+    # punto que la escribía en claro: en el log de "Fuente de video abierta" y, peor,
+    # en el RuntimeError de fallo de apertura, que además termina en el traceback.
+    URL = "rtsp://Camara:secreta123@192.168.1.38:554/stream1"
+
+    def test_el_error_de_apertura_no_lleva_la_password(self):
+        mock_capture = MagicMock()
+        mock_capture.isOpened.return_value = False
+
+        with patch("app.capture.camera.cv2.VideoCapture", return_value=mock_capture):
+            camara = Camera(self.URL)
+            with pytest.raises(RuntimeError) as excinfo:
+                camara.open()
+
+        assert "secreta123" not in str(excinfo.value)
+        assert "***" in str(excinfo.value)
+        # El resto de la URL sí tiene que estar: sin host no se puede diagnosticar nada.
+        assert "192.168.1.38" in str(excinfo.value)
+
+    def test_el_log_de_apertura_no_lleva_la_password(self, caplog):
+        mock_capture = MagicMock()
+        mock_capture.isOpened.return_value = True
+        mock_capture.read.return_value = (True, np.zeros((2, 2, 3), dtype=np.uint8))
+
+        with patch("app.capture.camera.cv2.VideoCapture", return_value=mock_capture):
+            with caplog.at_level("INFO"):
+                camara = Camera(self.URL)
+                camara.open()
+                camara.release()
+
+        assert "secreta123" not in caplog.text
+        assert "192.168.1.38" in caplog.text
+
+    def test_una_fuente_sin_credenciales_se_loguea_tal_cual(self, caplog):
+        # Un índice de webcam o una ruta de archivo no tienen nada que tapar.
+        mock_capture = MagicMock()
+        mock_capture.isOpened.return_value = True
+        mock_capture.read.return_value = (True, np.zeros((2, 2, 3), dtype=np.uint8))
+
+        with patch("app.capture.camera.cv2.VideoCapture", return_value=mock_capture):
+            with caplog.at_level("INFO"):
+                camara = Camera("video.mp4")
+                camara.open()
+                camara.release()
+
+        assert "video.mp4" in caplog.text
+
+
 class TestCameraStreamCaido:
     # Regresión de T26-177: el hilo lector solo pisa _ultimo_frame cuando la lectura
     # sale bien, así que un stream que se muere en caliente dejaba a read_frame()

@@ -32,8 +32,38 @@ if VIDEO_SOURCE is not None and VIDEO_SOURCE.isdigit():
     VIDEO_SOURCE = int(VIDEO_SOURCE)
 
 # Detección
-YOLO_MODEL_PATH = ruta("YOLO_MODEL_PATH", "models/yolov8n.pt")
-YOLO_CONFIDENCE = float(os.getenv("YOLO_CONFIDENCE", "0.5"))
+#
+# Los tres valores de abajo se eligieron midiendo (T26-178 / T26-179), no por defecto
+# de la librería. El dato que manda es que el pipeline procesa UN frame cada
+# FRAME_INTERVAL_SECONDS (2s), no 30 por segundo: hay presupuesto de cómputo de sobra
+# y no tiene sentido pagar el costo en precisión de una configuración pensada para
+# tiempo real.
+#
+# Costo medido sobre 20 frames reales de 1920x1080 (p90 contra el presupuesto de 2000 ms):
+#
+#     modelo      imgsz=640   imgsz=960   imgsz=1280
+#     yolov8n        11.5%       13.5%       22.6%
+#     yolov8s        17.8%       33.4%       65.0%
+#     yolov8m        39.4%       64.3%       no entra
+#
+# Se eligió yolov8s + imgsz 960: sube en los dos ejes a la vez (modelo y resolución)
+# y usa un tercio del presupuesto, dejando margen para las llamadas al backend que
+# el mismo ciclo hace y para hardware más lento que el de desarrollo. Los tres son
+# configurables para poder subirlos tras las pruebas con gente real.
+YOLO_MODEL_PATH = ruta("YOLO_MODEL_PATH", "models/yolov8s.pt")
+
+# Resolución a la que YOLO corre la inferencia. El default de ultralytics es 640, y con
+# frames de 1920x1080 eso significa reescalar a un tercio: una persona de 120 px de alto
+# queda en 40 px, que es donde el modelo empieza a perderla. Es el parámetro que más
+# afecta a la gente lejana o parcialmente tapada, que es justo el caso de un salón.
+YOLO_IMGSZ = int(os.getenv("YOLO_IMGSZ", "960"))
+
+# Umbral de confianza. 0.5 es alto para personas ocluidas detrás de mesas. Se puede
+# bajar sin miedo porque hay dos filtros aguas abajo que absorben el ruido: la detección
+# tiene que caer dentro del ROI de una mesa (OVERLAP_MINIMO) y además sostenerse
+# CONFIRMACION_SEGUNDOS. El sistema tolera más ruido de entrada de lo que sugiere el
+# número suelto.
+YOLO_CONFIDENCE = float(os.getenv("YOLO_CONFIDENCE", "0.35"))
 YOLO_CLASSES = [int(c) for c in os.getenv("YOLO_CLASSES", "0").split(",") if c.strip()]
 
 # Cadencia del pipeline

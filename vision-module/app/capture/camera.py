@@ -9,6 +9,7 @@ from pathlib import Path
 
 import cv2
 
+from app.utils import rtsp_url
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -94,10 +95,16 @@ class Camera:
                 "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|max_delay;0"
             )
 
+        # La fuente se enmascara SIEMPRE antes de que salga de acá: este log y este
+        # RuntimeError eran los dos únicos puntos del módulo que escupían la contraseña
+        # RTSP en claro —el error además terminaba en el traceback— pese a que
+        # rtsp_url.enmascarar() existe justamente para eso y su docstring lo pide.
         self.capture = cv2.VideoCapture(self.source)
         if not self.capture.isOpened():
-            raise RuntimeError(f"No se pudo abrir la fuente de video ({self.tipo}): {self.source}")
-        logger.info("Fuente de video abierta (%s): %s", self.tipo, self.source)
+            raise RuntimeError(
+                f"No se pudo abrir la fuente de video ({self.tipo}): {rtsp_url.enmascarar(self.source)}"
+            )
+        logger.info("Fuente de video abierta (%s): %s", self.tipo, rtsp_url.enmascarar(self.source))
 
         if self.tipo == RTSP:
             self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)

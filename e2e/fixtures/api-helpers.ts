@@ -280,6 +280,23 @@ export async function obtenerOcupacion(
   return res.json();
 }
 
+export interface RotacionMesaResponse {
+  mesa_id: number;
+  numero: number;
+  sector_id: number;
+  rotaciones: number;
+}
+
+export async function obtenerRotacion(
+  request: APIRequestContext,
+  token: string,
+  params?: { fecha_inicio?: string; fecha_fin?: string; sector_id?: number }
+): Promise<RotacionMesaResponse[]> {
+  const res = await request.get(`${BACKEND_URL}/metricas/rotacion`, { headers: authHeaders(token), params });
+  if (!res.ok()) throw new Error(`No se pudo obtener rotación: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
 export async function listarHistorial(
   request: APIRequestContext,
   token: string,

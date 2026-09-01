@@ -408,6 +408,7 @@ export default function DashboardPage() {
         esAdmin={user?.rol === "admin"}
         onVerHistorial={() => navigate("/historial")}
         onVerOcupacion={() => navigate("/ocupacion")}
+        onVerRotacion={() => navigate("/rotacion")}
         onCamaras={() => navigate("/camaras")}
         onCalibrarRoi={() => navigate("/calibracion-roi")}
         onLogout={handleLogout}

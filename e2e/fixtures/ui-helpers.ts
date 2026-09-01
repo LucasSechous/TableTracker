@@ -210,6 +210,72 @@ export function getOcupacionNotaReservada(page: Page): Locator {
   return page.getByTestId("ocupacion-nota-reservada");
 }
 
+export async function gotoRotacionAuthed(page: Page, token: string): Promise<void> {
+  await injectToken(page, token);
+  await page.goto("/rotacion");
+  await waitForRotacionLoaded(page);
+}
+
+export async function waitForRotacionLoaded(page: Page): Promise<void> {
+  await page.getByText("Cargando rotación...").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
+}
+
+/** Los inputs del componente compartido RangoFechas (historial y rotación). */
+export function getRangoDesdeInput(page: Page): Locator {
+  return page.getByTestId("rango-fechas-desde");
+}
+
+export function getRangoHastaInput(page: Page): Locator {
+  return page.getByTestId("rango-fechas-hasta");
+}
+
+export function getRotacionSectorSelect(page: Page): Locator {
+  return page.getByTestId("rotacion-filtro-sector");
+}
+
+export function getRotacionBuscarButton(page: Page): Locator {
+  return page.getByTestId("rotacion-buscar");
+}
+
+export function getRotacionLimpiarButton(page: Page): Locator {
+  return page.getByTestId("rotacion-limpiar");
+}
+
+/** La línea de "N rotaciones en M mesas" que encabeza la tabla. */
+export function getRotacionResumen(page: Page): Locator {
+  return page.getByTestId("rotacion-resumen");
+}
+
+/** Fila de una mesa en la tabla de rotación, por id de mesa. */
+export function getRotacionFila(page: Page, mesaId: number): Locator {
+  return page.getByTestId(`rotacion-fila-${mesaId}`);
+}
+
+/** La celda con el número de rotaciones de una mesa. */
+export function getRotacionCantidad(page: Page, mesaId: number): Locator {
+  return page.getByTestId(`rotacion-cantidad-${mesaId}`);
+}
+
+/** La celda con el nombre del sector de una mesa. */
+export function getRotacionSector(page: Page, mesaId: number): Locator {
+  return page.getByTestId(`rotacion-sector-${mesaId}`);
+}
+
+/** El botón de encabezado que ordena por una columna ("numero" | "sector" | "rotaciones"). */
+export function getRotacionOrdenarButton(page: Page, columna: string): Locator {
+  return page.getByTestId(`rotacion-ordenar-${columna}`);
+}
+
+/**
+ * Los data-testid de las filas en el orden en que están renderizadas. Sirve para afirmar
+ * sobre el ORDEN sin depender de índices posicionales en el DOM.
+ */
+export async function getRotacionOrdenFilas(page: Page): Promise<string[]> {
+  return page
+    .locator("tbody tr[data-testid^='rotacion-fila-']")
+    .evaluateAll((filas) => filas.map((f) => f.getAttribute("data-testid") ?? ""));
+}
+
 /** Todas las filas del cuerpo de la tabla de historial. */
 export function getHistorialRows(page: Page): Locator {
   return page.locator("table tbody tr");

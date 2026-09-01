@@ -2,7 +2,7 @@
 // PanelMesa. Agrupa la navegación de la app para que el header principal quede
 // liviano (solo nombre, leyenda y las dos acciones de mayor jerarquía).
 
-import { User, History, PieChart, Camera, Crosshair, LogOut } from "lucide-react"
+import { User, History, PieChart, Repeat, Camera, Crosshair, LogOut } from "lucide-react"
 import type { CSSProperties } from "react"
 
 interface Props {
@@ -13,6 +13,7 @@ interface Props {
   onClose: () => void
   onVerHistorial: () => void
   onVerOcupacion: () => void
+  onVerRotacion: () => void
   onCamaras: () => void
   onCalibrarRoi: () => void
   onLogout: () => void
@@ -26,6 +27,7 @@ export default function MenuLateral({
   onClose,
   onVerHistorial,
   onVerOcupacion,
+  onVerRotacion,
   onCamaras,
   onCalibrarRoi,
   onLogout,
@@ -116,6 +118,10 @@ export default function MenuLateral({
           <button onClick={() => ir(onVerOcupacion)} style={itemStyle}>
             <PieChart size={18} />
             Ocupación del salón
+          </button>
+          <button onClick={() => ir(onVerRotacion)} style={itemStyle}>
+            <Repeat size={18} />
+            Rotación de mesas
           </button>
           {esAdmin && (
             <button onClick={() => ir(onCamaras)} style={itemStyle}>

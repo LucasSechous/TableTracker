@@ -130,3 +130,20 @@ export interface OcupacionResponse {
   porcentaje_ocupacion: number
   conteo_por_estado: ConteoPorEstado
 }
+
+// Una fila de GET /metricas/rotacion (RF-23): cuántas veces rotó cada mesa activa en el
+// rango pedido.
+//
+// "Rotación" es una TRANSICIÓN hacia ocupada desde un estado distinto, no una fila cruda de
+// historial con estado='ocupada' (decisión de T26-155, ver backend/app/routers/metricas.py).
+// Dos correcciones manuales seguidas a 'ocupada' cuentan como una sola rotación, y una mesa
+// que ya venía ocupada de antes del rango no suma por entrar al rango.
+//
+// Trae sector_id, no el nombre del sector: para mostrarlo hay que cruzarlo con
+// sectoresApi.listar(). Las mesas sin rotaciones vienen igual, con rotaciones: 0.
+export interface RotacionMesa {
+  mesa_id: number
+  numero: number
+  sector_id: number
+  rotaciones: number
+}

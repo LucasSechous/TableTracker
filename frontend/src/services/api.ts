@@ -13,6 +13,7 @@ import type {
   CamaraTestResponse,
   DetectionFrameResult,
   OcupacionResponse,
+  RotacionMesa,
 } from "../types";
 
 export type {
@@ -27,6 +28,7 @@ export type {
   DetectionFrameResult,
   ConteoPorEstado,
   OcupacionResponse,
+  RotacionMesa,
 } from "../types";
 export type { Modo } from "../types";
 
@@ -194,6 +196,12 @@ export const metricasApi = {
   // cada llamada devuelve la foto actual del salón (T26-158, RF-22). El endpoint acepta
   // un sector_id opcional que esta UI todavía no expone (fuera del alcance del ticket).
   ocupacion: () => api.get<OcupacionResponse>("/metricas/ocupacion"),
+
+  // Rotaciones por mesa en un rango (T26-159, RF-23). Sin fechas devuelve el histórico
+  // completo. fecha_inicio/fecha_fin son datetimes ISO, no fechas sueltas: para que el
+  // "hasta" sea inclusivo hay que mandar el fin del día (ver finDelDia en RangoFechas).
+  rotacion: (params?: { fecha_inicio?: string; fecha_fin?: string; sector_id?: number }) =>
+    api.get<RotacionMesa[]>("/metricas/rotacion", { params }),
 };
 
 // Con responseType "blob" (ver camarasApi.snapshot), un error HTTP no trae el detail como

@@ -30,6 +30,9 @@ export interface Configuracion {
   ancho_salon: number
   alto_salon: number
   nombre_establecimiento?: string | null
+  // RF-28 (T26-156): dato informativo que carga el admin, sin relación con el COUNT real de
+  // mesas activas. null mientras nadie lo haya cargado.
+  cantidad_mesas_referencia?: number | null
 }
 
 export interface HistorialEstado {

@@ -210,6 +210,44 @@ export function getOcupacionNotaReservada(page: Page): Locator {
   return page.getByTestId("ocupacion-nota-reservada");
 }
 
+export async function gotoConfiguracionAuthed(page: Page, token: string): Promise<void> {
+  await injectToken(page, token);
+  await page.goto("/configuracion");
+  await page.getByTestId("configuracion-nombre").waitFor({ timeout: 10_000 });
+}
+
+export function getConfiguracionNombreInput(page: Page): Locator {
+  return page.getByTestId("configuracion-nombre");
+}
+
+export function getConfiguracionCantidadMesasInput(page: Page): Locator {
+  return page.getByTestId("configuracion-cantidad-mesas");
+}
+
+export function getConfiguracionAnchoInput(page: Page): Locator {
+  return page.getByTestId("configuracion-ancho");
+}
+
+export function getConfiguracionAltoInput(page: Page): Locator {
+  return page.getByTestId("configuracion-alto");
+}
+
+export function getConfiguracionGuardarButton(page: Page): Locator {
+  return page.getByTestId("configuracion-guardar");
+}
+
+export function getConfiguracionDeshacerButton(page: Page): Locator {
+  return page.getByTestId("configuracion-deshacer");
+}
+
+export function getConfiguracionExito(page: Page): Locator {
+  return page.getByTestId("configuracion-exito");
+}
+
+export function getConfiguracionError(page: Page): Locator {
+  return page.getByTestId("configuracion-error");
+}
+
 export async function gotoRotacionAuthed(page: Page, token: string): Promise<void> {
   await injectToken(page, token);
   await page.goto("/rotacion");

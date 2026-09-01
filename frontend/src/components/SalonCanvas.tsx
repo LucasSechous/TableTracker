@@ -9,10 +9,7 @@ import type { CSSProperties } from "react"
 import type { Sector, Mesa, Modo } from "../types"
 import SectorBloque from "./SectorBloque"
 import PanelMesa from "./PanelMesa"
-import { COLOR_POR_ESTADO } from "../constants"
-
-// Tamaño mínimo del salón sin sectores, para evitar que el resize lo colapse a 0.
-const TAMANO_MINIMO_SALON = 200
+import { COLOR_POR_ESTADO, calcularMinimoSalon } from "../constants"
 
 // Etiquetas legibles de cada estado para la leyenda de colores.
 const ETIQUETA_POR_ESTADO: Record<string, string> = {
@@ -74,16 +71,11 @@ export default function SalonCanvas({
     // El mínimo es el espacio que ocupan los sectores activos (para no dejarlos fuera del
     // salón al achicar), igual que el mínimo de un sector se calcula a partir de sus mesas.
     // No hay techo: a diferencia de un sector, el salón no vive contenido en nada más.
-    const sectoresActivos = sectores.filter((s) => s.activo)
-    const minAncho = sectoresActivos.length
-      ? Math.max(...sectoresActivos.map((s) => s.pos_x + s.ancho))
-      : TAMANO_MINIMO_SALON
-    const minAlto = sectoresActivos.length
-      ? Math.max(...sectoresActivos.map((s) => s.pos_y + s.alto))
-      : TAMANO_MINIMO_SALON
+    // El cálculo se comparte con la pantalla de configuración (ver constants.ts).
+    const minimo = calcularMinimoSalon(sectores)
 
-    const clampAncho = (valor: number) => Math.max(minAncho, valor)
-    const clampAlto = (valor: number) => Math.max(minAlto, valor)
+    const clampAncho = (valor: number) => Math.max(minimo.ancho, valor)
+    const clampAlto = (valor: number) => Math.max(minimo.alto, valor)
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing.current || !resizeStart.current) return

@@ -280,6 +280,37 @@ export async function obtenerOcupacion(
   return res.json();
 }
 
+export interface ConfiguracionResponse {
+  ancho_salon: number;
+  alto_salon: number;
+  nombre_establecimiento: string | null;
+  cantidad_mesas_referencia: number | null;
+}
+
+export async function obtenerConfiguracion(
+  request: APIRequestContext,
+  token: string
+): Promise<ConfiguracionResponse> {
+  const res = await request.get(`${BACKEND_URL}/configuracion`, { headers: authHeaders(token) });
+  if (!res.ok()) throw new Error(`No se pudo obtener configuración: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
+export async function actualizarConfiguracion(
+  request: APIRequestContext,
+  token: string,
+  datos: {
+    ancho_salon?: number;
+    alto_salon?: number;
+    nombre_establecimiento?: string;
+    cantidad_mesas_referencia?: number;
+  }
+): Promise<ConfiguracionResponse> {
+  const res = await request.patch(`${BACKEND_URL}/configuracion`, { headers: authHeaders(token), data: datos });
+  if (!res.ok()) throw new Error(`No se pudo actualizar configuración: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
 export interface RotacionMesaResponse {
   mesa_id: number;
   numero: number;

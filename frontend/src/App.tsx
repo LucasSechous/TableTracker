@@ -7,6 +7,7 @@ import DashboardPage from "./pages/DashboardPage";
 import HistorialPage from "./pages/HistorialPage";
 import OcupacionPage from "./pages/OcupacionPage";
 import RotacionPage from "./pages/RotacionPage";
+import ConfiguracionPage from "./pages/ConfiguracionPage";
 import CalibracionRoiPage from "./pages/CalibracionRoiPage";
 import CamarasPage from "./pages/CamarasPage";
 import AdminRoute from "./components/AdminRoute";
@@ -46,6 +47,19 @@ export default function App() {
           element={
             <PrivateRoute>
               <RotacionPage />
+            </PrivateRoute>
+          }
+        />
+        {/* Con AdminRoute, a diferencia de /ocupacion y /rotacion: el PATCH /configuracion
+            exige rol admin, así que dejar entrar a un mozo sería mostrarle un formulario
+            que va a fallar con 403 recién al guardar. */}
+        <Route
+          path="/configuracion"
+          element={
+            <PrivateRoute>
+              <AdminRoute>
+                <ConfiguracionPage />
+              </AdminRoute>
             </PrivateRoute>
           }
         />

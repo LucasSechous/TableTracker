@@ -135,8 +135,16 @@ export const sectoresApi = {
 export const configuracionApi = {
   obtener: () => api.get<Configuracion>("/configuracion"),
 
-  actualizar: (datos: { ancho_salon?: number; alto_salon?: number; nombre_establecimiento?: string }) =>
-    api.patch<Configuracion>("/configuracion", datos),
+  // PATCH parcial y solo admin. Ojo con un detalle del backend: aplica los campos con
+  // model_dump(exclude_none=True), así que mandar null NO borra un campo, lo ignora.
+  // Para nombre_establecimiento se puede mandar "" y queda vacío; cantidad_mesas_referencia
+  // valida gt=0, así que una vez cargada no hay forma de volverla a null desde la API.
+  actualizar: (datos: {
+    ancho_salon?: number
+    alto_salon?: number
+    nombre_establecimiento?: string
+    cantidad_mesas_referencia?: number
+  }) => api.patch<Configuracion>("/configuracion", datos),
 };
 
 export const camarasApi = {

@@ -411,6 +411,7 @@ export default function DashboardPage() {
         onVerRotacion={() => navigate("/rotacion")}
         onCamaras={() => navigate("/camaras")}
         onCalibrarRoi={() => navigate("/calibracion-roi")}
+        onConfiguracion={() => navigate("/configuracion")}
         onLogout={handleLogout}
       />
 

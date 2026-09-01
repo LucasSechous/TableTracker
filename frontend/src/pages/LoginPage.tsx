@@ -2,8 +2,7 @@
 // Autentica al usuario contra el backend y redirige al dashboard tras el login.
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import type { AxiosError } from "axios";
-import { authApi } from "../services/api";
+import { authApi, extraerDetalle } from "../services/api";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -21,8 +20,7 @@ export default function LoginPage() {
       localStorage.setItem("token", data.access_token);
       navigate("/");
     } catch (err) {
-      const axiosErr = err as AxiosError<{ detail?: string }>;
-      setError(axiosErr.response?.data?.detail ?? "Error al iniciar sesión");
+      setError(extraerDetalle(err, "Error al iniciar sesión"));
     } finally {
       setLoading(false);
     }

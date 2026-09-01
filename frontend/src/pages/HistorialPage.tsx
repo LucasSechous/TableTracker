@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { historialApi, mesasApi } from "../services/api"
+import { historialApi, mesasApi, extraerDetalle } from "../services/api"
 import type { HistorialEstado, Mesa } from "../types"
 import RangoFechas, { finDelDia, labelStyle } from "../components/RangoFechas"
 
@@ -12,10 +12,6 @@ const ESTADO_LABEL: Record<string, string> = {
   ocupada: "Ocupada",
   pendiente_limpieza: "Pendiente de limpieza",
   reservada: "Reservada",
-}
-
-function extraerDetalle(err: unknown, fallback: string) {
-  return (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? fallback
 }
 
 export default function HistorialPage() {

@@ -2,10 +2,9 @@
 // En modo monitoreo el click abre PanelMesa con el detalle; en modo edición es arrastrable.
 
 import { useState, useEffect, useRef } from "react"
-import type { AxiosError } from "axios"
 import { Trash2 } from "lucide-react"
 import type { Mesa, Modo } from "../types"
-import { mesasApi } from "../services/api"
+import { mesasApi, extraerDetalle } from "../services/api"
 import { DIAMETRO_MESA, COLOR_POR_ESTADO, BORDE_POR_ESTADO } from "../constants"
 
 interface MesaVisualProps {
@@ -96,8 +95,7 @@ export default function MesaVisual({
       await mesasApi.desactivar(mesa.id)
       onMesaEliminada(mesa.id)
     } catch (err) {
-      const axiosErr = err as AxiosError<{ detail?: string }>
-      alert(axiosErr.response?.data?.detail ?? "No se pudo eliminar la mesa")
+      alert(extraerDetalle(err, "No se pudo eliminar la mesa"))
     } finally {
       setEliminando(false)
     }

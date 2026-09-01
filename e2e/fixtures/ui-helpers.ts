@@ -210,6 +210,12 @@ export function getOcupacionNotaReservada(page: Page): Locator {
   return page.getByTestId("ocupacion-nota-reservada");
 }
 
+export async function gotoCamarasAuthed(page: Page, token: string): Promise<void> {
+  await injectToken(page, token);
+  await page.goto("/camaras");
+  await page.getByText("Verificando permisos...").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
+}
+
 export async function gotoConfiguracionAuthed(page: Page, token: string): Promise<void> {
   await injectToken(page, token);
   await page.goto("/configuracion");

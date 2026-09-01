@@ -2,9 +2,8 @@
 // Overlay + card centrada con CSS plano inline, calcado de ModalEditarSector.tsx.
 
 import { useState } from "react"
-import type { AxiosError } from "axios"
 import type { Camara, Sector } from "../types"
-import { camarasApi } from "../services/api"
+import { camarasApi, extraerDetalle } from "../services/api"
 
 interface ModalEditarCamaraProps {
   camara: Camara
@@ -74,8 +73,7 @@ export default function ModalEditarCamara({
       })
       onCamaraActualizada(data)
     } catch (err) {
-      const axiosErr = err as AxiosError<{ detail?: string }>
-      setError(axiosErr.response?.data?.detail ?? "No se pudo actualizar la cámara")
+      setError(extraerDetalle(err, "No se pudo actualizar la cámara"))
     } finally {
       setGuardando(false)
     }

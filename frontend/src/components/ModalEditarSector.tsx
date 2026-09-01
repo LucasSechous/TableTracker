@@ -2,9 +2,8 @@
 // Overlay + card centrada con CSS plano inline, sin librerías externas de UI/modales.
 
 import { useState } from "react"
-import type { AxiosError } from "axios"
 import type { Sector } from "../types"
-import { sectoresApi } from "../services/api"
+import { sectoresApi, extraerDetalle } from "../services/api"
 
 interface ModalEditarSectorProps {
   sector: Sector
@@ -34,8 +33,7 @@ export default function ModalEditarSector({ sector, onClose, onSectorActualizado
       })
       onSectorActualizado({ ...sector, ...data })
     } catch (err) {
-      const axiosErr = err as AxiosError<{ detail?: string }>
-      setError(axiosErr.response?.data?.detail ?? "No se pudo actualizar el sector")
+      setError(extraerDetalle(err, "No se pudo actualizar el sector"))
     } finally {
       setGuardando(false)
     }

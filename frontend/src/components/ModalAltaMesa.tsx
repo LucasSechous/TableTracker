@@ -2,9 +2,8 @@
 // La posición inicial se calcula en coordenadas locales al sector (ver nota sobre pos_x/pos_y más abajo).
 
 import { useState } from "react"
-import type { AxiosError } from "axios"
 import type { Mesa, Sector } from "../types"
-import { mesasApi } from "../services/api"
+import { mesasApi, extraerDetalle } from "../services/api"
 import { DIAMETRO_MESA } from "../constants"
 
 // SectorBloque.tsx posiciona el bloque del sector con position:absolute (creando su propio
@@ -66,8 +65,7 @@ export default function ModalAltaMesa({ sectores, onClose, onMesaCreada }: Modal
 
       onMesaCreada(mesaPosicionada)
     } catch (err) {
-      const axiosErr = err as AxiosError<{ detail?: string }>
-      setError(axiosErr.response?.data?.detail ?? "No se pudo crear la mesa")
+      setError(extraerDetalle(err, "No se pudo crear la mesa"))
     } finally {
       setGuardando(false)
     }

@@ -3,12 +3,11 @@
 // inferior derecha; contiene sus mesas activas como MesaVisual.
 
 import { useState, useEffect, useRef } from "react"
-import type { AxiosError } from "axios"
 import { Pencil, Trash2 } from "lucide-react"
 import type { Sector, Mesa, Modo } from "../types"
 import MesaVisual from "./MesaVisual"
 import ModalEditarSector from "./ModalEditarSector"
-import { sectoresApi } from "../services/api"
+import { sectoresApi, extraerDetalle } from "../services/api"
 import { DIAMETRO_MESA } from "../constants"
 
 // Tamaño mínimo de un sector sin mesas, para evitar que el resize lo colapse a 0.
@@ -169,8 +168,7 @@ export default function SectorBloque({
       await sectoresApi.actualizar(sector.id, { activo: false })
       onSectorEliminado(sector.id)
     } catch (err) {
-      const axiosErr = err as AxiosError<{ detail?: string }>
-      alert(axiosErr.response?.data?.detail ?? "No se pudo eliminar el sector")
+      alert(extraerDetalle(err, "No se pudo eliminar el sector"))
     } finally {
       setEliminando(false)
     }

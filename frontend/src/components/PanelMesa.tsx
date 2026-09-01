@@ -9,9 +9,8 @@
 
 import { useEffect, useState } from "react"
 import type { CSSProperties } from "react"
-import type { AxiosError } from "axios"
 import type { Mesa } from "../types"
-import { historialApi, mesasApi } from "../services/api"
+import { historialApi, mesasApi, extraerDetalle } from "../services/api"
 import { COLOR_POR_ESTADO } from "../constants"
 
 const ETIQUETA_POR_ESTADO: Record<string, string> = {
@@ -78,8 +77,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
       onMesaActualizada(data)
       setExpandido(false)
     } catch (err) {
-      const axiosErr = err as AxiosError<{ detail?: string }>
-      alert(axiosErr.response?.data?.detail ?? "No se pudo cambiar el estado de la mesa")
+      alert(extraerDetalle(err, "No se pudo cambiar el estado de la mesa"))
     } finally {
       setAccionando(false)
     }

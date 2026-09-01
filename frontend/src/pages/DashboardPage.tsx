@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Pencil, Menu } from "lucide-react"
-import { authApi, mesasApi, sectoresApi, configuracionApi } from "../services/api"
+import { authApi, mesasApi, sectoresApi, configuracionApi, extraerDetalle } from "../services/api"
 import type { UserResponse } from "../services/api"
 import type { Mesa, Sector, Modo, Configuracion } from "../types"
 import SalonCanvas from "../components/SalonCanvas"
@@ -58,8 +58,7 @@ export default function DashboardPage() {
         setConfiguracion(configuracionRes.data)
       })
       .catch((err: unknown) => {
-        const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-        setError(detail ?? "Error al cargar el salón")
+        setError(extraerDetalle(err, "Error al cargar el salón"))
       })
       .finally(() => setLoading(false))
   }, [])
@@ -97,10 +96,6 @@ export default function DashboardPage() {
       clearInterval(intervalId)
     }
   }, [modo])
-
-  function extraerDetalle(err: unknown, fallback: string) {
-    return (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? fallback
-  }
 
   function handleMesaEstadoChange(mesaId: number, nuevoEstado: string) {
     const estadoAnterior = sectores.flatMap((s) => s.mesas ?? []).find((m) => m.id === mesaId)?.estado

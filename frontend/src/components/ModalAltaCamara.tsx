@@ -3,9 +3,8 @@
 // sector sigue el mismo patrón que ModalAltaMesa.tsx (la cámara también cuelga de un sector).
 
 import { useState } from "react"
-import type { AxiosError } from "axios"
 import type { Camara, Sector } from "../types"
-import { camarasApi } from "../services/api"
+import { camarasApi, extraerDetalle } from "../services/api"
 
 interface ModalAltaCamaraProps {
   sectores: Sector[]
@@ -66,8 +65,7 @@ export default function ModalAltaCamara({ sectores, onClose, onCamaraCreada }: M
       })
       onCamaraCreada(data)
     } catch (err) {
-      const axiosErr = err as AxiosError<{ detail?: string }>
-      setError(axiosErr.response?.data?.detail ?? "No se pudo crear la cámara")
+      setError(extraerDetalle(err, "No se pudo crear la cámara"))
     } finally {
       setGuardando(false)
     }

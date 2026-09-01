@@ -325,7 +325,9 @@ def bucle(video, detector, cliente, zonas, confirmador, camara_id, publicador=No
         etapas["publicar"] = time.monotonic() - t
 
         t = time.monotonic()
-        ocupacion = zonas_mod.resolver_ocupacion(zonas, detecciones, config.OVERLAP_MINIMO)
+        ocupacion = zonas_mod.resolver_ocupacion(
+            zonas, detecciones, config.OVERLAP_MINIMO, config.ANCLAJE_OVERLAP
+        )
         etapas["ocupacion"] = time.monotonic() - t
 
         t = time.monotonic()

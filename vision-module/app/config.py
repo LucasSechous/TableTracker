@@ -80,6 +80,16 @@ CAMARA_PASSWORD = os.getenv("CAMARA_PASSWORD") or None
 # Ocupación: qué fracción de un bounding box tiene que caer dentro del ROI para
 # contar como una persona en esa mesa.
 OVERLAP_MINIMO = float(os.getenv("OVERLAP_MINIMO", "0.30"))
+
+# Qué parte del bounding box se compara contra el ROI (T26-180):
+#   bbox_completo    - la persona entera (criterio histórico, default)
+#   tercio_inferior  - solo el tercio de abajo, o sea dónde está apoyada
+# El tercio inferior debería portarse mejor con gente SENTADA, porque el bbox de
+# una persona es alto y con una cámara baja buena parte queda por encima de la
+# mesa en el plano de la imagen. Pero cambia la semántica de OVERLAP_MINIMO y
+# todavía no se pudo medir contra una escena real con gente sentada, así que el
+# default no se toca. Cuando se hagan las pruebas físicas, comparar los dos.
+ANCLAJE_OVERLAP = os.getenv("ANCLAJE_OVERLAP", "bbox_completo").strip()
 # Cuánto tiene que sostenerse una observación antes de confirmar el cambio de
 # estado. Evita que alguien que pasa caminando marque la mesa como ocupada.
 CONFIRMACION_SEGUNDOS = float(os.getenv("CONFIRMACION_SEGUNDOS", "6"))

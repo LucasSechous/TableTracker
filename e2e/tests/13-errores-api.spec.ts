@@ -32,8 +32,12 @@ test.describe("errores de validación de la API", () => {
   }) => {
     await gotoCamarasAuthed(page, token);
 
+    // Se exige que haya al menos una cámara en vez de saltear el test si no la hay: este
+    // es EL test de regresión del bug de la pantalla en blanco, y uno que se auto-saltea
+    // se ve verde sin haber probado nada. Si no hay cámaras, el que falla es el entorno y
+    // hay que enterarse.
     const filaEditar = page.getByRole("button", { name: "Editar" }).first();
-    test.skip((await filaEditar.count()) === 0, "no hay cámaras cargadas para editar");
+    await expect(filaEditar).toBeVisible();
     await filaEditar.click();
     await expect(page.getByRole("heading", { name: "Editar cámara" })).toBeVisible();
 

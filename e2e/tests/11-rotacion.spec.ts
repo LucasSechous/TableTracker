@@ -18,11 +18,12 @@ import {
   getRotacionSectorSelect,
   getRotacionBuscarButton,
   getRotacionLimpiarButton,
-  getRotacionFila,
   getRotacionCantidad,
   getRotacionSector,
   getRotacionOrdenarButton,
   getRotacionOrdenFilas,
+  getRotacionFilas,
+  getRotacionSinRotaciones,
 } from "../fixtures/ui-helpers";
 
 // Sección 11 — Vista de rotación de mesas (T26-159, RF-23)
@@ -109,12 +110,12 @@ test.describe("con mesas que rotaron una cantidad conocida de veces", () => {
     await getRotacionSectorSelect(page).selectOption(String(sector.id));
     await getRotacionBuscarButton(page).click();
 
-    await expect(getRotacionFila(page, mesaDosRotaciones.id)).toBeVisible();
-    await expect(getRotacionFila(page, mesaUnaRotacion.id)).toBeVisible();
+    // toHaveCount reintenta: es lo que espera a que llegue la respuesta filtrada. No
+    // sirve afirmar que las filas del sector están visibles, porque YA lo estaban en el
+    // listado sin filtrar y el assert pasaría contra la tabla vieja.
+    await expect(getRotacionFilas(page)).toHaveCount(3);
 
-    // Todas las filas visibles pertenecen al sector filtrado.
     const filas = await getRotacionOrdenFilas(page);
-    expect(filas.length).toBe(3);
     for (const mesa of [mesaDosRotaciones, mesaUnaRotacion, mesaSinRotar]) {
       expect(filas).toContain(`rotacion-fila-${mesa.id}`);
     }
@@ -127,7 +128,9 @@ test.describe("con mesas que rotaron una cantidad conocida de veces", () => {
     await gotoRotacionAuthed(page, token);
     await getRotacionSectorSelect(page).selectOption(String(sector.id));
     await getRotacionBuscarButton(page).click();
-    await expect(getRotacionFila(page, mesaDosRotaciones.id)).toBeVisible();
+    // Igual que en 11.4: se espera el conteo filtrado antes de mirar el orden, o se
+    // estaría ordenando la tabla anterior.
+    await expect(getRotacionFilas(page)).toHaveCount(3);
 
     // Orden por defecto: rotaciones descendente, la que más rotó arriba.
     expect(await getRotacionOrdenFilas(page)).toEqual([
@@ -170,8 +173,10 @@ test.describe("con mesas que rotaron una cantidad conocida de veces", () => {
     await getRotacionSectorSelect(page).selectOption(String(sector.id));
     await getRotacionBuscarButton(page).click();
 
-    // Las mesas siguen listadas (existen), pero con 0 rotaciones en ese rango.
-    await expect(getRotacionCantidad(page, mesaDosRotaciones.id)).toHaveText("0");
-    await expect(getRotacionCantidad(page, mesaUnaRotacion.id)).toHaveText("0");
+    // Con todas las mesas en 0, la pantalla NO lista filas con cero: muestra el cartel
+    // de "ninguna mesa rotó", que es una situación distinta de "no hay mesas" y por eso
+    // tiene su propio mensaje. Este assert también es el punto de sincronización.
+    await expect(getRotacionSinRotaciones(page)).toBeVisible();
+    await expect(getRotacionFilas(page)).toHaveCount(0);
   });
 });

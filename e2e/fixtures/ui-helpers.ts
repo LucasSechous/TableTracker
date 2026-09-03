@@ -213,7 +213,11 @@ export function getOcupacionNotaReservada(page: Page): Locator {
 export async function gotoCamarasAuthed(page: Page, token: string): Promise<void> {
   await injectToken(page, token);
   await page.goto("/camaras");
+  // Hay DOS esperas y las dos hacen falta: primero el guard de AdminRoute, que consulta
+  // /auth/me, y después la carga del listado. Sin la segunda, un test que cuente botones
+  // "Editar" enseguida encuentra cero y se saltea solo, aparentando estar en verde.
   await page.getByText("Verificando permisos...").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
+  await page.getByText("Cargando cámaras...").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
 }
 
 export async function gotoConfiguracionAuthed(page: Page, token: string): Promise<void> {
@@ -311,13 +315,33 @@ export function getRotacionOrdenarButton(page: Page, columna: string): Locator {
 }
 
 /**
+ * Todas las filas de mesa de la tabla, como Locator.
+ *
+ * Se devuelve el Locator y no una promesa porque es el punto de SINCRONIZACIÓN después
+ * de apretar Buscar: expect(...).toHaveCount(n) reintenta hasta que llega la respuesta
+ * filtrada. Sin eso se lee la tabla anterior —las filas viejas siguen visibles mientras
+ * viaja el request— y el test compara contra el resultado del filtro anterior.
+ */
+export function getRotacionFilas(page: Page): Locator {
+  return page.locator("tbody tr[data-testid^='rotacion-fila-']");
+}
+
+/**
  * Los data-testid de las filas en el orden en que están renderizadas. Sirve para afirmar
  * sobre el ORDEN sin depender de índices posicionales en el DOM.
+ *
+ * OJO: saca una foto del DOM en ese instante y no reintenta. Antes de llamarla hay que
+ * haber esperado el resultado, por ejemplo con expect(getRotacionFilas(page)).toHaveCount().
  */
 export async function getRotacionOrdenFilas(page: Page): Promise<string[]> {
-  return page
-    .locator("tbody tr[data-testid^='rotacion-fila-']")
-    .evaluateAll((filas) => filas.map((f) => f.getAttribute("data-testid") ?? ""));
+  return getRotacionFilas(page).evaluateAll((filas) =>
+    filas.map((f) => f.getAttribute("data-testid") ?? "")
+  );
+}
+
+/** El cartel que reemplaza a las filas cuando ninguna mesa rotó en el período elegido. */
+export function getRotacionSinRotaciones(page: Page): Locator {
+  return page.getByTestId("rotacion-sin-rotaciones");
 }
 
 /** Todas las filas del cuerpo de la tabla de historial. */

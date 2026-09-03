@@ -104,6 +104,10 @@ export default function MesaVisual({
   return (
     <div style={{ position: "absolute", left: localPos.x, top: localPos.y }}>
       <div
+        // Ancla estable para los tests. Antes se ubicaba por el border-radius del 50%
+        // que tenía cuando las mesas se dibujaban redondas; ahora son cuadradas y ese
+        // selector dejó de encontrar nada.
+        data-testid={`mesa-${mesa.numero}`}
         style={{
           width: DIAMETRO_MESA,
           height: DIAMETRO_MESA,

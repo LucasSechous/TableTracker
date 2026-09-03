@@ -1,3 +1,4 @@
+import { expect } from "@playwright/test";
 import type { Page, Locator } from "@playwright/test";
 
 /** Inyecta el token en localStorage antes de que cargue cualquier script de la app. */
@@ -17,16 +18,65 @@ export async function waitForSalonLoaded(page: Page): Promise<void> {
   await page.getByText("Cargando salón...").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
 }
 
-/** Locator del bloque raíz de un SectorBloque, ubicado por el texto exacto de su nombre. */
+/**
+ * Locator del bloque raíz de un SectorBloque.
+ *
+ * Antes se ubicaba por el texto del nombre y se subía al padre con xpath. El rediseño
+ * del Sprint 6/7 agregó una barra de filtros con un botón por sector, así que el nombre
+ * pasó a aparecer DOS veces en el DOM y el locator empezó a fallar por modo estricto de
+ * Playwright, tumbando casi todos los tests de canvas. Ahora va por data-testid.
+ */
 export function getSectorBlock(page: Page, nombreSector: string): Locator {
-  return page.getByText(nombreSector, { exact: true }).locator("xpath=..");
+  return page.getByTestId(`sector-bloque-${nombreSector}`);
 }
 
-/** Locator del círculo de una mesa (border-radius:50%) dentro de un sector, por número exacto. */
+/**
+ * Locator del cuadrado de una mesa dentro de un sector, por número exacto.
+ *
+ * El nombre quedó por compatibilidad con los specs que ya lo usan: las mesas se dibujaban
+ * redondas y se las buscaba por border-radius:50%, pero el rediseño las volvió cuadradas
+ * (borderRadius 8) y ese selector dejó de encontrar nada.
+ */
 export function getMesaCircle(sectorBlock: Locator, numero: number): Locator {
-  return sectorBlock
-    .locator('div[style*="50%"]')
-    .filter({ hasText: new RegExp(`^${numero}$`) });
+  return sectorBlock.getByTestId(`mesa-${numero}`);
+}
+
+/**
+ * Cambia el estado de una mesa por la interfaz, desde el PanelMesa ya abierto.
+ *
+ * Reemplaza a getEstadoSelect: la corrección manual dejó de ser un <select> inline sobre
+ * el canvas y pasó a este panel lateral, detrás de un desplegable "Corregir estado
+ * manualmente" (RF-17). Hay que abrirlo antes de poder elegir.
+ */
+export async function corregirEstadoDesdePanel(page: Page, estado: string): Promise<void> {
+  const toggle = page.getByTestId("panel-mesa-toggle-correccion");
+  await toggle.waitFor({ state: "visible", timeout: 10_000 });
+  // El panel recuerda si quedó expandido de una interacción anterior; solo se abre si
+  // los botones de estado todavía no están a la vista.
+  if (!(await page.getByTestId(`panel-mesa-estado-${estado}`).isVisible().catch(() => false))) {
+    await toggle.click();
+  }
+  await page.getByTestId(`panel-mesa-estado-${estado}`).click();
+}
+
+/** Abre el menú lateral, que es donde vive la navegación desde el rediseño del Sprint 6/7. */
+export async function abrirMenuLateral(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Abrir menú" }).click();
+}
+
+/**
+ * El desplegable de corrección manual dentro de PanelMesa. Sirve como señal de que el
+ * panel está abierto: solo existe cuando hay una mesa seleccionada.
+ */
+export function getPanelMesaToggle(page: Page): Locator {
+  return page.getByTestId("panel-mesa-toggle-correccion");
+}
+
+export async function cerrarPanelMesa(page: Page): Promise<void> {
+  // Por testid y no por el rol con nombre "Cerrar": ese texto es prefijo de "Cerrar
+  // sesión" y "Cerrar menú", y getByRole matchea por subcadena.
+  await page.getByTestId("panel-mesa-cerrar").click();
+  await getPanelMesaToggle(page).waitFor({ state: "hidden", timeout: 5_000 }).catch(() => {});
 }
 
 /** Locator del handle de resize (esquina inferior derecha) de un SectorBloque, en modo edición. */
@@ -53,8 +103,33 @@ export function getEstadoSelect(mesaCircle: Locator): Locator {
   return mesaCircle.locator("xpath=following-sibling::div//select");
 }
 
+/**
+ * El botón que ENTRA en modo edición. Ya no es un toggle.
+ *
+ * Antes un mismo botón alternaba entre "Editar disposición" y "Ver monitoreo". El
+ * rediseño del Sprint 6/7 lo partió en dos: en monitoreo el header muestra "Editar
+ * disposición", y en edición ese botón desaparece y sale una barra inferior fija con
+ * "Salir de edición". Esperar "Ver monitoreo" dejó de encontrar nada y era lo que
+ * tumbaba a los specs 05 y 07 enteros.
+ */
 export function getToggleModoButton(page: Page): Locator {
-  return page.getByRole("button", { name: /Editar disposición|Ver monitoreo/ });
+  return page.getByRole("button", { name: /Editar disposición/ });
+}
+
+export function getSalirEdicionButton(page: Page): Locator {
+  return page.getByRole("button", { name: "Salir de edición" });
+}
+
+/** Entra en modo edición y espera la señal de que el modo cambió de verdad. */
+export async function entrarEnModoEdicion(page: Page): Promise<void> {
+  await getToggleModoButton(page).click();
+  await expect(getSalirEdicionButton(page)).toBeVisible();
+}
+
+/** Vuelve a monitoreo desde la barra inferior del modo edición. */
+export async function salirDeModoEdicion(page: Page): Promise<void> {
+  await getSalirEdicionButton(page).click();
+  await expect(getToggleModoButton(page)).toBeVisible();
 }
 
 export function getLogoutButton(page: Page): Locator {

@@ -15,7 +15,7 @@ import {
   waitForSalonLoaded,
   getSectorBlock,
   getMesaCircle,
-  getEstadoSelect,
+  corregirEstadoDesdePanel,
   COLOR_POR_ESTADO,
 } from "../fixtures/ui-helpers";
 import { BACKEND_URL } from "../playwright.config";
@@ -90,10 +90,10 @@ test.describe("con un salón sembrado (1 sector, 4 mesas: una por estado)", () =
     const wrapper = circle.locator("xpath=..");
     const posAntes = await wrapper.evaluate((el) => ({ left: el.style.left, top: el.style.top }));
 
+    // El click ya no despliega un <select> sobre el canvas: abre PanelMesa, y la
+    // corrección manual vive detrás de un desplegable dentro de ese panel (RF-17).
     await circle.click();
-    const select = getEstadoSelect(circle);
-    await expect(select).toBeVisible();
-    await select.selectOption("ocupada");
+    await corregirEstadoDesdePanel(page, "ocupada");
 
     await expect(circle).toHaveCSS("background-color", COLOR_POR_ESTADO["ocupada"]);
     const posDespues = await wrapper.evaluate((el) => ({ left: el.style.left, top: el.style.top }));
@@ -107,7 +107,7 @@ test.describe("con un salón sembrado (1 sector, 4 mesas: una por estado)", () =
     const circle = getMesaCircle(sectorBlock, libre.numero);
 
     await circle.click();
-    await getEstadoSelect(circle).selectOption("reservada");
+    await corregirEstadoDesdePanel(page, "reservada");
     await expect(circle).toHaveCSS("background-color", COLOR_POR_ESTADO["reservada"]);
 
     await page.reload();

@@ -130,6 +130,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                 Mesa {mesa.numero} · {mesa.sector.nombre}
               </div>
               <button
+                data-testid="panel-mesa-cerrar"
                 onClick={onClose}
                 aria-label="Cerrar"
                 style={{
@@ -213,6 +214,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
 
               <div>
                 <button
+                  data-testid="panel-mesa-toggle-correccion"
                   onClick={() => setExpandido((v) => !v)}
                   style={{
                     minHeight: 44,
@@ -228,6 +230,9 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                 >
                   {expandido ? "Ocultar corrección manual" : "Corregir estado manualmente"}
                 </button>
+                {/* Anclas estables para los tests: la corrección manual pasó de ser un
+                    <select> inline sobre el canvas a este panel colapsable, y los specs
+                    que la ejercitan necesitan poder llegar sin depender del texto. */}
 
                 {expandido && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
@@ -243,6 +248,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                     {Object.entries(ETIQUETA_POR_ESTADO).map(([estado, etiqueta]) => (
                       <button
                         key={estado}
+                        data-testid={`panel-mesa-estado-${estado}`}
                         disabled={accionando || estado === mesa.estado}
                         onClick={() => {
                           onEstadoChange(mesa.id, estado)

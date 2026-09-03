@@ -177,6 +177,9 @@ export default function SectorBloque({
   return (
     <>
       <div
+        // Ancla estable para los tests: el nombre del sector aparece además en la barra
+        // de filtros de SalonCanvas, así que buscarlo por texto matchea dos elementos.
+        data-testid={`sector-bloque-${sector.nombre}`}
         style={{
           position: "absolute",
           left: localPos.x,

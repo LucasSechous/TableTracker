@@ -200,3 +200,100 @@ def test_rotacion_fecha_inicio_posterior_a_fecha_fin_da_400(client, como):
         params={"fecha_inicio": BASE.isoformat(), "fecha_fin": (BASE - timedelta(days=1)).isoformat()},
     )
     assert respuesta.status_code == 400
+
+
+# ------------------------------------------- /rotacion acotada al horario (T26-171)
+
+# BASE y las fechas de arriba son naive y app/services/horario las trata como UTC.
+# Montevideo está en UTC-3, así que para armar una transición "a las 21:00 del reloj
+# del local" hay que guardarla a las 00:00 UTC del día siguiente. Este helper evita
+# tener que hacer esa cuenta a mano en cada test, que es donde se cuelan los errores.
+def _a_las(hora_local, dia=30):
+    """El datetime UTC que corresponde a `hora_local` del día `dia` de agosto de 2026.
+
+    Ojo con el día: 21:00 local es 00:00 UTC del día SIGUIENTE, así que el resultado
+    puede caer en otra fecha que la pedida. Como la query ordena por created_at, en un
+    test con varias filas hay que pasar el día explícito para que el orden cronológico
+    real coincida con el orden en que están escritas.
+    """
+    from datetime import datetime as _dt
+
+    desplazado = hora_local + 3
+    return _dt(2026, 8, dia + desplazado // 24, desplazado % 24, 0, 0)
+
+
+def _configurar_horario(db, apertura, cierre):
+    from datetime import time
+
+    from app.models.configuracion import ConfiguracionGeneral
+
+    config = ConfiguracionGeneral(
+        id=1,
+        hora_apertura=time(apertura, 0) if apertura is not None else None,
+        hora_cierre=time(cierre, 0) if cierre is not None else None,
+    )
+    db.add(config)
+    db.commit()
+    return config
+
+
+def _rotaciones_de(client, mesa_id):
+    cuerpo = client.get("/metricas/rotacion").json()
+    return next(fila["rotaciones"] for fila in cuerpo if fila["mesa_id"] == mesa_id)
+
+
+def test_rotacion_sin_horario_configurado_cuenta_las_24_horas(client, como, db, crear_mesa):
+    """Regresión: sin horario, el número tiene que ser el mismo que antes de T26-171."""
+    mesa = crear_mesa(estado=EstadoMesa.libre)
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(4))   # madrugada
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(5))
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(21))  # servicio
+    como("admin")
+
+    assert _rotaciones_de(client, mesa.id) == 2
+
+
+def test_rotacion_descarta_las_transiciones_fuera_del_horario(client, como, db, crear_mesa):
+    mesa = crear_mesa(estado=EstadoMesa.libre)
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(4))   # cerrado: no cuenta
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(5))
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(14))  # abierto: cuenta
+    _configurar_horario(db, 12, 23)
+    como("admin")
+
+    assert _rotaciones_de(client, mesa.id) == 1
+
+
+def test_rotacion_con_horario_que_cruza_medianoche(client, como, db, crear_mesa):
+    """Restaurante que abre 20:00 y cierra 02:00: la franja es el complemento del rango."""
+    # Los días van explícitos porque una noche de servicio cruza dos fechas locales, y
+    # además 21:00 local ya cae en el día UTC siguiente. Sin esto las filas quedan
+    # desordenadas respecto del ORDER BY created_at y el arrastre de estado se evalúa en
+    # un orden que no es el de los hechos.
+    mesa = crear_mesa(estado=EstadoMesa.libre)
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(21, dia=30))  # cuenta
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(22, dia=30))
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(1, dia=31))   # 01:00, sigue en servicio
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(10, dia=31))
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(15, dia=31))  # cerrado: no cuenta
+    _configurar_horario(db, 20, 2)
+    como("admin")
+
+    assert _rotaciones_de(client, mesa.id) == 2
+
+
+def test_una_ocupacion_fuera_de_horario_no_infla_la_siguiente_en_horario(client, como, db, crear_mesa):
+    """El arrastre de estado tiene que procesar TAMBIÉN las filas fuera de la franja.
+
+    Si se saltearan, la mesa seguiría figurando como libre después de ocuparse a las 4
+    de la mañana, y la fila 'ocupada' de las 14:00 —que no es una rotación, porque la
+    mesa ya venía ocupada— se contaría como si lo fuera. Es el error más fácil de
+    cometer al implementar el recorte, y no se nota: el número sale plausible.
+    """
+    mesa = crear_mesa(estado=EstadoMesa.libre)
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(4))   # fuera de horario
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(14))  # dentro, pero ya estaba ocupada
+    _configurar_horario(db, 12, 23)
+    como("admin")
+
+    assert _rotaciones_de(client, mesa.id) == 0

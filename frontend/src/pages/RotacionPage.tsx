@@ -11,10 +11,11 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowDownUp, RefreshCw, Repeat } from "lucide-react"
-import { metricasApi, sectoresApi, extraerDetalleApi } from "../services/api"
-import type { RotacionMesa, Sector } from "../types"
+import { ArrowDownUp, Clock, Download, RefreshCw, Repeat } from "lucide-react"
+import { metricasApi, sectoresApi, configuracionApi, extraerDetalleApi } from "../services/api"
+import type { RotacionMesa, Sector, Configuracion } from "../types"
 import RangoFechas, { finDelDia, labelStyle } from "../components/RangoFechas"
+import { descargarCsv, generarCsv, nombreArchivoCsv } from "../csv"
 
 type Columna = "numero" | "sector" | "rotaciones"
 type Direccion = "asc" | "desc"
@@ -30,20 +31,28 @@ const FILTROS_VACIOS: Filtros = { desde: "", hasta: "", sectorId: "" }
 export default function RotacionPage() {
   const [filas, setFilas] = useState<RotacionMesa[]>([])
   const [sectores, setSectores] = useState<Sector[]>([])
+  const [config, setConfig] = useState<Configuracion | null>(null)
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS)
   const [columna, setColumna] = useState<Columna>("rotaciones")
   const [direccion, setDireccion] = useState<Direccion>("desc")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Los filtros con los que se trajo lo que está en pantalla. No son los mismos que `filtros`
+  // si el usuario cambió el rango y todavía no le dio a Buscar, y el CSV tiene que
+  // corresponderse con la tabla que está viendo, no con lo que quedó tipeado.
+  const [aplicados, setAplicados] = useState<Filtros>(FILTROS_VACIOS)
   const navigate = useNavigate()
 
   useEffect(() => {
     sectoresApi.listar().then((res) => setSectores(res.data)).catch(() => {})
+    // Solo para la leyenda: si falla, la tabla igual sirve y no vale la pena un error.
+    configuracionApi.obtener().then((res) => setConfig(res.data)).catch(() => {})
   }, [])
 
   const buscar = useCallback(async (f: Filtros) => {
     setLoading(true)
     setError(null)
+    setAplicados(f)
     const params: { fecha_inicio?: string; fecha_fin?: string; sector_id?: number } = {}
     if (f.desde) params.fecha_inicio = f.desde
     if (f.hasta) params.fecha_fin = finDelDia(f.hasta)
@@ -102,6 +111,17 @@ export default function RotacionPage() {
     }
     return (a.numero - b.numero) * signo
   })
+
+  // Se exporta filasOrdenadas, no filas: el orden de la tabla es parte de lo que el usuario
+  // está viendo y de lo que pidió el ticket. No hace falta paginar acá —a diferencia del
+  // historial— porque el endpoint devuelve una fila por mesa activa y ya está todo en memoria.
+  function handleExportar() {
+    const contenido = generarCsv(
+      ["Mesa", "Sector", "Rotaciones"],
+      filasOrdenadas.map((fila) => [fila.numero, nombreSector(fila.sector_id), fila.rotaciones])
+    )
+    descargarCsv(nombreArchivoCsv("rotacion", aplicados.desde, aplicados.hasta), contenido)
+  }
 
   const totalRotaciones = filas.reduce((acc, f) => acc + f.rotaciones, 0)
   const maxRotaciones = filas.reduce((acc, f) => Math.max(acc, f.rotaciones), 0)
@@ -184,6 +204,20 @@ export default function RotacionPage() {
           <button data-testid="rotacion-limpiar" onClick={handleLimpiar} style={estiloBotonSecundario}>
             Limpiar filtros
           </button>
+
+          <button
+            data-testid="rotacion-exportar-csv"
+            onClick={handleExportar}
+            disabled={loading || filas.length === 0}
+            style={{
+              ...estiloBoton,
+              opacity: loading || filas.length === 0 ? 0.5 : 1,
+              cursor: loading || filas.length === 0 ? "default" : "pointer",
+            }}
+          >
+            <Download size={15} />
+            Exportar CSV
+          </button>
         </div>
 
         {loading && <p style={{ fontSize: 14, color: "#888" }}>Cargando rotación...</p>}
@@ -219,6 +253,19 @@ export default function RotacionPage() {
             >
               <Repeat size={15} />
               {`${totalRotaciones} ${totalRotaciones === 1 ? "rotación" : "rotaciones"} en ${filas.length} ${filas.length === 1 ? "mesa" : "mesas"}`}
+            </div>
+
+            {/* Qué franja se está contando (T26-171). Se muestra en los dos casos, con y
+                sin horario: que el número cubra las 24 horas también es información, y es
+                justamente la que faltaba antes del ticket. */}
+            <div
+              data-testid="rotacion-horario"
+              style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 12, color: "#94a3b8" }}
+            >
+              <Clock size={13} />
+              {config?.hora_apertura && config?.hora_cierre
+                ? `Acotado al horario de servicio: ${config.hora_apertura.slice(0, 5)} a ${config.hora_cierre.slice(0, 5)}.`
+                : "Cuenta las 24 horas del día. Cargá el horario de servicio en Configuración para acotarlo al servicio real."}
             </div>
 
             <div style={{ backgroundColor: "#fff", border: "1px solid #e0e0e0", borderRadius: 8, overflowX: "auto" }}>

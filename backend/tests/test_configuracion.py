@@ -33,6 +33,13 @@ def test_get_devuelve_los_valores(client, como, crear_configuracion):
         "alto_salon": 700,
         "nombre_establecimiento": "La Parrilla",
         "cantidad_mesas_referencia": 20,
+        # Sin cargar: con el horario en None las métricas siguen contando las 24 horas
+        # (T26-171). La igualdad es exacta a propósito —no un subconjunto— para que
+        # agregar un campo a la respuesta obligue a pasar por acá.
+        "hora_apertura": None,
+        "hora_cierre": None,
+        # Sin cargar: la alerta de limpieza demorada arranca apagada (T26-173).
+        "minutos_limpieza_demorada": None,
     }
 
 

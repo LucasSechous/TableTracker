@@ -23,6 +23,15 @@ class Mesa(Base):
     numero = Column(Integer, nullable=False)
     sector_id = Column(Integer, ForeignKey("sectores.id"), nullable=False)
     estado = Column(Enum(EstadoMesa), nullable=False, default=EstadoMesa.libre)
+    # Desde cuándo la mesa está en su estado actual (T26-173). Es un dato DERIVADO de
+    # historial_estados y se guarda igual, denormalizado, por costo: el dashboard pide
+    # GET /mesas cada 3 segundos (INTERVALO_REFRESCO_MESAS_MS), o sea ~1200 veces por
+    # hora contra una base remota. Calcularlo ahí obligaría a cruzar el historial en
+    # cada uno de esos ciclos; teniéndolo en la fila, el endpoint no paga nada extra.
+    #
+    # Lo mantiene registrar_historial() en app/routers/mesas.py, que es el único lugar
+    # por donde pasa un cambio de estado con su fila de historial.
+    estado_desde = Column(DateTime(timezone=True), server_default=func.now())
     activa = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     # server_default: la base ya lo tenía y el modelo no lo declaraba (T26-137).

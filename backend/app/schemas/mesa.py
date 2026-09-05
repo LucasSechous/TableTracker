@@ -36,6 +36,9 @@ class MesaResponse(BaseModel):
     estado: EstadoMesa
     activa: bool
     created_at: datetime
+    # Desde cuándo está en este estado (T26-173). Viene denormalizado en la fila, no
+    # calculado: este endpoint lo pide el dashboard cada 3 segundos.
+    estado_desde: Optional[datetime] = None
     pos_x: int = 0
     pos_y: int = 0
 

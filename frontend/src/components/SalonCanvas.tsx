@@ -9,15 +9,7 @@ import type { CSSProperties } from "react"
 import type { Sector, Mesa, Modo } from "../types"
 import SectorBloque from "./SectorBloque"
 import PanelMesa from "./PanelMesa"
-import { COLOR_POR_ESTADO, calcularMinimoSalon } from "../constants"
-
-// Etiquetas legibles de cada estado para la leyenda de colores.
-const ETIQUETA_POR_ESTADO: Record<string, string> = {
-  libre: "Libre",
-  ocupada: "Ocupada",
-  pendiente_limpieza: "Pendiente de limpieza",
-  reservada: "Reservada",
-}
+import { COLOR_POR_ESTADO, ETIQUETA_POR_ESTADO, calcularMinimoSalon } from "../constants"
 
 interface Props {
   sectores: Sector[]
@@ -25,6 +17,8 @@ interface Props {
   anchoSalon: number
   altoSalon: number
   esAdmin: boolean
+  /** Umbral de limpieza demorada, de paso hacia MesaVisual (T26-173). */
+  umbralLimpiezaMinutos?: number | null
   onMesaEstadoChange: (mesaId: number, nuevoEstado: string) => void
   onMesaPosicionChange: (mesaId: number, pos_x: number, pos_y: number) => void
   onSectorPosicionChange: (sectorId: number, pos_x: number, pos_y: number) => void
@@ -42,6 +36,7 @@ export default function SalonCanvas({
   anchoSalon,
   altoSalon,
   esAdmin,
+  umbralLimpiezaMinutos,
   onMesaEstadoChange,
   onMesaPosicionChange,
   onSectorPosicionChange,
@@ -193,6 +188,7 @@ export default function SalonCanvas({
             modo={modo}
             anchoSalon={localSize.ancho}
             altoSalon={localSize.alto}
+            umbralLimpiezaMinutos={umbralLimpiezaMinutos}
             onMesaClick={(mesa) => setMesaSeleccionadaId(mesa.id)}
             onMesaPosicionChange={onMesaPosicionChange}
             onSectorDrag={onSectorPosicionChange}

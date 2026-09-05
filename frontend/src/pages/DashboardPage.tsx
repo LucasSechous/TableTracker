@@ -352,6 +352,9 @@ export default function DashboardPage() {
             anchoSalon={configuracion.ancho_salon}
             altoSalon={configuracion.alto_salon}
             esAdmin={user?.rol === "admin"}
+            // Sale de la configuración que esta pantalla ya carga para el tamaño del
+            // salón: no agrega ninguna request al ciclo de refresco (T26-173).
+            umbralLimpiezaMinutos={configuracion.minutos_limpieza_demorada}
             onMesaEstadoChange={handleMesaEstadoChange}
             onMesaPosicionChange={handleMesaPosicionChange}
             onSectorPosicionChange={handleSectorPosicionChange}

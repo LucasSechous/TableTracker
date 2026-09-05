@@ -11,10 +11,11 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { PieChart, RefreshCw, LayoutGrid } from "lucide-react"
-import { metricasApi, extraerDetalleApi } from "../services/api"
-import type { ConteoPorEstado, OcupacionResponse } from "../types"
+import { PieChart, RefreshCw, LayoutGrid, MoonStar } from "lucide-react"
+import { metricasApi, configuracionApi, extraerDetalleApi } from "../services/api"
+import type { ConteoPorEstado, OcupacionResponse, Configuracion } from "../types"
 import { COLOR_POR_ESTADO, BORDE_POR_ESTADO } from "../constants"
+import { enHorarioDeServicio, sinSegundos } from "../horario"
 
 // Mismo orden que la leyenda de SalonCanvas: el panel se recorre igual que el salón.
 // Se declara a mano (y no como Object.keys(COLOR_POR_ESTADO)) para que TypeScript valide
@@ -33,6 +34,7 @@ export default function OcupacionPage() {
   const [ocupacion, setOcupacion] = useState<OcupacionResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [config, setConfig] = useState<Configuracion | null>(null)
   const navigate = useNavigate()
 
   const cargar = useCallback(async () => {
@@ -55,8 +57,20 @@ export default function OcupacionPage() {
     cargar()
   }, [cargar])
 
+  // Solo alimenta el aviso de horario: si falla, el panel sirve igual y no corresponde
+  // mostrar un error por un dato accesorio.
+  useEffect(() => {
+    configuracionApi.obtener().then((res) => setConfig(res.data)).catch(() => {})
+  }, [])
+
   const conteo = ocupacion?.conteo_por_estado
   const salonSinMesas = ocupacion !== null && ocupacion.total_mesas === 0
+  // El % NO se recorta por horario, a diferencia de la rotación: esto es una foto del
+  // estado actual de las mesas, no un agregado sobre un rango, así que no hay nada que
+  // filtrar. Lo que sí corresponde es avisar que la foto se sacó con el local cerrado,
+  // porque un 0% a las 4 de la mañana no significa que el salón esté vacío de gente.
+  const fueraDeHorario =
+    config != null && !enHorarioDeServicio(new Date(), config.hora_apertura, config.hora_cierre)
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
@@ -88,6 +102,27 @@ export default function OcupacionPage() {
       </header>
 
       <main style={{ padding: 24 }}>
+        {fueraDeHorario && config?.hora_apertura && config?.hora_cierre && (
+          <p
+            data-testid="ocupacion-fuera-de-horario"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 13,
+              color: "#8a6d0b",
+              backgroundColor: "#fff8e1",
+              border: "1px solid #ffe082",
+              borderRadius: 6,
+              padding: "10px 16px",
+              marginTop: 0,
+            }}
+          >
+            <MoonStar size={15} style={{ flexShrink: 0 }} />
+            {`El local está cerrado ahora (servicio de ${sinSegundos(config.hora_apertura)} a ${sinSegundos(config.hora_cierre)}). Estos números son del momento actual, no del último servicio.`}
+          </p>
+        )}
+
         {loading && <p style={{ fontSize: 14, color: "#888" }}>Cargando métricas...</p>}
 
         {error && (

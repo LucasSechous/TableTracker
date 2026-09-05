@@ -35,6 +35,23 @@ Esta situación responde en parte al estado incompleto del pipeline (sección 2)
 
 **Criterio de retención.** Solo el último valor por cámara: cada `POST` sobrescribe la entrada anterior, no se guarda historial de detecciones ni se persiste entre pedidos más allá de la vida del proceso. Se pierde por completo al reiniciar el backend, y asume que corre en un solo worker —con más de uno, cada proceso tendría su propio diccionario y el `GET` podría devolver un valor desactualizado según a cuál le haya llegado el último `POST` (la misma limitación single-worker que ya deja constancia `docs/vision-loop.md` para el resto del pipeline).
 
+### Excepción documentada: banco de pruebas de detección (T26-182)
+
+**Qué se persiste.** Fotogramas completos en JPEG —imagen cruda de la escena, con las personas que estén en el encuadre— y, opcionalmente, clips de video. Es la excepción más fuerte de este documento: a diferencia de la de T26-150, acá sí se escribe material visual a disco, y sí puede haber gente identificable.
+
+**Por qué.** T26-178 (resolución de inferencia), T26-179 (tamaño del modelo) y T26-180 (anclaje del solape) definen parámetros cuyo valor correcto no se puede deducir del código: hay que medirlo. Y una medición solo es comparable si las configuraciones se evalúan sobre **exactamente los mismos fotogramas** — medir en vivo contra la cámara compara escenas distintas y el resultado no distingue el cambio de parámetro del cambio de escena. El intento de medir T26-178 sin este banco fue justamente lo que falló.
+
+**Dónde.** `vision-module/data/samples/<etiqueta>/`, escrito únicamente por `vision-module/scripts/capturar_muestras.py` y leído por `vision-module/scripts/benchmark_deteccion.py`. Ambos son scripts de desarrollo que se invocan a mano; **ninguno forma parte del pipeline de producción**. El bucle de `app/main.py` sigue sin escribir un solo frame a disco, y la verificación de la sección 3 se mantiene válida para el código que corre en operación real.
+
+**Condición de activación.** Estrictamente manual y explícita: solo ocurre cuando alguien ejecuta `python -m scripts.capturar_muestras` con una `--etiqueta` y una descripción de `--condiciones`. No hay ninguna ruta de código que lo dispare solo, ni al arrancar el módulo ni durante el bucle. El directorio está cubierto por `.gitignore` (`data/samples/*`), así que el material no llega al repositorio.
+
+**Criterio de retención.** El lote vive lo que dure la calibración que lo justificó y se borra una vez elegidos los parámetros; no hay caducidad automática, así que la baja es responsabilidad de quien lo generó. Reglas que aplican mientras exista:
+
+- Filmar únicamente a personas que sepan que están siendo grabadas y para qué. Para el banco de desarrollo alcanza con integrantes del equipo y una maqueta de mesa y sillas: **no hace falta —ni corresponde— grabar clientes reales de un local**.
+- No commitear el material bajo ninguna circunstancia, ni siquiera "temporalmente".
+- No adjuntarlo a tickets, informes ni a la tesis. Lo que se comparte es la tabla de resultados del benchmark, que son números, no imágenes.
+- `metadata.json` guarda la URL de la fuente **enmascarada** (`app/utils/rtsp_url.enmascarar`), porque lleva la contraseña de la cámara y el archivo se mira al discutir resultados.
+
 ## 4. Verificación: reconocimiento facial o re-identificación de personas
 
 Se revisaron las dependencias declaradas en `requirements.txt` y se realizó una búsqueda de términos asociados a biometría (reconocimiento facial, re-identificación, embeddings de identidad) en todo el código del módulo.
@@ -63,7 +80,7 @@ Las credenciales y configuración sensible (incluyendo la URL de fuente de video
 
 | Aspecto | Estado verificado |
 | --- | --- |
-| Persistencia de imágenes/video | No implementada; sin guardado en el pipeline real |
+| Persistencia de imágenes/video | Sin guardado en el pipeline real. Dos excepciones documentadas en la sección 3: detección en vivo en memoria (T26-150) y banco de pruebas en disco, fuera de producción y gitignoreado (T26-182) |
 | Reconocimiento facial / re-identificación | No presente; no hay dependencias ni código para ello |
 | Registro diferenciado de personas | No existe |
 | Exclusión de credenciales sensibles | Correcta, vía `.gitignore` y `.env` |

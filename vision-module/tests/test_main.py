@@ -1,6 +1,8 @@
 # Pruebas de app.main: el armado del pipeline (qué cámara, qué ROI, qué fuente
 # de video) y el comportamiento del bucle ante frames perdidos y errores de la API.
 
+import threading
+import time
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -267,6 +269,79 @@ class TestPublicarDeteccionActual:
 
         cliente.publicar_deteccion_actual.assert_not_called()
         assert "No se pudo publicar la detección" in caplog.text
+
+
+class TestPublicadorEnSegundoPlano:
+    # T26-181 midió que ese POST costaba una mediana de 672 ms dentro del ciclo, tanto
+    # como la inferencia de YOLO, para información que es secundaria. Sacarlo del camino
+    # crítico recupera un tercio del presupuesto de 2 s.
+
+    def test_no_bloquea_al_llamador(self):
+        import time as _time
+
+        arrancado = threading.Event()
+        soltar = threading.Event()
+
+        def lento(*_args):
+            arrancado.set()
+            soltar.wait(5)
+
+        publicador = main.PublicadorEnSegundoPlano()
+        with patch.object(main, "publicar_deteccion_actual", side_effect=lento):
+            t0 = _time.monotonic()
+            publicador.publicar(MagicMock(), 5, MagicMock(), [], np.zeros((2, 2, 3)))
+            transcurrido = _time.monotonic() - t0
+            assert arrancado.wait(2), "el envío tendría que haber arrancado en su propio hilo"
+            assert transcurrido < 0.5, "publicar() no puede bloquear el ciclo"
+            soltar.set()
+
+    def test_saltea_el_frame_si_el_envio_anterior_sigue_en_curso(self):
+        # Encolar publicaría fotos viejas en una vista que se llama "en vivo", y una
+        # cola sin límite crecería si el backend se pone lento. Se descarta a propósito.
+        soltar = threading.Event()
+        llamadas = []
+
+        def lento(*args):
+            llamadas.append(args)
+            soltar.wait(5)
+
+        publicador = main.PublicadorEnSegundoPlano()
+        with patch.object(main, "publicar_deteccion_actual", side_effect=lento):
+            publicador.publicar(MagicMock(), 5, MagicMock(), [], np.zeros((2, 2, 3)))
+            for _ in range(50):
+                if llamadas:
+                    break
+                threading.Event().wait(0.01)
+            publicador.publicar(MagicMock(), 5, MagicMock(), [], np.zeros((2, 2, 3)))
+            publicador.publicar(MagicMock(), 5, MagicMock(), [], np.zeros((2, 2, 3)))
+            assert len(llamadas) == 1, "los frames de más se descartan, no se encolan"
+            soltar.set()
+
+    def test_vuelve_a_publicar_cuando_el_anterior_termino(self):
+        publicador = main.PublicadorEnSegundoPlano()
+        with patch.object(main, "publicar_deteccion_actual") as fake:
+            publicador.publicar(MagicMock(), 5, MagicMock(), [], np.zeros((2, 2, 3)))
+            publicador._hilo.join(timeout=2)
+            publicador.publicar(MagicMock(), 5, MagicMock(), [], np.zeros((2, 2, 3)))
+            publicador._hilo.join(timeout=2)
+        assert fake.call_count == 2
+
+
+class TestRegistrarPresupuesto:
+    def test_avisa_cuando_el_ciclo_se_pasa_del_presupuesto(self, caplog):
+        # Sin este aviso, un ciclo que se pasa no duerme nada y la cadencia se degrada
+        # en silencio: desde afuera se ve igual que "la detección va lenta".
+        inicio = time.monotonic() - (config.FRAME_INTERVAL_SECONDS + 1.0)
+        with caplog.at_level("WARNING"):
+            main.registrar_presupuesto(inicio, {"inferencia": 0.8, "publicar": 0.001})
+        assert "se pasó" in caplog.text
+        assert "inferencia 800ms" in caplog.text
+
+    def test_en_un_ciclo_normal_no_ensucia_el_log(self, caplog):
+        inicio = time.monotonic() - 0.2
+        with caplog.at_level("WARNING"):
+            main.registrar_presupuesto(inicio, {"inferencia": 0.2})
+        assert caplog.text == ""
 
 
 class TestBucle:

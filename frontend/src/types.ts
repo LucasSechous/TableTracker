@@ -30,6 +30,9 @@ export interface Configuracion {
   ancho_salon: number
   alto_salon: number
   nombre_establecimiento?: string | null
+  // RF-28 (T26-156): dato informativo que carga el admin, sin relación con el COUNT real de
+  // mesas activas. null mientras nadie lo haya cargado.
+  cantidad_mesas_referencia?: number | null
 }
 
 export interface HistorialEstado {
@@ -103,4 +106,47 @@ export interface DetectionFrameResult {
   frame_height: number
   model_name: string
   detections: Detection[]
+}
+
+// Conteo de mesas activas por estado. Los cuatro buckets vienen siempre, en 0 si no
+// hay mesas en ese estado (el backend los inicializa), así que la UI nunca tiene que
+// distinguir "cero mesas" de "campo ausente".
+export interface ConteoPorEstado {
+  libre: number
+  ocupada: number
+  pendiente_limpieza: number
+  reservada: number
+}
+
+// Respuesta de GET /metricas/ocupacion (RF-22).
+//
+// porcentaje_ocupacion cuenta SOLO las mesas en estado "ocupada" (decisión de T26-154,
+// ver backend/app/routers/metricas.py): una mesa reservada todavía está físicamente
+// libre, así que sumarla sobreestimaría cuánto salón está realmente en uso. Sigue
+// viniendo en conteo_por_estado como bucket aparte, y el panel la muestra ahí sin
+// mezclarla con el %.
+//
+// Con total_mesas == 0 el backend devuelve 0.0, que no significa "salón desocupado"
+// sino "no hay nada que medir": OcupacionPage lo trata como empty state, no como 0%.
+export interface OcupacionResponse {
+  total_mesas: number
+  porcentaje_ocupacion: number
+  conteo_por_estado: ConteoPorEstado
+}
+
+// Una fila de GET /metricas/rotacion (RF-23): cuántas veces rotó cada mesa activa en el
+// rango pedido.
+//
+// "Rotación" es una TRANSICIÓN hacia ocupada desde un estado distinto, no una fila cruda de
+// historial con estado='ocupada' (decisión de T26-155, ver backend/app/routers/metricas.py).
+// Dos correcciones manuales seguidas a 'ocupada' cuentan como una sola rotación, y una mesa
+// que ya venía ocupada de antes del rango no suma por entrar al rango.
+//
+// Trae sector_id, no el nombre del sector: para mostrarlo hay que cruzarlo con
+// sectoresApi.listar(). Las mesas sin rotaciones vienen igual, con rotaciones: 0.
+export interface RotacionMesa {
+  mesa_id: number
+  numero: number
+  sector_id: number
+  rotaciones: number
 }

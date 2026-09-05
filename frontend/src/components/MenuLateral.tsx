@@ -2,7 +2,7 @@
 // PanelMesa. Agrupa la navegación de la app para que el header principal quede
 // liviano (solo nombre, leyenda y las dos acciones de mayor jerarquía).
 
-import { User, History, Camera, Crosshair, LogOut } from "lucide-react"
+import { User, History, PieChart, Repeat, Camera, Crosshair, Settings, LogOut } from "lucide-react"
 import type { CSSProperties } from "react"
 
 interface Props {
@@ -12,8 +12,11 @@ interface Props {
   esAdmin: boolean
   onClose: () => void
   onVerHistorial: () => void
+  onVerOcupacion: () => void
+  onVerRotacion: () => void
   onCamaras: () => void
   onCalibrarRoi: () => void
+  onConfiguracion: () => void
   onLogout: () => void
 }
 
@@ -24,8 +27,11 @@ export default function MenuLateral({
   esAdmin,
   onClose,
   onVerHistorial,
+  onVerOcupacion,
+  onVerRotacion,
   onCamaras,
   onCalibrarRoi,
+  onConfiguracion,
   onLogout,
 }: Props) {
   function ir(accion: () => void) {
@@ -109,6 +115,16 @@ export default function MenuLateral({
             <History size={18} />
             Ver historial
           </button>
+          {/* Sin gate de esAdmin, agrupado con "Ver historial": las dos son vistas de
+              consulta que sirven a cualquier rol, a diferencia de las de configuración. */}
+          <button onClick={() => ir(onVerOcupacion)} style={itemStyle}>
+            <PieChart size={18} />
+            Ocupación del salón
+          </button>
+          <button onClick={() => ir(onVerRotacion)} style={itemStyle}>
+            <Repeat size={18} />
+            Rotación de mesas
+          </button>
           {esAdmin && (
             <button onClick={() => ir(onCamaras)} style={itemStyle}>
               <Camera size={18} />
@@ -119,6 +135,12 @@ export default function MenuLateral({
             <button onClick={() => ir(onCalibrarRoi)} style={itemStyle}>
               <Crosshair size={18} />
               Calibrar ROI
+            </button>
+          )}
+          {esAdmin && (
+            <button onClick={() => ir(onConfiguracion)} style={itemStyle}>
+              <Settings size={18} />
+              Configuración
             </button>
           )}
 

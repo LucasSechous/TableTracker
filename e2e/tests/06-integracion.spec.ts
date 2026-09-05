@@ -17,7 +17,8 @@ import {
   gotoDashboardAuthed,
   getSectorBlock,
   getMesaCircle,
-  getEstadoSelect,
+  corregirEstadoDesdePanel,
+  cerrarPanelMesa,
   getEmailInput,
   getPasswordInput,
   getSubmitButton,
@@ -61,7 +62,7 @@ test.describe("con un sector y dos mesas", () => {
     await expect(sectorBlock).toBeVisible();
     const circle = getMesaCircle(sectorBlock, mesaA.numero);
     await circle.click();
-    await getEstadoSelect(circle).selectOption("ocupada");
+    await corregirEstadoDesdePanel(page, "ocupada");
 
     await expect(circle).toHaveCSS("background-color", COLOR_POR_ESTADO["ocupada"]);
   });
@@ -77,10 +78,17 @@ test.describe("con un sector y dos mesas", () => {
     const circleB = getMesaCircle(sectorBlock, mesaB.numero);
 
     // Disparo de los dos cambios sin esperar a que la request de la primera resuelva.
+    // Cada mesa se corrige desde su propio PanelMesa: el panel muestra la mesa
+    // seleccionada, así que abrir la segunda reemplaza el contenido de la primera.
     await circleA.click();
-    await getEstadoSelect(circleA).selectOption("ocupada");
+    await corregirEstadoDesdePanel(page, "ocupada");
+    // Hay que cerrar el panel entre una mesa y otra: PanelMesa NO se cierra al corregir
+    // el estado, y su overlay tapa el canvas, así que el click en la segunda mesa lo
+    // interceptaría el overlay en vez de la mesa.
+    await cerrarPanelMesa(page);
     await circleB.click();
-    await getEstadoSelect(circleB).selectOption("reservada");
+    await corregirEstadoDesdePanel(page, "reservada");
+    await cerrarPanelMesa(page);
 
     await expect(circleA).toHaveCSS("background-color", COLOR_POR_ESTADO["ocupada"]);
     await expect(circleB).toHaveCSS("background-color", COLOR_POR_ESTADO["reservada"]);

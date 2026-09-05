@@ -1,3 +1,4 @@
+import { expect } from "@playwright/test";
 import type { Page, Locator } from "@playwright/test";
 
 /** Inyecta el token en localStorage antes de que cargue cualquier script de la app. */
@@ -17,16 +18,65 @@ export async function waitForSalonLoaded(page: Page): Promise<void> {
   await page.getByText("Cargando salón...").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
 }
 
-/** Locator del bloque raíz de un SectorBloque, ubicado por el texto exacto de su nombre. */
+/**
+ * Locator del bloque raíz de un SectorBloque.
+ *
+ * Antes se ubicaba por el texto del nombre y se subía al padre con xpath. El rediseño
+ * del Sprint 6/7 agregó una barra de filtros con un botón por sector, así que el nombre
+ * pasó a aparecer DOS veces en el DOM y el locator empezó a fallar por modo estricto de
+ * Playwright, tumbando casi todos los tests de canvas. Ahora va por data-testid.
+ */
 export function getSectorBlock(page: Page, nombreSector: string): Locator {
-  return page.getByText(nombreSector, { exact: true }).locator("xpath=..");
+  return page.getByTestId(`sector-bloque-${nombreSector}`);
 }
 
-/** Locator del círculo de una mesa (border-radius:50%) dentro de un sector, por número exacto. */
+/**
+ * Locator del cuadrado de una mesa dentro de un sector, por número exacto.
+ *
+ * El nombre quedó por compatibilidad con los specs que ya lo usan: las mesas se dibujaban
+ * redondas y se las buscaba por border-radius:50%, pero el rediseño las volvió cuadradas
+ * (borderRadius 8) y ese selector dejó de encontrar nada.
+ */
 export function getMesaCircle(sectorBlock: Locator, numero: number): Locator {
-  return sectorBlock
-    .locator('div[style*="50%"]')
-    .filter({ hasText: new RegExp(`^${numero}$`) });
+  return sectorBlock.getByTestId(`mesa-${numero}`);
+}
+
+/**
+ * Cambia el estado de una mesa por la interfaz, desde el PanelMesa ya abierto.
+ *
+ * Reemplaza a getEstadoSelect: la corrección manual dejó de ser un <select> inline sobre
+ * el canvas y pasó a este panel lateral, detrás de un desplegable "Corregir estado
+ * manualmente" (RF-17). Hay que abrirlo antes de poder elegir.
+ */
+export async function corregirEstadoDesdePanel(page: Page, estado: string): Promise<void> {
+  const toggle = page.getByTestId("panel-mesa-toggle-correccion");
+  await toggle.waitFor({ state: "visible", timeout: 10_000 });
+  // El panel recuerda si quedó expandido de una interacción anterior; solo se abre si
+  // los botones de estado todavía no están a la vista.
+  if (!(await page.getByTestId(`panel-mesa-estado-${estado}`).isVisible().catch(() => false))) {
+    await toggle.click();
+  }
+  await page.getByTestId(`panel-mesa-estado-${estado}`).click();
+}
+
+/** Abre el menú lateral, que es donde vive la navegación desde el rediseño del Sprint 6/7. */
+export async function abrirMenuLateral(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Abrir menú" }).click();
+}
+
+/**
+ * El desplegable de corrección manual dentro de PanelMesa. Sirve como señal de que el
+ * panel está abierto: solo existe cuando hay una mesa seleccionada.
+ */
+export function getPanelMesaToggle(page: Page): Locator {
+  return page.getByTestId("panel-mesa-toggle-correccion");
+}
+
+export async function cerrarPanelMesa(page: Page): Promise<void> {
+  // Por testid y no por el rol con nombre "Cerrar": ese texto es prefijo de "Cerrar
+  // sesión" y "Cerrar menú", y getByRole matchea por subcadena.
+  await page.getByTestId("panel-mesa-cerrar").click();
+  await getPanelMesaToggle(page).waitFor({ state: "hidden", timeout: 5_000 }).catch(() => {});
 }
 
 /** Locator del handle de resize (esquina inferior derecha) de un SectorBloque, en modo edición. */
@@ -53,8 +103,33 @@ export function getEstadoSelect(mesaCircle: Locator): Locator {
   return mesaCircle.locator("xpath=following-sibling::div//select");
 }
 
+/**
+ * El botón que ENTRA en modo edición. Ya no es un toggle.
+ *
+ * Antes un mismo botón alternaba entre "Editar disposición" y "Ver monitoreo". El
+ * rediseño del Sprint 6/7 lo partió en dos: en monitoreo el header muestra "Editar
+ * disposición", y en edición ese botón desaparece y sale una barra inferior fija con
+ * "Salir de edición". Esperar "Ver monitoreo" dejó de encontrar nada y era lo que
+ * tumbaba a los specs 05 y 07 enteros.
+ */
 export function getToggleModoButton(page: Page): Locator {
-  return page.getByRole("button", { name: /Editar disposición|Ver monitoreo/ });
+  return page.getByRole("button", { name: /Editar disposición/ });
+}
+
+export function getSalirEdicionButton(page: Page): Locator {
+  return page.getByRole("button", { name: "Salir de edición" });
+}
+
+/** Entra en modo edición y espera la señal de que el modo cambió de verdad. */
+export async function entrarEnModoEdicion(page: Page): Promise<void> {
+  await getToggleModoButton(page).click();
+  await expect(getSalirEdicionButton(page)).toBeVisible();
+}
+
+/** Vuelve a monitoreo desde la barra inferior del modo edición. */
+export async function salirDeModoEdicion(page: Page): Promise<void> {
+  await getSalirEdicionButton(page).click();
+  await expect(getToggleModoButton(page)).toBeVisible();
 }
 
 export function getLogoutButton(page: Page): Locator {
@@ -131,6 +206,217 @@ export function getBuscarButton(page: Page): Locator {
 
 export function getLimpiarFiltrosButton(page: Page): Locator {
   return page.getByRole("button", { name: "Limpiar filtros" });
+}
+
+export async function gotoOcupacionAuthed(page: Page, token: string): Promise<void> {
+  await injectToken(page, token);
+  await page.goto("/ocupacion");
+  await waitForOcupacionLoaded(page);
+}
+
+export async function waitForOcupacionLoaded(page: Page): Promise<void> {
+  await page.getByText("Cargando métricas...").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
+}
+
+/**
+ * Los locators del panel de ocupación van por data-testid y se indexan por la CLAVE del
+ * estado (libre, ocupada, ...), no por su etiqueta visible. Dos razones, las dos de
+ * T26-161: no navegar el DOM por posición (los XPath posicionales fueron los que
+ * rompieron en el Sprint 5) y no acoplar el spec al texto de la UI, que puede cambiar
+ * sin que cambie el comportamiento.
+ */
+export const ESTADOS_OCUPACION = ["libre", "ocupada", "pendiente_limpieza", "reservada"] as const;
+
+/** Etiqueta (en plural) de la card de cada estado, para los asserts de texto visible. */
+export const ETIQUETA_CARD_OCUPACION: Record<string, string> = {
+  libre: "Libres",
+  ocupada: "Ocupadas",
+  pendiente_limpieza: "Pendientes de limpieza",
+  reservada: "Reservadas",
+};
+
+/** Card completa de un estado en el panel de ocupación. */
+export function getOcupacionCard(page: Page, estado: string): Locator {
+  return page.getByTestId(`ocupacion-card-${estado}`);
+}
+
+/** El número grande de la card de un estado. */
+export function getOcupacionCardCount(page: Page, estado: string): Locator {
+  return page.getByTestId(`ocupacion-count-${estado}`);
+}
+
+/** El cuadradito de color de la card, que debe usar la paleta del salón. */
+export function getOcupacionCardSwatch(page: Page, estado: string): Locator {
+  return page.getByTestId(`ocupacion-swatch-${estado}`);
+}
+
+/** La etiqueta de texto de la card de un estado. */
+export function getOcupacionCardEtiqueta(page: Page, estado: string): Locator {
+  return page.getByTestId(`ocupacion-etiqueta-${estado}`);
+}
+
+/** El porcentaje general (el número grande del encabezado). */
+export function getOcupacionPorcentaje(page: Page): Locator {
+  return page.getByTestId("ocupacion-porcentaje");
+}
+
+/** El "N de M mesas ocupadas" que acompaña al porcentaje. */
+export function getOcupacionResumen(page: Page): Locator {
+  return page.getByTestId("ocupacion-resumen");
+}
+
+/** El "N mesas activas en total" del encabezado de la grilla de cards. */
+export function getOcupacionTotal(page: Page): Locator {
+  return page.getByTestId("ocupacion-total");
+}
+
+/** El empty state que reemplaza al panel cuando no hay ninguna mesa activa. */
+export function getOcupacionEmptyState(page: Page): Locator {
+  return page.getByTestId("ocupacion-empty");
+}
+
+/** La aclaración pegada al porcentaje sobre qué mesas cuenta y cuáles no. */
+export function getOcupacionNotaPorcentaje(page: Page): Locator {
+  return page.getByTestId("ocupacion-nota-porcentaje");
+}
+
+/** El recordatorio dentro de la card de Reservadas. */
+export function getOcupacionNotaReservada(page: Page): Locator {
+  return page.getByTestId("ocupacion-nota-reservada");
+}
+
+export async function gotoCamarasAuthed(page: Page, token: string): Promise<void> {
+  await injectToken(page, token);
+  await page.goto("/camaras");
+  // Hay DOS esperas y las dos hacen falta: primero el guard de AdminRoute, que consulta
+  // /auth/me, y después la carga del listado. Sin la segunda, un test que cuente botones
+  // "Editar" enseguida encuentra cero y se saltea solo, aparentando estar en verde.
+  await page.getByText("Verificando permisos...").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
+  await page.getByText("Cargando cámaras...").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
+}
+
+export async function gotoConfiguracionAuthed(page: Page, token: string): Promise<void> {
+  await injectToken(page, token);
+  await page.goto("/configuracion");
+  await page.getByTestId("configuracion-nombre").waitFor({ timeout: 10_000 });
+}
+
+export function getConfiguracionNombreInput(page: Page): Locator {
+  return page.getByTestId("configuracion-nombre");
+}
+
+export function getConfiguracionCantidadMesasInput(page: Page): Locator {
+  return page.getByTestId("configuracion-cantidad-mesas");
+}
+
+export function getConfiguracionAnchoInput(page: Page): Locator {
+  return page.getByTestId("configuracion-ancho");
+}
+
+export function getConfiguracionAltoInput(page: Page): Locator {
+  return page.getByTestId("configuracion-alto");
+}
+
+export function getConfiguracionGuardarButton(page: Page): Locator {
+  return page.getByTestId("configuracion-guardar");
+}
+
+export function getConfiguracionDeshacerButton(page: Page): Locator {
+  return page.getByTestId("configuracion-deshacer");
+}
+
+export function getConfiguracionExito(page: Page): Locator {
+  return page.getByTestId("configuracion-exito");
+}
+
+export function getConfiguracionError(page: Page): Locator {
+  return page.getByTestId("configuracion-error");
+}
+
+export async function gotoRotacionAuthed(page: Page, token: string): Promise<void> {
+  await injectToken(page, token);
+  await page.goto("/rotacion");
+  await waitForRotacionLoaded(page);
+}
+
+export async function waitForRotacionLoaded(page: Page): Promise<void> {
+  await page.getByText("Cargando rotación...").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
+}
+
+/** Los inputs del componente compartido RangoFechas (historial y rotación). */
+export function getRangoDesdeInput(page: Page): Locator {
+  return page.getByTestId("rango-fechas-desde");
+}
+
+export function getRangoHastaInput(page: Page): Locator {
+  return page.getByTestId("rango-fechas-hasta");
+}
+
+export function getRotacionSectorSelect(page: Page): Locator {
+  return page.getByTestId("rotacion-filtro-sector");
+}
+
+export function getRotacionBuscarButton(page: Page): Locator {
+  return page.getByTestId("rotacion-buscar");
+}
+
+export function getRotacionLimpiarButton(page: Page): Locator {
+  return page.getByTestId("rotacion-limpiar");
+}
+
+/** La línea de "N rotaciones en M mesas" que encabeza la tabla. */
+export function getRotacionResumen(page: Page): Locator {
+  return page.getByTestId("rotacion-resumen");
+}
+
+/** Fila de una mesa en la tabla de rotación, por id de mesa. */
+export function getRotacionFila(page: Page, mesaId: number): Locator {
+  return page.getByTestId(`rotacion-fila-${mesaId}`);
+}
+
+/** La celda con el número de rotaciones de una mesa. */
+export function getRotacionCantidad(page: Page, mesaId: number): Locator {
+  return page.getByTestId(`rotacion-cantidad-${mesaId}`);
+}
+
+/** La celda con el nombre del sector de una mesa. */
+export function getRotacionSector(page: Page, mesaId: number): Locator {
+  return page.getByTestId(`rotacion-sector-${mesaId}`);
+}
+
+/** El botón de encabezado que ordena por una columna ("numero" | "sector" | "rotaciones"). */
+export function getRotacionOrdenarButton(page: Page, columna: string): Locator {
+  return page.getByTestId(`rotacion-ordenar-${columna}`);
+}
+
+/**
+ * Todas las filas de mesa de la tabla, como Locator.
+ *
+ * Se devuelve el Locator y no una promesa porque es el punto de SINCRONIZACIÓN después
+ * de apretar Buscar: expect(...).toHaveCount(n) reintenta hasta que llega la respuesta
+ * filtrada. Sin eso se lee la tabla anterior —las filas viejas siguen visibles mientras
+ * viaja el request— y el test compara contra el resultado del filtro anterior.
+ */
+export function getRotacionFilas(page: Page): Locator {
+  return page.locator("tbody tr[data-testid^='rotacion-fila-']");
+}
+
+/**
+ * Los data-testid de las filas en el orden en que están renderizadas. Sirve para afirmar
+ * sobre el ORDEN sin depender de índices posicionales en el DOM.
+ *
+ * OJO: saca una foto del DOM en ese instante y no reintenta. Antes de llamarla hay que
+ * haber esperado el resultado, por ejemplo con expect(getRotacionFilas(page)).toHaveCount().
+ */
+export async function getRotacionOrdenFilas(page: Page): Promise<string[]> {
+  return getRotacionFilas(page).evaluateAll((filas) =>
+    filas.map((f) => f.getAttribute("data-testid") ?? "")
+  );
+}
+
+/** El cartel que reemplaza a las filas cuando ninguna mesa rotó en el período elegido. */
+export function getRotacionSinRotaciones(page: Page): Locator {
+  return page.getByTestId("rotacion-sin-rotaciones");
 }
 
 /** Todas las filas del cuerpo de la tabla de historial. */

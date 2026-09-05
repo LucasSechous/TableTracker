@@ -146,3 +146,141 @@ class TestCameraVideoCapture:
             camara.open()
             assert camara._hilo is None
             camara.release()
+
+
+class TestCameraNoFiltraCredenciales:
+    # rtsp_url.enmascarar() existe justamente para que la contraseña de la cámara no
+    # salga nunca al log, y su docstring lo pide explícitamente. camera.py era el único
+    # punto que la escribía en claro: en el log de "Fuente de video abierta" y, peor,
+    # en el RuntimeError de fallo de apertura, que además termina en el traceback.
+    URL = "rtsp://Camara:secreta123@192.168.1.38:554/stream1"
+
+    def test_el_error_de_apertura_no_lleva_la_password(self):
+        mock_capture = MagicMock()
+        mock_capture.isOpened.return_value = False
+
+        with patch("app.capture.camera.cv2.VideoCapture", return_value=mock_capture):
+            camara = Camera(self.URL)
+            with pytest.raises(RuntimeError) as excinfo:
+                camara.open()
+
+        assert "secreta123" not in str(excinfo.value)
+        assert "***" in str(excinfo.value)
+        # El resto de la URL sí tiene que estar: sin host no se puede diagnosticar nada.
+        assert "192.168.1.38" in str(excinfo.value)
+
+    def test_el_log_de_apertura_no_lleva_la_password(self, caplog):
+        mock_capture = MagicMock()
+        mock_capture.isOpened.return_value = True
+        mock_capture.read.return_value = (True, np.zeros((2, 2, 3), dtype=np.uint8))
+
+        with patch("app.capture.camera.cv2.VideoCapture", return_value=mock_capture):
+            with caplog.at_level("INFO"):
+                camara = Camera(self.URL)
+                camara.open()
+                camara.release()
+
+        assert "secreta123" not in caplog.text
+        assert "192.168.1.38" in caplog.text
+
+    def test_una_fuente_sin_credenciales_se_loguea_tal_cual(self, caplog):
+        # Un índice de webcam o una ruta de archivo no tienen nada que tapar.
+        mock_capture = MagicMock()
+        mock_capture.isOpened.return_value = True
+        mock_capture.read.return_value = (True, np.zeros((2, 2, 3), dtype=np.uint8))
+
+        with patch("app.capture.camera.cv2.VideoCapture", return_value=mock_capture):
+            with caplog.at_level("INFO"):
+                camara = Camera("video.mp4")
+                camara.open()
+                camara.release()
+
+        assert "video.mp4" in caplog.text
+
+
+class TestCameraStreamCaido:
+    # Regresión de T26-177: el hilo lector solo pisa _ultimo_frame cuando la lectura
+    # sale bien, así que un stream que se muere en caliente dejaba a read_frame()
+    # devolviendo la última imagen buena PARA SIEMPRE. El bucle nunca veía un None,
+    # el contador de frames fallidos nunca subía y reconectar() no se llamaba jamás:
+    # el módulo seguía "detectando" sobre una foto congelada.
+
+    @staticmethod
+    def _camara_con_un_frame(antiguedad_maxima):
+        """Abre una Camera RTSP que entrega un frame y después deja de entregar."""
+        frame = np.full((2, 2, 3), 7, dtype=np.uint8)
+        mock_capture = MagicMock()
+        mock_capture.isOpened.return_value = True
+        # Un solo frame bueno y después siempre fallo: es lo que hace un stream que
+        # se corta, no un archivo que termina.
+        mock_capture.read.side_effect = [(True, frame)] + [(False, None)] * 100_000
+
+        with patch("app.capture.camera.cv2.VideoCapture", return_value=mock_capture):
+            camara = Camera("rtsp://host/stream", antiguedad_maxima=antiguedad_maxima)
+            camara.open()
+        return camara, frame
+
+    def test_devuelve_el_frame_mientras_esta_fresco(self):
+        camara, frame = self._camara_con_un_frame(antiguedad_maxima=5.0)
+        try:
+            for _ in range(50):
+                if camara.read_frame() is not None:
+                    break
+                time.sleep(0.01)
+            assert np.array_equal(camara.read_frame(), frame)
+        finally:
+            camara.release()
+
+    def test_devuelve_none_cuando_el_frame_supera_la_antiguedad_maxima(self):
+        # Umbral muy corto para no tener que esperar en el test.
+        camara, _ = self._camara_con_un_frame(antiguedad_maxima=0.15)
+        try:
+            for _ in range(50):
+                if camara.read_frame() is not None:
+                    break
+                time.sleep(0.01)
+            assert camara.read_frame() is not None, "el frame inicial tendría que estar fresco"
+
+            time.sleep(0.25)
+            assert camara.read_frame() is None, "un frame vencido tiene que leerse como stream caído"
+        finally:
+            camara.release()
+
+    def test_sin_ningun_frame_todavia_devuelve_none(self):
+        # RTSP recién abierto: el hilo todavía no capturó nada. No hay timestamp que
+        # comparar y no debe romper.
+        mock_capture = MagicMock()
+        mock_capture.isOpened.return_value = True
+        mock_capture.read.return_value = (False, None)
+
+        with patch("app.capture.camera.cv2.VideoCapture", return_value=mock_capture):
+            camara = Camera("rtsp://host/stream")
+            camara.open()
+            try:
+                assert camara.read_frame() is None
+            finally:
+                camara.release()
+
+    def test_el_bucle_reconecta_cuando_el_stream_se_congela(self):
+        # La consecuencia que importa: con el frame vencido, el bucle tiene que llegar
+        # a reconectar(). Antes de T26-177 este camino era inalcanzable.
+        from app import main
+
+        video = MagicMock()
+        video.read_frame.return_value = None  # stream caído
+
+        reconexiones = []
+
+        def fake_reconectar(v):
+            reconexiones.append(v)
+            raise KeyboardInterrupt  # corta el bucle infinito una vez probado el punto
+
+        with patch.object(main, "reconectar", side_effect=fake_reconectar), patch.object(
+            main, "esperar_proximo_frame", lambda _inicio: None
+        ), patch.object(main.config, "FRAMES_FALLIDOS_MAXIMOS", 3):
+            with pytest.raises(KeyboardInterrupt):
+                main.bucle(video, MagicMock(), MagicMock(), [], MagicMock(), camara_id=5)
+
+        assert len(reconexiones) == 1
+        # Exactamente FRAMES_FALLIDOS_MAXIMOS lecturas antes de reconectar.
+        assert video.read_frame.call_count == 3

@@ -8,6 +8,7 @@
 # `/roi-mesa`. El .env solo dice cuál es el sector piloto y aporta los secretos
 # que la API no entrega (la contraseña del stream RTSP).
 
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -168,6 +169,35 @@ def avisar_zonas_fuera_del_frame(zonas, frame):
             )
 
 
+class PublicadorEnSegundoPlano:
+    """Manda la detección actual al backend sin bloquear el ciclo.
+
+    Medido con la instrumentación de T26-181: ese POST tardaba una mediana de 672 ms,
+    tanto como la inferencia de YOLO, y se lo comía del presupuesto de 2 s del ciclo
+    aunque sea información secundaria. El backend persiste contra una base remota, así
+    que el costo es una ida y vuelta de red, no CPU.
+
+    Se descarta el envío si el anterior sigue en curso, en vez de encolarlo: publicar
+    una foto vieja no sirve para una vista "en vivo", y una cola sin límite terminaría
+    creciendo si el backend se pone lento. Un solo hilo a la vez, y el que no llega se
+    pierde a propósito.
+    """
+
+    def __init__(self):
+        self._hilo = None
+
+    def publicar(self, cliente, camara_id, detector, detecciones, frame):
+        if self._hilo is not None and self._hilo.is_alive():
+            logger.debug("El envío anterior de la detección actual sigue en curso: se saltea este frame")
+            return
+        self._hilo = threading.Thread(
+            target=publicar_deteccion_actual,
+            args=(cliente, camara_id, detector, detecciones, frame),
+            daemon=True,
+        )
+        self._hilo.start()
+
+
 def publicar_deteccion_actual(cliente, camara_id, detector, detecciones, frame):
     """Publica el resultado crudo del frame para la vista en vivo (T26-150).
 
@@ -176,6 +206,9 @@ def publicar_deteccion_actual(cliente, camara_id, detector, detecciones, frame):
     motivo. Por eso el catch es amplio (no solo ErrorBackend) — también cubre un
     payload que no valida (ej. un bbox degenerado) — y lo único que hace ante
     cualquier falla es loguear y seguir con el próximo frame.
+
+    Corre en un hilo aparte (ver PublicadorEnSegundoPlano); se deja como función
+    suelta para poder llamarla sincrónicamente desde los tests.
     """
     try:
         alto, ancho = frame.shape[:2]
@@ -254,9 +287,10 @@ def reconectar(video):
             time.sleep(config.RECONEXION_SEGUNDOS)
 
 
-def bucle(video, detector, cliente, zonas, confirmador, camara_id):
+def bucle(video, detector, cliente, zonas, confirmador, camara_id, publicador=None):
     fallidos = 0
     primer_frame = True
+    publicador = publicador if publicador is not None else PublicadorEnSegundoPlano()
     while True:
         inicio = time.monotonic()
         frame = video.read_frame()
@@ -277,13 +311,56 @@ def bucle(video, detector, cliente, zonas, confirmador, camara_id):
             avisar_zonas_fuera_del_frame(zonas, frame)
             primer_frame = False
 
+        # Se cronometra cada etapa por separado (T26-181). Sin esto, un ciclo lento se
+        # ve igual desde afuera venga de YOLO, del backend o de la cámara, y no hay
+        # forma de elegir el modelo o la resolución con criterio: se estaría tuneando
+        # a ciegas.
+        etapas = {}
+        t = time.monotonic()
         detecciones = detector.detect(frame)
-        publicar_deteccion_actual(cliente, camara_id, detector, detecciones, frame)
-        ocupacion = zonas_mod.resolver_ocupacion(zonas, detecciones, config.OVERLAP_MINIMO)
+        etapas["inferencia"] = time.monotonic() - t
+
+        t = time.monotonic()
+        publicador.publicar(cliente, camara_id, detector, detecciones, frame)
+        etapas["publicar"] = time.monotonic() - t
+
+        t = time.monotonic()
+        ocupacion = zonas_mod.resolver_ocupacion(
+            zonas, detecciones, config.OVERLAP_MINIMO, config.ANCLAJE_OVERLAP
+        )
+        etapas["ocupacion"] = time.monotonic() - t
+
+        t = time.monotonic()
         for mesa_id, hay_gente in confirmador.actualizar(ocupacion, inicio).items():
             aplicar_cambio(cliente, confirmador, mesa_id, hay_gente)
+        etapas["cambios"] = time.monotonic() - t
 
+        registrar_presupuesto(inicio, etapas)
         esperar_proximo_frame(inicio)
+
+
+def registrar_presupuesto(inicio, etapas):
+    """Deja constancia de cuánto tardó el ciclo y en qué se fue el tiempo.
+
+    El detalle va en DEBUG para no ensuciar la operación normal, pero pasarse del
+    presupuesto sale como WARNING: cuando el ciclo tarda más que
+    FRAME_INTERVAL_SECONDS, esperar_proximo_frame() no duerme nada y la cadencia se
+    degrada EN SILENCIO —el bucle pasa a correr todo lo rápido que puede y el CPU se
+    clava—. Sin este aviso, desde afuera se ve igual que «la detección va lenta».
+    """
+    total = time.monotonic() - inicio
+    detalle = ", ".join(f"{nombre} {segundos * 1000:.0f}ms" for nombre, segundos in etapas.items())
+
+    if total > config.FRAME_INTERVAL_SECONDS:
+        logger.warning(
+            "El ciclo tardó %.2fs y el presupuesto es %.2fs (se pasó %.2fs): %s",
+            total,
+            config.FRAME_INTERVAL_SECONDS,
+            total - config.FRAME_INTERVAL_SECONDS,
+            detalle,
+        )
+    else:
+        logger.debug("Ciclo %.0fms de %.0fms disponibles: %s", total * 1000, config.FRAME_INTERVAL_SECONDS * 1000, detalle)
 
 
 def esperar_proximo_frame(inicio):
@@ -308,10 +385,12 @@ def run():
     zonas = cargar_zonas(cliente, camara, config.SECTOR_ID)
     fuente = resolver_fuente(camara)
 
-    detector = Detector(config.YOLO_MODEL_PATH, config.YOLO_CONFIDENCE, config.YOLO_CLASSES)
+    detector = Detector(
+        config.YOLO_MODEL_PATH, config.YOLO_CONFIDENCE, config.YOLO_CLASSES, imgsz=config.YOLO_IMGSZ
+    )
     detector.load()
 
-    video = Camera(fuente)
+    video = Camera(fuente, antiguedad_maxima=config.FRAME_ANTIGUEDAD_MAXIMA_SEGUNDOS)
     video.open()
     logger.info(
         "Procesando %s cada %ss — overlap mínimo %.2f, confirmación a los %ss",

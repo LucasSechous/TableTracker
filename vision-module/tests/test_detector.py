@@ -81,3 +81,30 @@ class TestDetectorDetect:
         detector.model.predict.assert_called_once_with(
             frame, conf=0.6, classes=[0, 2], verbose=False
         )
+
+    def test_detect_pasa_imgsz_a_la_inferencia_cuando_esta_configurado(self):
+        # T26-178: sin imgsz explícito ultralytics usa 640 y reescala un frame de
+        # 1080p a un tercio, perdiendo a las personas chicas. Que el valor llegue
+        # efectivamente al predict() es lo único que este módulo puede garantizar.
+        detector = Detector("models/yolov8s.pt", confidence=0.35, classes=[0], imgsz=960)
+        detector.model = MagicMock()
+        detector.model.predict.return_value = _resultado_con([])
+        frame = np.zeros((10, 10, 3))
+
+        detector.detect(frame)
+
+        detector.model.predict.assert_called_once_with(
+            frame, conf=0.35, classes=[0], verbose=False, imgsz=960
+        )
+
+    def test_detect_sin_imgsz_no_lo_manda_y_deja_el_default_de_la_libreria(self):
+        # Quien construya un Detector sin imgsz (tests, scripts) tiene que seguir
+        # obteniendo el comportamiento de ultralytics, no un valor impuesto acá.
+        detector = Detector("models/yolov8n.pt", confidence=0.5, classes=[0])
+        detector.model = MagicMock()
+        detector.model.predict.return_value = _resultado_con([])
+        frame = np.zeros((10, 10, 3))
+
+        detector.detect(frame)
+
+        assert "imgsz" not in detector.model.predict.call_args.kwargs

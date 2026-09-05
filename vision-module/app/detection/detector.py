@@ -25,16 +25,25 @@ class Deteccion:
 
 
 class Detector:
-    def __init__(self, model_path, confidence, classes):
+    # imgsz: resolución a la que se corre la inferencia. Se pasa explícito y no se deja
+    # el default de ultralytics (640) porque con frames de 1080p ese default reescala a
+    # un tercio y se pierden las personas chicas (T26-178, ver config.YOLO_IMGSZ).
+    def __init__(self, model_path, confidence, classes, imgsz=None):
         self.model_path = model_path
         self.confidence = confidence
         self.classes = classes
+        self.imgsz = imgsz
         self.model = None
 
     def load(self):
         # Carga los pesos YOLO una sola vez (ultralytics.YOLO).
         self.model = YOLO(str(self.model_path))
-        logger.info("Modelo YOLO cargado: %s", self.model_path)
+        logger.info(
+            "Modelo YOLO cargado: %s (confianza %.2f, imgsz %s)",
+            self.model_path,
+            self.confidence,
+            self.imgsz if self.imgsz else "default de la librería",
+        )
 
     def detect(self, frame):
         # Ejecuta la inferencia sobre un frame y devuelve una lista de Deteccion.
@@ -43,11 +52,15 @@ class Detector:
         if self.model is None:
             raise RuntimeError("El modelo no está cargado: llamar a load() antes de detect()")
 
+        # imgsz solo se manda si está definido: sin él, ultralytics usa su propio default,
+        # que es lo que corresponde para quien construya un Detector sin especificarlo.
+        extra = {"imgsz": self.imgsz} if self.imgsz else {}
         resultados = self.model.predict(
             frame,
             conf=self.confidence,
             classes=self.classes,
             verbose=False,
+            **extra,
         )
         cajas = resultados[0].boxes
         return [

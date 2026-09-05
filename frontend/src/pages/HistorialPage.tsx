@@ -3,18 +3,15 @@
 
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { historialApi, mesasApi } from "../services/api"
+import { historialApi, mesasApi, extraerDetalle } from "../services/api"
 import type { HistorialEstado, Mesa } from "../types"
+import RangoFechas, { finDelDia, labelStyle } from "../components/RangoFechas"
 
 const ESTADO_LABEL: Record<string, string> = {
   libre: "Libre",
   ocupada: "Ocupada",
   pendiente_limpieza: "Pendiente de limpieza",
   reservada: "Reservada",
-}
-
-function extraerDetalle(err: unknown, fallback: string) {
-  return (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? fallback
 }
 
 export default function HistorialPage() {
@@ -40,7 +37,7 @@ export default function HistorialPage() {
     }
     if (filtros.mesaId) params.mesa_id = Number(filtros.mesaId)
     if (filtros.fechaInicio) params.fecha_inicio = filtros.fechaInicio
-    if (filtros.fechaFin) params.fecha_fin = `${filtros.fechaFin}T23:59:59`
+    if (filtros.fechaFin) params.fecha_fin = finDelDia(filtros.fechaFin)
 
     historialApi
       .listar(params)
@@ -118,7 +115,7 @@ export default function HistorialPage() {
             marginBottom: 20,
           }}
         >
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, color: "#444" }}>
+          <label style={labelStyle}>
             Mesa
             <select
               value={mesaId}
@@ -134,27 +131,14 @@ export default function HistorialPage() {
             </select>
           </label>
 
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, color: "#444" }}>
-            Desde
-            <input
-              type="date"
-              value={fechaInicio}
-              onChange={(e) => setFechaInicio(e.target.value)}
-              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc" }}
-            />
-          </label>
+          <RangoFechas
+            desde={fechaInicio}
+            hasta={fechaFin}
+            onDesdeChange={setFechaInicio}
+            onHastaChange={setFechaFin}
+          />
 
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, color: "#444" }}>
-            Hasta
-            <input
-              type="date"
-              value={fechaFin}
-              onChange={(e) => setFechaFin(e.target.value)}
-              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc" }}
-            />
-          </label>
-
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, color: "#444" }}>
+          <label style={labelStyle}>
             Orden
             <select
               value={orden}

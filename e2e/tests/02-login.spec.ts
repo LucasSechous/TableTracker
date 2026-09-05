@@ -6,6 +6,7 @@ import {
   getSubmitButton,
   gotoDashboardAuthed,
   getLogoutButton,
+  abrirMenuLateral,
 } from "../fixtures/ui-helpers";
 
 // Sección 2 — Login y sesión
@@ -73,6 +74,11 @@ test("2.4 la sesión persiste al recargar la página tras un login exitoso", asy
 
 test("2.5 logout borra el token y redirige a login", async ({ page, token }) => {
   await gotoDashboardAuthed(page, token);
+  // Desde el rediseño del Sprint 6/7 "Cerrar sesión" vive dentro del drawer de
+  // MenuLateral. El drawer se oculta con transform (no con display), así que el botón
+  // sigue contando como visible para Playwright pero queda fuera del viewport y el
+  // click expira. Hay que abrir el menú primero.
+  await abrirMenuLateral(page);
   await getLogoutButton(page).click();
 
   await expect(page).toHaveURL(/\/login$/);

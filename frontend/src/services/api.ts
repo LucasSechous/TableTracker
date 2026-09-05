@@ -12,6 +12,8 @@ import type {
   PuntoRoi,
   CamaraTestResponse,
   DetectionFrameResult,
+  OcupacionResponse,
+  RotacionMesa,
 } from "../types";
 
 export type {
@@ -24,6 +26,9 @@ export type {
   PuntoRoi,
   CamaraTestResponse,
   DetectionFrameResult,
+  ConteoPorEstado,
+  OcupacionResponse,
+  RotacionMesa,
 } from "../types";
 export type { Modo } from "../types";
 
@@ -130,8 +135,16 @@ export const sectoresApi = {
 export const configuracionApi = {
   obtener: () => api.get<Configuracion>("/configuracion"),
 
-  actualizar: (datos: { ancho_salon?: number; alto_salon?: number; nombre_establecimiento?: string }) =>
-    api.patch<Configuracion>("/configuracion", datos),
+  // PATCH parcial y solo admin. Ojo con un detalle del backend: aplica los campos con
+  // model_dump(exclude_none=True), así que mandar null NO borra un campo, lo ignora.
+  // Para nombre_establecimiento se puede mandar "" y queda vacío; cantidad_mesas_referencia
+  // valida gt=0, así que una vez cargada no hay forma de volverla a null desde la API.
+  actualizar: (datos: {
+    ancho_salon?: number
+    alto_salon?: number
+    nombre_establecimiento?: string
+    cantidad_mesas_referencia?: number
+  }) => api.patch<Configuracion>("/configuracion", datos),
 };
 
 export const camarasApi = {
@@ -186,6 +199,75 @@ export const roiMesaApi = {
   eliminar: (id: number) => api.delete(`/roi-mesa/${id}`),
 };
 
+export const metricasApi = {
+  // Agregado calculado en el momento sobre mesas activas, no un recurso persistido:
+  // cada llamada devuelve la foto actual del salón (T26-158, RF-22). El endpoint acepta
+  // un sector_id opcional que esta UI todavía no expone (fuera del alcance del ticket).
+  ocupacion: () => api.get<OcupacionResponse>("/metricas/ocupacion"),
+
+  // Rotaciones por mesa en un rango (T26-159, RF-23). Sin fechas devuelve el histórico
+  // completo. fecha_inicio/fecha_fin son datetimes ISO, no fechas sueltas: para que el
+  // "hasta" sea inclusivo hay que mandar el fin del día (ver finDelDia en RangoFechas).
+  rotacion: (params?: { fecha_inicio?: string; fecha_fin?: string; sector_id?: number }) =>
+    api.get<RotacionMesa[]>("/metricas/rotacion", { params }),
+};
+
+// El `detail` de FastAPI NO siempre es un string. Cuando la validación falla (422) es una
+// LISTA de objetos {type, loc, msg, input, ctx}, uno por campo inválido. Meter eso crudo en
+// un estado que después se renderiza como {error} hace que React tire "Objects are not valid
+// as a React child" y, sin error boundary, deja la pantalla en blanco. Pasó de verdad al
+// editar una cámara: el backend rechazaba la URL con la contraseña enmascarada —con un
+// mensaje bueno— y el usuario veía una página vacía en vez del mensaje.
+//
+// Por eso el desarme del detail vive en un solo lugar y estas funciones garantizan devolver
+// SIEMPRE un string. Nadie debería volver a leer `response.data.detail` a mano.
+
+// Pydantic antepone "Value error, " (o similar) al mensaje del validador. Es ruido de
+// implementación: el texto útil es lo que escribió quien programó el validador.
+const PREFIJO_PYDANTIC = /^(Value error|Assertion failed|Type error),\s*/;
+
+function mensajeDeItemPydantic(item: unknown): string | null {
+  if (typeof item !== "object" || item === null) return null;
+  const { msg, loc } = item as { msg?: unknown; loc?: unknown };
+  if (typeof msg !== "string" || !msg.trim()) return null;
+  const limpio = msg.replace(PREFIJO_PYDANTIC, "");
+  // El campo solo se antepone cuando hay varios errores: con uno solo el mensaje del
+  // validador ya se explica y el prefijo "rtsp_url: " sería ruido.
+  const campo = Array.isArray(loc)
+    ? [...loc].reverse().find((p) => typeof p === "string" && p !== "body" && p !== "query")
+    : undefined;
+  return campo ? `${campo}: ${limpio}` : limpio;
+}
+
+function detalleDesdeCuerpo(data: unknown, fallback: string): string {
+  const detail = (data as { detail?: unknown } | undefined)?.detail;
+
+  if (typeof detail === "string" && detail.trim()) return detail;
+
+  // 422 de validación: se juntan los mensajes de todos los campos que fallaron.
+  if (Array.isArray(detail)) {
+    const mensajes = detail.map(mensajeDeItemPydantic).filter((m): m is string => m !== null);
+    if (mensajes.length === 1) return mensajes[0];
+    if (mensajes.length > 1) {
+      // Con un solo error el campo no se antepone (ver mensajeDeItemPydantic), con varios sí.
+      return detail
+        .map(mensajeDeItemPydantic)
+        .filter((m): m is string => m !== null)
+        .join(" · ");
+    }
+  }
+
+  return fallback;
+}
+
+/**
+ * Versión sincrónica, para el caso normal (respuesta JSON). Devuelve siempre un string,
+ * así que es seguro meter el resultado directo en un estado que se renderiza.
+ */
+export function extraerDetalle(err: unknown, fallback: string): string {
+  return detalleDesdeCuerpo((err as AxiosError).response?.data, fallback);
+}
+
 // Con responseType "blob" (ver camarasApi.snapshot), un error HTTP no trae el detail como
 // JSON directo: axios ya devolvió el cuerpo como Blob antes de que se supiera que el status
 // no era 2xx. Hay que leerlo como texto y parsearlo a mano. Para el resto de los endpoints
@@ -197,16 +279,14 @@ export async function extraerDetalleApi(err: unknown, fallback: string): Promise
 
   if (data instanceof Blob) {
     try {
-      const parsed = JSON.parse(await data.text());
-      if (typeof parsed?.detail === "string") return parsed.detail;
+      return detalleDesdeCuerpo(JSON.parse(await data.text()), fallback);
     } catch {
       // Cuerpo no era JSON (o no se pudo leer): se usa el fallback.
+      return fallback;
     }
-    return fallback;
   }
 
-  const detail = (data as { detail?: string } | undefined)?.detail;
-  return typeof detail === "string" ? detail : fallback;
+  return detalleDesdeCuerpo(data, fallback);
 }
 
 export default api;

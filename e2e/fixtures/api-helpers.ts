@@ -257,6 +257,77 @@ export interface HistorialResponse {
   created_at: string;
 }
 
+export interface ConteoPorEstadoResponse {
+  libre: number;
+  ocupada: number;
+  pendiente_limpieza: number;
+  reservada: number;
+}
+
+export interface OcupacionMetricaResponse {
+  total_mesas: number;
+  porcentaje_ocupacion: number;
+  conteo_por_estado: ConteoPorEstadoResponse;
+}
+
+export async function obtenerOcupacion(
+  request: APIRequestContext,
+  token: string,
+  params?: { sector_id?: number }
+): Promise<OcupacionMetricaResponse> {
+  const res = await request.get(`${BACKEND_URL}/metricas/ocupacion`, { headers: authHeaders(token), params });
+  if (!res.ok()) throw new Error(`No se pudo obtener ocupación: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
+export interface ConfiguracionResponse {
+  ancho_salon: number;
+  alto_salon: number;
+  nombre_establecimiento: string | null;
+  cantidad_mesas_referencia: number | null;
+}
+
+export async function obtenerConfiguracion(
+  request: APIRequestContext,
+  token: string
+): Promise<ConfiguracionResponse> {
+  const res = await request.get(`${BACKEND_URL}/configuracion`, { headers: authHeaders(token) });
+  if (!res.ok()) throw new Error(`No se pudo obtener configuración: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
+export async function actualizarConfiguracion(
+  request: APIRequestContext,
+  token: string,
+  datos: {
+    ancho_salon?: number;
+    alto_salon?: number;
+    nombre_establecimiento?: string;
+    cantidad_mesas_referencia?: number;
+  }
+): Promise<ConfiguracionResponse> {
+  const res = await request.patch(`${BACKEND_URL}/configuracion`, { headers: authHeaders(token), data: datos });
+  if (!res.ok()) throw new Error(`No se pudo actualizar configuración: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
+export interface RotacionMesaResponse {
+  mesa_id: number;
+  numero: number;
+  sector_id: number;
+  rotaciones: number;
+}
+
+export async function obtenerRotacion(
+  request: APIRequestContext,
+  token: string,
+  params?: { fecha_inicio?: string; fecha_fin?: string; sector_id?: number }
+): Promise<RotacionMesaResponse[]> {
+  const res = await request.get(`${BACKEND_URL}/metricas/rotacion`, { headers: authHeaders(token), params });
+  if (!res.ok()) throw new Error(`No se pudo obtener rotación: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
 export async function listarHistorial(
   request: APIRequestContext,
   token: string,

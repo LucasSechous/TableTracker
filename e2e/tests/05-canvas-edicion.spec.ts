@@ -8,6 +8,7 @@ import {
   deleteSector,
   listarMesas,
   listarSectores,
+  obtenerConfiguracion,
   uniqueSuffix,
   SectorResponse,
   MesaResponse,
@@ -18,8 +19,10 @@ import {
   getSectorBlock,
   getMesaCircle,
   getResizeHandle,
-  getEstadoSelect,
+  getPanelMesaToggle,
+  cerrarPanelMesa,
   getToggleModoButton,
+  entrarEnModoEdicion,
   dragBy,
 } from "../fixtures/ui-helpers";
 
@@ -28,12 +31,17 @@ import {
 // las dimensiones del canvas/sector.
 const DIAMETRO_MESA = 60;
 
+// Margen que se le deja al sector de 5.8 contra el borde del salón: al agrandarlo con el
+// handle no debería poder crecer más que esto. Tiene que ser mayor que el tamaño inicial
+// del sector (150x80) para que el clamp sea lo que lo detiene y no su propio tamaño.
+const MARGEN_PARA_CRECER_X = 200;
+const MARGEN_PARA_CRECER_Y = 100;
+
 // Sección 5 — Canvas del salón, modo edición
 
-async function toggleAEdicion(page: import("@playwright/test").Page) {
-  await getToggleModoButton(page).click();
-  await expect(getToggleModoButton(page)).toHaveText(/Ver monitoreo/);
-}
+// Delega en el helper compartido: entrar en edición dejó de ser un toggle de un solo
+// botón y la lógica no debería estar duplicada en cada spec.
+const toggleAEdicion = entrarEnModoEdicion;
 
 test.describe("con un sector (700x400) y una mesa cerca de la esquina", () => {
   let sector: SectorResponse;
@@ -56,17 +64,20 @@ test.describe("con un sector (700x400) y una mesa cerca de la esquina", () => {
     const sectorBlock = getSectorBlock(page, sector.nombre);
     const circle = getMesaCircle(sectorBlock, mesa.numero);
 
-    // En monitoreo (modo por defecto), el click abre el select de estado.
+    // En monitoreo (modo por defecto), el click abre PanelMesa con el detalle de la
+    // mesa. Antes abría un <select> inline sobre el canvas; el rediseño del Sprint 6/7
+    // lo reemplazó por el panel lateral, pero lo que se prueba acá sigue siendo lo
+    // mismo: que el click en monitoreo consulte y en edición no.
     await expect(getToggleModoButton(page)).toHaveText(/Editar disposición/);
     await circle.click();
-    await expect(getEstadoSelect(circle)).toBeVisible();
-    await page.mouse.click(10, 10); // cierra el select clickeando afuera
+    await expect(getPanelMesaToggle(page)).toBeVisible();
+    await cerrarPanelMesa(page);
 
     await toggleAEdicion(page);
 
-    // En edición, el mismo click NO debe abrir el select.
+    // En edición, el mismo click NO debe abrir el panel: ahí el click arrastra.
     await circle.click();
-    await expect(getEstadoSelect(circle)).toHaveCount(0);
+    await expect(getPanelMesaToggle(page)).toHaveCount(0);
   });
 
   test("5.2 arrastrar una mesa la mueve visualmente", async ({ page, token }) => {
@@ -218,8 +229,17 @@ test.describe("con un sector cerca del borde inferior derecho del canvas", () =>
   test.beforeEach(async ({ request, token }) => {
     const suffix = uniqueSuffix(test.info().parallelIndex);
     sector = await createSector(request, token, { nombre: `E2E Resize Borde Canvas ${suffix}` });
-    // Canvas de 1200x700: a esta posición sólo quedan 200x100 de margen para crecer.
-    sector = await actualizarSector(request, token, sector.id, { pos_x: 1000, pos_y: 600, ancho: 150, alto: 80 });
+    // La posición se calcula desde el tamaño REAL del salón, no desde un 1200x700
+    // hardcodeado: el tamaño del canvas es estado global persistido y cualquiera puede
+    // haberlo cambiado arrastrando el borde. Con el valor fijo, el sector terminaba
+    // colocado fuera del salón y el margen para crecer daba negativo.
+    const { ancho_salon, alto_salon } = await obtenerConfiguracion(request, token);
+    sector = await actualizarSector(request, token, sector.id, {
+      pos_x: ancho_salon - MARGEN_PARA_CRECER_X,
+      pos_y: alto_salon - MARGEN_PARA_CRECER_Y,
+      ancho: 150,
+      alto: 80,
+    });
     mesa = await createMesa(request, token, { numero: 1, sector_id: sector.id, estado: "libre" });
   });
 
@@ -229,6 +249,15 @@ test.describe("con un sector cerca del borde inferior derecho del canvas", () =>
   });
 
   test("5.8 agrandar un sector con el handle no lo saca del canvas", async ({ page, token, request }) => {
+    // El tamaño del salón se lee de la API en vez de hardcodear 1200x700: es estado
+    // global persistido y cualquier resize del canvas —por la UI o por otro test— lo
+    // cambia para siempre. Este test fallaba con "expected 200, received 241" porque
+    // el salón había quedado en 1241 de ancho, y lo que estaba mal era la constante
+    // del test, no el clamping de la aplicación.
+    const { ancho_salon, alto_salon } = await obtenerConfiguracion(request, token);
+    const anchoEsperado = ancho_salon - sector.pos_x;
+    const altoEsperado = alto_salon - sector.pos_y;
+
     await gotoDashboardAuthed(page, token);
     await toggleAEdicion(page);
 
@@ -241,17 +270,17 @@ test.describe("con un sector cerca del borde inferior derecho del canvas", () =>
       dragBy(page, handle, 1000, 1000),
     ]);
     const payload = patchRequest.postDataJSON() as { ancho: number; alto: number };
-    expect(payload.ancho).toBe(200); // 1200 - pos_x(1000)
-    expect(payload.alto).toBe(100); // 700 - pos_y(600)
+    expect(payload.ancho).toBe(anchoEsperado);
+    expect(payload.alto).toBe(altoEsperado);
 
     await page.reload();
     await waitForSalonLoaded(page);
     const sectoresBackend = await listarSectores(request, token);
     const sectorActualizado = sectoresBackend.find((s) => s.id === sector.id)!;
-    expect(sectorActualizado.ancho).toBe(200);
-    expect(sectorActualizado.alto).toBe(100);
-    expect(sectorActualizado.pos_x + sectorActualizado.ancho).toBeLessThanOrEqual(1200);
-    expect(sectorActualizado.pos_y + sectorActualizado.alto).toBeLessThanOrEqual(700);
+    expect(sectorActualizado.ancho).toBe(anchoEsperado);
+    expect(sectorActualizado.alto).toBe(altoEsperado);
+    expect(sectorActualizado.pos_x + sectorActualizado.ancho).toBeLessThanOrEqual(ancho_salon);
+    expect(sectorActualizado.pos_y + sectorActualizado.alto).toBeLessThanOrEqual(alto_salon);
   });
 });
 

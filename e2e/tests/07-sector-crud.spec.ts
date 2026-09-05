@@ -16,14 +16,12 @@ import {
   getEditarSectorButton,
   getEliminarSectorButton,
   getToggleModoButton,
+  entrarEnModoEdicion,
 } from "../fixtures/ui-helpers";
 
 // Sección 7 — Edición y eliminación de sectores (T26-120/T26-121)
 
-async function toggleAEdicion(page: import("@playwright/test").Page) {
-  await getToggleModoButton(page).click();
-  await expect(getToggleModoButton(page)).toHaveText(/Ver monitoreo/);
-}
+const toggleAEdicion = entrarEnModoEdicion;
 
 test.describe("con un sector vacío (sin mesas)", () => {
   let sector: SectorResponse;
@@ -49,9 +47,11 @@ test.describe("con un sector vacío (sin mesas)", () => {
     await page.getByLabel("Nombre").fill(nuevoNombre);
     await page.getByRole("button", { name: "Guardar cambios" }).click();
 
-    // Sin recarga: el bloque ya muestra el nuevo nombre.
-    await expect(page.getByText(nuevoNombre, { exact: true })).toBeVisible();
-    await expect(page.getByText(sector.nombre, { exact: true })).toHaveCount(0);
+    // Sin recarga: el bloque ya muestra el nuevo nombre. Se afirma sobre el bloque y no
+    // sobre el texto suelto porque el nombre del sector aparece además en el botón de la
+    // barra de filtros, y buscarlo por texto matchea dos elementos.
+    await expect(getSectorBlock(page, nuevoNombre)).toBeVisible();
+    await expect(getSectorBlock(page, sector.nombre)).toHaveCount(0);
 
     const sectoresBackend = await listarSectores(request, token);
     const sectorActualizado = sectoresBackend.find((s) => s.id === sector.id)!;

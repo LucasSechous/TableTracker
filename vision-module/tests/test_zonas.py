@@ -4,7 +4,13 @@
 import pytest
 
 from app.detection.detector import Deteccion
-from app.mapping.zonas import Zona, desde_rois, resolver_ocupacion
+from app.mapping.zonas import (
+    ANCLAJE_BBOX_COMPLETO,
+    ANCLAJE_TERCIO_INFERIOR,
+    Zona,
+    desde_rois,
+    resolver_ocupacion,
+)
 
 # Cuadrado de 100x100 con la esquina en (100, 100), como referencia de todas las
 # pruebas de geometría.
@@ -66,6 +72,57 @@ class TestOverlap:
         # Medio cuadrado de 100x100: 5000 sobre los 10000 del bbox.
         zona = Zona(mesa_id=1, poligono=[(0, 0), (100, 0), (0, 100)])
         assert zona.overlap((0, 0, 100, 100)) == pytest.approx(0.5)
+
+
+class TestAnclajeDelOverlap:
+    # T26-180. La zona es el rectángulo de una mesa vista desde una cámara: ocupa la
+    # franja de abajo del encuadre. Una persona parada al lado tiene un bbox alto que
+    # arranca muy por encima de la mesa.
+    MESA = Zona(1, [(0, 100), (100, 100), (100, 160), (0, 160)])
+
+    # Persona de pie junto a la mesa: 180 px de alto, apoyada a la altura de la mesa.
+    # Solo la parte de abajo se superpone con el rectángulo.
+    PERSONA_SENTADA = (20, 0, 60, 180)
+
+    def test_el_bbox_completo_diluye_a_la_persona_sentada(self):
+        # De los 180 px de alto, solo 60 caen sobre la mesa: 1/3 del bbox. Con el
+        # criterio histórico eso queda al filo del umbral de 0.30.
+        overlap = self.MESA.overlap(self.PERSONA_SENTADA, ANCLAJE_BBOX_COMPLETO)
+        assert overlap == pytest.approx(1 / 3, abs=0.01)
+
+    def test_el_tercio_inferior_la_ve_claramente_ocupando_la_mesa(self):
+        # El tercio de abajo del bbox (y de 120 a 180) cae ENTERO dentro de la mesa
+        # (y de 100 a 160)... salvo la franja de 160 a 180, que queda fuera.
+        overlap = self.MESA.overlap(self.PERSONA_SENTADA, ANCLAJE_TERCIO_INFERIOR)
+        assert overlap > self.MESA.overlap(self.PERSONA_SENTADA, ANCLAJE_BBOX_COMPLETO)
+        assert overlap == pytest.approx(2 / 3, abs=0.01)
+
+    def test_alguien_lejos_de_la_mesa_no_cuenta_con_ningun_anclaje(self):
+        # El caso inverso, que es el que no hay que romper al bajar el criterio:
+        # una persona que no está sobre la mesa no debe contar de ninguna forma.
+        lejos = (200, 0, 240, 180)
+        assert self.MESA.overlap(lejos, ANCLAJE_BBOX_COMPLETO) == 0.0
+        assert self.MESA.overlap(lejos, ANCLAJE_TERCIO_INFERIOR) == 0.0
+
+    def test_el_default_sigue_siendo_el_criterio_historico(self):
+        # Cambiar el default movería todas las decisiones de ocupación sin evidencia.
+        assert self.MESA.overlap(self.PERSONA_SENTADA) == self.MESA.overlap(
+            self.PERSONA_SENTADA, ANCLAJE_BBOX_COMPLETO
+        )
+
+    def test_un_anclaje_desconocido_falla_fuerte(self):
+        # Un typo en el .env no debe degradar la detección en silencio.
+        with pytest.raises(ValueError, match="Anclaje desconocido"):
+            self.MESA.overlap(self.PERSONA_SENTADA, "tercio_superior")
+
+    def test_un_bbox_degenerado_no_rompe(self):
+        assert self.MESA.overlap((10, 100, 10, 100), ANCLAJE_TERCIO_INFERIOR) == 0.0
+
+    def test_resolver_ocupacion_propaga_el_anclaje(self):
+        deteccion = Deteccion(self.PERSONA_SENTADA, clase=0, confianza=0.9)
+        # Con umbral 0.5 el bbox completo (0.33) no alcanza y el tercio inferior (0.66) sí.
+        assert resolver_ocupacion([self.MESA], [deteccion], 0.5, ANCLAJE_BBOX_COMPLETO) == {1: False}
+        assert resolver_ocupacion([self.MESA], [deteccion], 0.5, ANCLAJE_TERCIO_INFERIOR) == {1: True}
 
 
 class TestFueraDelFrame:

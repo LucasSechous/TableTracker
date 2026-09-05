@@ -1,6 +1,11 @@
 import { test, expect } from "../fixtures/test-fixtures";
 import { createSector, createMesa, deleteMesa, deleteSector, uniqueSuffix } from "../fixtures/api-helpers";
-import { getLogoutButton, getSectorBlock, getMesaCircle } from "../fixtures/ui-helpers";
+import {
+  getLogoutButton,
+  getSectorBlock,
+  getMesaCircle,
+  corregirEstadoDesdePanel,
+} from "../fixtures/ui-helpers";
 import { BACKEND_URL } from "../playwright.config";
 
 // Sección 3 — Rutas protegidas
@@ -60,7 +65,7 @@ test("3.4 una respuesta 401 durante el uso normal se maneja sin romper la UI", a
   );
 
   await mesaCircle.click();
-  await page.locator("select").first().selectOption("ocupada");
+  await corregirEstadoDesdePanel(page, "ocupada");
 
   await page.waitForURL(/\/login$/, { timeout: 10_000 });
   expect(pageErrors).toEqual([]);

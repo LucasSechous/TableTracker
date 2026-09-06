@@ -5,13 +5,22 @@ import { useState, useEffect, useRef } from "react"
 import { Trash2 } from "lucide-react"
 import type { Mesa, Modo } from "../types"
 import { mesasApi, extraerDetalle } from "../services/api"
-import { DIAMETRO_MESA, COLOR_POR_ESTADO, BORDE_POR_ESTADO } from "../constants"
+import {
+  DIAMETRO_MESA,
+  COLOR_POR_ESTADO,
+  BORDE_POR_ESTADO,
+  COLOR_LIMPIEZA_DEMORADA,
+  limpiezaDemorada,
+  minutosEnEstado,
+} from "../constants"
 
 interface MesaVisualProps {
   mesa: Mesa
   modo: Modo
   anchoSector: number
   altoSector: number
+  /** Umbral de limpieza demorada en minutos, o null si la alerta está apagada (T26-173). */
+  umbralLimpiezaMinutos?: number | null
   onMesaClick: (mesa: Mesa) => void
   onPosicionChange: (mesaId: number, pos_x: number, pos_y: number) => void
   onMesaEliminada: (mesaId: number) => void
@@ -22,6 +31,7 @@ export default function MesaVisual({
   modo,
   anchoSector,
   altoSector,
+  umbralLimpiezaMinutos,
   onMesaClick,
   onPosicionChange,
   onMesaEliminada,
@@ -101,6 +111,12 @@ export default function MesaVisual({
     }
   }
 
+  // El aviso solo tiene sentido mirando el salón en vivo: en modo edición el canvas es
+  // para acomodar mesas, y un badge rojo ahí compite con los controles de arrastre.
+  const atrasada =
+    modo === "monitoreo" && limpiezaDemorada(mesa.estado, mesa.estado_desde, umbralLimpiezaMinutos)
+  const minutosAtraso = atrasada ? minutosEnEstado(mesa.estado_desde) : null
+
   return (
     <div style={{ position: "absolute", left: localPos.x, top: localPos.y }}>
       <div
@@ -112,7 +128,12 @@ export default function MesaVisual({
           width: DIAMETRO_MESA,
           height: DIAMETRO_MESA,
           borderRadius: 8,
-          border: `2px solid ${BORDE_POR_ESTADO[mesa.estado] ?? "#757575"}`,
+          // El relleno NO cambia: sigue siendo el naranja de pendiente_limpieza, porque
+          // el estado no cambió. Lo que se refuerza es el borde, que es la capa que
+          // puede señalar una condición sin pisar la lectura del estado.
+          border: `${atrasada ? 3 : 2}px solid ${
+            atrasada ? COLOR_LIMPIEZA_DEMORADA : BORDE_POR_ESTADO[mesa.estado] ?? "#757575"
+          }`,
           backgroundColor: COLOR_POR_ESTADO[mesa.estado] ?? "#9e9e9e",
           boxSizing: "border-box",
           display: "flex",
@@ -131,6 +152,36 @@ export default function MesaVisual({
       >
         {mesa.numero}
       </div>
+
+      {atrasada && minutosAtraso !== null && (
+        <div
+          data-testid={`mesa-${mesa.numero}-limpieza-demorada`}
+          title={`Pendiente de limpieza hace ${minutosAtraso} minutos`}
+          style={{
+            position: "absolute",
+            top: -8,
+            left: DIAMETRO_MESA - 16,
+            minWidth: 26,
+            height: 18,
+            padding: "0 5px",
+            borderRadius: 9,
+            backgroundColor: COLOR_LIMPIEZA_DEMORADA,
+            color: "#fff",
+            fontSize: 10,
+            fontWeight: 700,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            // Por encima de la mesa pero por debajo del botón de eliminar (z 3), que en
+            // modo edición no coexiste con esto de todos modos.
+            zIndex: 3,
+            pointerEvents: "none",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {minutosAtraso}m
+        </div>
+      )}
 
       {modo === "edicion" && (
         <button

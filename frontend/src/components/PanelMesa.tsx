@@ -11,14 +11,7 @@ import { useEffect, useState } from "react"
 import type { CSSProperties } from "react"
 import type { Mesa } from "../types"
 import { historialApi, mesasApi, extraerDetalle } from "../services/api"
-import { COLOR_POR_ESTADO } from "../constants"
-
-const ETIQUETA_POR_ESTADO: Record<string, string> = {
-  libre: "Libre",
-  ocupada: "Ocupada",
-  pendiente_limpieza: "Pendiente de limpieza",
-  reservada: "Reservada",
-}
+import { COLOR_POR_ESTADO, ETIQUETA_POR_ESTADO } from "../constants"
 
 interface Props {
   mesa: Mesa | null

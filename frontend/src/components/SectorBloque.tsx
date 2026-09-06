@@ -18,6 +18,8 @@ interface SectorBloqueProps {
   modo: Modo
   anchoSalon: number
   altoSalon: number
+  /** Umbral de limpieza demorada, solo de paso hacia MesaVisual (T26-173). */
+  umbralLimpiezaMinutos?: number | null
   onMesaClick: (mesa: Mesa) => void
   onMesaPosicionChange: (mesaId: number, pos_x: number, pos_y: number) => void
   onSectorDrag: (sectorId: number, pos_x: number, pos_y: number) => void
@@ -32,6 +34,7 @@ export default function SectorBloque({
   modo,
   anchoSalon,
   altoSalon,
+  umbralLimpiezaMinutos,
   onMesaClick,
   onMesaPosicionChange,
   onSectorDrag,
@@ -263,6 +266,7 @@ export default function SectorBloque({
               modo={modo}
               anchoSector={localSize.ancho}
               altoSector={localSize.alto}
+              umbralLimpiezaMinutos={umbralLimpiezaMinutos}
               onMesaClick={onMesaClick}
               onPosicionChange={onMesaPosicionChange}
               onMesaEliminada={onMesaEliminada}

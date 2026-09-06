@@ -14,6 +14,7 @@ import type {
   DetectionFrameResult,
   OcupacionResponse,
   RotacionMesa,
+  EstadoOpcion,
 } from "../types";
 
 export type {
@@ -29,6 +30,7 @@ export type {
   ConteoPorEstado,
   OcupacionResponse,
   RotacionMesa,
+  EstadoOpcion,
 } from "../types";
 export type { Modo } from "../types";
 
@@ -105,9 +107,61 @@ export const mesasApi = {
   desactivar: (id: number) => api.patch<Mesa>(`/mesas/${id}`, { activa: false }),
 };
 
+// El backend pagina el historial: limit tiene default 500 y tope 1000 (ver
+// HISTORIAL_LIMIT_* en backend/app/routers/historial.py). Hasta T26-174 este cliente no
+// mandaba ninguno de los dos, así que la pantalla mostraba como mucho 500 filas y no había
+// forma de saber que faltaban: el listado simplemente terminaba.
+const HISTORIAL_FILAS_POR_PAGINA = 1000
+
+export interface HistorialFiltros {
+  mesa_id?: number
+  fecha_inicio?: string
+  fecha_fin?: string
+  orden?: "asc" | "desc"
+}
+
+export interface HistorialPaginado {
+  filas: HistorialEstado[]
+  /** true si se alcanzó maxFilas y quedaron registros sin traer. */
+  truncado: boolean
+}
+
 export const historialApi = {
-  listar: (params?: { mesa_id?: number; fecha_inicio?: string; fecha_fin?: string; orden?: "asc" | "desc" }) =>
+  listar: (params?: HistorialFiltros & { limit?: number; offset?: number }) =>
     api.get<HistorialEstado[]>("/historial/", { params }),
+
+  /**
+   * Recorre las páginas hasta agotar el resultado o llegar a maxFilas.
+   *
+   * maxFilas no es una limitación del backend sino una red de seguridad del cliente:
+   * historial_estados no tiene borrado y crece con cada cambio de estado, así que sin tope
+   * un rango amplio podría intentar traer (y renderizar) cientos de miles de filas y colgar
+   * la pestaña. Quien llama elige su tope y decide qué hacer con `truncado`.
+   *
+   * El corte por página corta es lo que evita una request de más: si el backend devolvió
+   * menos de lo pedido, no hay más nada que pedir.
+   */
+  listarTodo: async (params: HistorialFiltros, maxFilas: number): Promise<HistorialPaginado> => {
+    const filas: HistorialEstado[] = []
+    let offset = 0
+    for (;;) {
+      const limit = Math.min(HISTORIAL_FILAS_POR_PAGINA, maxFilas - filas.length)
+      const { data } = await api.get<HistorialEstado[]>("/historial/", {
+        params: { ...params, limit, offset },
+      })
+      filas.push(...data)
+      // Página incompleta: se acabaron los registros, no hay nada truncado.
+      if (data.length < limit) return { filas, truncado: false }
+      if (filas.length >= maxFilas) {
+        // Se pide una fila más para distinguir "justo entraron todas" de "hay más".
+        const { data: sobrante } = await api.get<HistorialEstado[]>("/historial/", {
+          params: { ...params, limit: 1, offset: filas.length },
+        })
+        return { filas, truncado: sobrante.length > 0 }
+      }
+      offset = filas.length
+    }
+  },
 };
 
 export const sectoresApi = {
@@ -139,11 +193,16 @@ export const configuracionApi = {
   // model_dump(exclude_none=True), así que mandar null NO borra un campo, lo ignora.
   // Para nombre_establecimiento se puede mandar "" y queda vacío; cantidad_mesas_referencia
   // valida gt=0, así que una vez cargada no hay forma de volverla a null desde la API.
+  // Las horas van como "HH:MM" y el backend las parsea a time. Igual que
+  // cantidad_mesas_referencia, una vez cargadas NO se pueden vaciar desde la API por el
+  // exclude_none: habría que mandar null y el backend lo descarta (T26-171).
   actualizar: (datos: {
     ancho_salon?: number
     alto_salon?: number
     nombre_establecimiento?: string
     cantidad_mesas_referencia?: number
+    hora_apertura?: string
+    hora_cierre?: string
   }) => api.patch<Configuracion>("/configuracion", datos),
 };
 
@@ -198,6 +257,14 @@ export const roiMesaApi = {
   // Baja lógica: el backend deja activa=false, no borra la fila (ver roi.py).
   eliminar: (id: number) => api.delete(`/roi-mesa/${id}`),
 };
+
+export const estadosApi = {
+  // Solo lectura: devuelve el enum EstadoMesa ya resuelto a {valor, etiqueta} (T26-157,
+  // RF-29). Pide sesión pero no rol admin, aunque hoy el único consumidor sea una pantalla
+  // admin-only. La barra final apunta al path exacto del router y evita el 307 de FastAPI
+  // (ver mesasApi.crear).
+  listar: () => api.get<EstadoOpcion[]>("/estados/"),
+}
 
 export const metricasApi = {
   // Agregado calculado en el momento sobre mesas activas, no un recurso persistido:

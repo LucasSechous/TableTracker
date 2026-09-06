@@ -285,6 +285,10 @@ export interface ConfiguracionResponse {
   alto_salon: number;
   nombre_establecimiento: string | null;
   cantidad_mesas_referencia: number | null;
+  // Horario de servicio (T26-171) y umbral de limpieza demorada (T26-173). null = apagado.
+  hora_apertura: string | null;
+  hora_cierre: string | null;
+  minutos_limpieza_demorada: number | null;
 }
 
 export async function obtenerConfiguracion(
@@ -304,6 +308,9 @@ export async function actualizarConfiguracion(
     alto_salon?: number;
     nombre_establecimiento?: string;
     cantidad_mesas_referencia?: number;
+    hora_apertura?: string;
+    hora_cierre?: string;
+    minutos_limpieza_demorada?: number;
   }
 ): Promise<ConfiguracionResponse> {
   const res = await request.patch(`${BACKEND_URL}/configuracion`, { headers: authHeaders(token), data: datos });

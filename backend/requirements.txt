@@ -14,6 +14,12 @@ python-jose[cryptography]==3.5.0
 # día cambia cómo python-jose declara sus extras.
 cryptography==49.0.0
 python-dotenv==1.2.2
+# Base de datos IANA de zonas horarias, para acotar las métricas al horario de
+# servicio (T26-171). Windows no trae tzdata con el sistema, así que sin este
+# paquete zoneinfo.ZoneInfo("America/Montevideo") levanta ZoneInfoNotFoundError
+# en desarrollo aunque funcione en el Linux del deploy. Se declara para que el
+# comportamiento sea el mismo en las dos plataformas.
+tzdata==2026.1
 email-validator==2.3.0
 opencv-python-headless==5.0.0.93
 # Suite de tests (T26-140). httpx no era dependencia declarada de nada —

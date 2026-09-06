@@ -11,11 +11,13 @@ from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.configuracion import ConfiguracionGeneral
 from app.models.historial import HistorialEstado
 from app.models.mesa import EstadoMesa, Mesa
 from app.models.sector import Sector
 from app.routers.auth import get_usuario_actual
 from app.schemas.metricas import ConteoPorEstado, OcupacionResponse, RotacionMesaResponse
+from app.services.horario import en_horario_de_servicio
 
 router = APIRouter(dependencies=[Depends(get_usuario_actual)])
 
@@ -115,10 +117,22 @@ def obtener_rotacion(
             query_rango = query_rango.filter(HistorialEstado.created_at <= fecha_fin)
         filas = query_rango.order_by(HistorialEstado.mesa_id, HistorialEstado.created_at).all()
 
+        # Horario de servicio (T26-171). Con las horas sin cargar, en_horario_de_servicio()
+        # devuelve True siempre y el conteo queda idéntico al de antes del ticket.
+        config = db.query(ConfiguracionGeneral).filter(ConfiguracionGeneral.id == 1).first()
+        apertura = config.hora_apertura if config else None
+        cierre = config.hora_cierre if config else None
+
         for fila in filas:
             anterior = estado_previo[fila.mesa_id]
-            if fila.estado == EstadoMesa.ocupada and anterior != EstadoMesa.ocupada:
+            es_rotacion = fila.estado == EstadoMesa.ocupada and anterior != EstadoMesa.ocupada
+            if es_rotacion and en_horario_de_servicio(fila.created_at, apertura, cierre):
                 rotaciones[fila.mesa_id] += 1
+            # El arrastre del estado se actualiza SIEMPRE, esté la fila dentro de la franja
+            # o no. Saltear las filas de fuera del horario rompería el conteo: una mesa que
+            # se ocupó a las 3 de la mañana seguiría figurando como libre, y su próxima
+            # transición a 'ocupada' —esa sí en horario— se contaría como una rotación que
+            # no ocurrió. Lo que se recorta es qué transiciones CUENTAN, no cuáles se ven.
             estado_previo[fila.mesa_id] = fila.estado
 
     return [

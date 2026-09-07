@@ -356,9 +356,24 @@ class TestBucle:
         return detector
 
     def _correr(self, video, detector, zonas, confirmador, cliente=None):
+        """Corre el bucle hasta el KeyboardInterrupt y espera a que se apliquen los cambios.
+
+        Desde T26-183 los cambios de estado no se aplican dentro del ciclo sino en los
+        workers del aplicador, así que un assert inmediato después del bucle correría
+        antes de que el trabajo termine. El aplicador se inyecta con un solo hilo para
+        que el orden sea determinista y se drena acá.
+        """
         cliente = cliente if cliente is not None else cliente_falso()
-        with patch("app.main.time.sleep"), pytest.raises(KeyboardInterrupt):
-            main.bucle(video, detector, cliente, zonas, confirmador, CAMARA["id"])
+        aplicador = main.AplicadorEnSegundoPlano(cliente, hilos=1)
+        try:
+            with patch("app.main.time.sleep"), pytest.raises(KeyboardInterrupt):
+                main.bucle(video, detector, cliente, zonas, confirmador, CAMARA["id"], aplicador=aplicador)
+            limite = time.monotonic() + 5
+            while aplicador.pendientes() > 0 and time.monotonic() < limite:
+                time.sleep(0.01)
+            assert aplicador.pendientes() == 0, "el aplicador no drenó a tiempo"
+        finally:
+            aplicador.cerrar()
         return cliente
 
     def test_un_frame_perdido_no_cuenta_como_mesa_vacia(self, monkeypatch):
@@ -448,3 +463,162 @@ class TestMain:
         with patch("app.main.run", side_effect=RuntimeError("bug")):
             with pytest.raises(RuntimeError):
                 main.main()
+
+
+class TestAplicadorEnSegundoPlano:
+    """Garantías del aplicador de cambios (T26-183).
+
+    Es código concurrente: las garantías se prueban, no se afirman en un comentario.
+    """
+
+    def _cliente(self, estado="libre", demora=0.0):
+        cliente = MagicMock()
+        cliente.obtener_mesa.side_effect = lambda mesa_id: (
+            time.sleep(demora) or {"id": mesa_id, "numero": mesa_id, "estado": estado}
+        )
+        return cliente
+
+    def _esperar_vacio(self, aplicador, timeout=5):
+        limite = time.monotonic() + timeout
+        while aplicador.pendientes() > 0 and time.monotonic() < limite:
+            time.sleep(0.01)
+        return aplicador.pendientes() == 0
+
+    def test_aplica_el_cambio_encolado(self):
+        cliente = self._cliente()
+        aplicador = main.AplicadorEnSegundoPlano(cliente, hilos=2)
+        try:
+            aplicador.encolar({221: True})
+            assert self._esperar_vacio(aplicador)
+        finally:
+            aplicador.cerrar()
+
+        cliente.cambiar_estado.assert_called_once_with(221, "ocupada")
+
+    def test_encolar_no_bloquea_el_ciclo(self):
+        """El punto del ticket: la etapa 'cambios' tiene que dejar de costar segundos."""
+        cliente = self._cliente(demora=0.3)
+        aplicador = main.AplicadorEnSegundoPlano(cliente, hilos=4)
+        try:
+            inicio = time.monotonic()
+            aplicador.encolar({1: True, 2: True, 3: True, 4: True})
+            encolado = time.monotonic() - inicio
+            # Cuatro mesas a 0.3s cada una serían 1.2s en serie. Encolar tiene que
+            # ser inmediato; el margen es generoso para no depender del scheduler.
+            assert encolado < 0.1, f"encolar tardó {encolado:.3f}s"
+            assert self._esperar_vacio(aplicador)
+        finally:
+            aplicador.cerrar()
+
+    def test_las_mesas_distintas_se_aplican_en_paralelo(self):
+        cliente = self._cliente(demora=0.3)
+        aplicador = main.AplicadorEnSegundoPlano(cliente, hilos=4)
+        try:
+            inicio = time.monotonic()
+            aplicador.encolar({1: True, 2: True, 3: True, 4: True})
+            assert self._esperar_vacio(aplicador)
+            total = time.monotonic() - inicio
+        finally:
+            aplicador.cerrar()
+
+        # En serie serían ~1.2s; con 4 hilos, ~0.3s. Se afirma bien por debajo de
+        # la mitad para que el test distinga paralelo de serie sin ser frágil.
+        assert total < 0.7, f"las cuatro mesas tardaron {total:.3f}s, parece serie"
+
+    def test_una_misma_mesa_se_aplica_en_orden_y_nunca_en_paralelo(self):
+        """Entre mesas hay paralelismo; dentro de una mesa, orden estricto."""
+        concurrentes = []
+        en_curso = {"n": 0}
+        candado = threading.Lock()
+
+        def obtener(mesa_id):
+            with candado:
+                en_curso["n"] += 1
+                concurrentes.append(en_curso["n"])
+            time.sleep(0.05)
+            with candado:
+                en_curso["n"] -= 1
+            return {"id": mesa_id, "numero": mesa_id, "estado": "libre"}
+
+        cliente = MagicMock()
+        cliente.obtener_mesa.side_effect = obtener
+        aplicador = main.AplicadorEnSegundoPlano(cliente, hilos=4)
+        try:
+            for _ in range(6):
+                aplicador.encolar({221: True})
+            assert self._esperar_vacio(aplicador)
+        finally:
+            aplicador.cerrar()
+
+        assert max(concurrentes) == 1, f"la misma mesa se procesó en paralelo: {concurrentes}"
+        assert cliente.obtener_mesa.call_count == 6
+
+    def test_un_fallo_se_reporta_para_que_el_ciclo_revierta(self):
+        """No se pierde: el ciclo lo recoge y revierte la confirmación."""
+        cliente = MagicMock()
+        cliente.obtener_mesa.side_effect = ErrorBackend("timeout")
+        aplicador = main.AplicadorEnSegundoPlano(cliente, hilos=1)
+        try:
+            aplicador.encolar({221: True})
+            assert self._esperar_vacio(aplicador)
+            fallidas = aplicador.recoger_fallidas()
+        finally:
+            aplicador.cerrar()
+
+        assert fallidas == {221}
+
+    def test_las_fallidas_se_entregan_una_sola_vez(self):
+        cliente = MagicMock()
+        cliente.obtener_mesa.side_effect = ErrorBackend("timeout")
+        aplicador = main.AplicadorEnSegundoPlano(cliente, hilos=1)
+        try:
+            aplicador.encolar({221: True})
+            assert self._esperar_vacio(aplicador)
+            assert aplicador.recoger_fallidas() == {221}
+            # Segunda lectura vacía: si no, el ciclo revertiría dos veces la misma mesa.
+            assert aplicador.recoger_fallidas() == set()
+        finally:
+            aplicador.cerrar()
+
+    def test_un_403_se_relanza_en_el_hilo_del_ciclo(self):
+        """Antes de T26-183 un permiso insuficiente cortaba el proceso. Tiene que seguir
+        cortándolo aunque el trabajo se haya movido a un worker."""
+        cliente = MagicMock()
+        cliente.obtener_mesa.side_effect = CredencialesInvalidas("rol insuficiente")
+        aplicador = main.AplicadorEnSegundoPlano(cliente, hilos=1)
+        try:
+            aplicador.encolar({221: True})
+            assert self._esperar_vacio(aplicador)
+            with pytest.raises(CredencialesInvalidas):
+                aplicador.revisar_fatal()
+        finally:
+            aplicador.cerrar()
+
+    def test_desbordar_la_cola_de_una_mesa_no_pierde_el_cambio_en_silencio(self):
+        cliente = self._cliente(demora=0.4)
+        aplicador = main.AplicadorEnSegundoPlano(cliente, hilos=1, maximo_por_mesa=2)
+        try:
+            for _ in range(6):
+                aplicador.encolar({221: True})
+            fallidas = aplicador.recoger_fallidas()
+        finally:
+            aplicador.cerrar()
+
+        # Lo que no entró se reporta como fallo para que el ciclo lo reintente, en
+        # vez de acumularse sin techo o desaparecer.
+        assert fallidas == {221}
+
+    def test_un_error_inesperado_no_mata_al_worker(self):
+        """Si un worker muere, su mesa queda colgada para siempre."""
+        cliente = MagicMock()
+        cliente.obtener_mesa.side_effect = [RuntimeError("bug"), {"id": 9, "numero": 9, "estado": "libre"}]
+        aplicador = main.AplicadorEnSegundoPlano(cliente, hilos=1)
+        try:
+            aplicador.encolar({221: True})
+            assert self._esperar_vacio(aplicador)
+            aplicador.encolar({9: True})
+            assert self._esperar_vacio(aplicador)
+        finally:
+            aplicador.cerrar()
+
+        cliente.cambiar_estado.assert_called_once_with(9, "ocupada")

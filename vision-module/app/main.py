@@ -169,6 +169,56 @@ def avisar_zonas_fuera_del_frame(zonas, frame):
             )
 
 
+class CacheUmbrales:
+    """Mantiene CONFIRMACION_SEGUNDOS y OVERLAP_MINIMO al día contra GET /configuracion.
+
+    T26-183: esos dos parámetros dejaron de vivir en el .env para poder calibrarlos desde
+    la pantalla de configuración sin reiniciar el módulo. Guardar el último valor conocido
+    y refrescarlo cada CONFIGURACION_REFRESCO_ITERACIONES iteraciones —no en cada una— es
+    el punto medio del ticket: evita una llamada HTTP por frame por un dato que rara vez
+    cambia, sin obligar a reiniciar el proceso para que un ajuste tenga efecto.
+
+    Si la API no responde se mantiene el último valor bueno y se loguea en WARNING: un
+    backend caído en medio del loop no puede tumbar la detección, mismo criterio que
+    aplicar_cambio() ya usa para los cambios de estado.
+    """
+
+    def __init__(self, cliente, confirmacion_segundos, overlap_minimo, cada_iteraciones):
+        self.cliente = cliente
+        self.confirmacion_segundos = confirmacion_segundos
+        self.overlap_minimo = overlap_minimo
+        self.cada_iteraciones = cada_iteraciones
+        self._iteracion = 0
+
+    def actualizar(self):
+        """Se llama una vez por iteración del bucle; solo pega contra la API cada N."""
+        self._iteracion += 1
+        if self._iteracion % self.cada_iteraciones != 0:
+            return
+        try:
+            config_remota = self.cliente.obtener_configuracion()
+        except ErrorBackend as error:
+            logger.warning("No se pudo refrescar la configuración, se sigue con la última conocida: %s", error)
+            return
+
+        nuevo_confirmacion = config_remota["confirmacion_segundos"]
+        nuevo_overlap = config_remota["overlap_minimo"]
+        if nuevo_confirmacion != self.confirmacion_segundos:
+            logger.warning(
+                "CONFIRMACION_SEGUNDOS cambió de %s a %s: la detección en curso se ve afectada",
+                self.confirmacion_segundos,
+                nuevo_confirmacion,
+            )
+            self.confirmacion_segundos = nuevo_confirmacion
+        if nuevo_overlap != self.overlap_minimo:
+            logger.warning(
+                "OVERLAP_MINIMO cambió de %s a %s: la detección en curso se ve afectada",
+                self.overlap_minimo,
+                nuevo_overlap,
+            )
+            self.overlap_minimo = nuevo_overlap
+
+
 class PublicadorEnSegundoPlano:
     """Manda la detección actual al backend sin bloquear el ciclo.
 
@@ -287,12 +337,19 @@ def reconectar(video):
             time.sleep(config.RECONEXION_SEGUNDOS)
 
 
-def bucle(video, detector, cliente, zonas, confirmador, camara_id, publicador=None):
+def bucle(video, detector, cliente, zonas, confirmador, camara_id, publicador=None, umbrales=None):
     fallidos = 0
     primer_frame = True
     publicador = publicador if publicador is not None else PublicadorEnSegundoPlano()
     while True:
         inicio = time.monotonic()
+
+        # Umbrales de detección (T26-183): se refrescan antes de procesar el frame para
+        # que, si cambiaron, el resto del ciclo ya trabaje con el valor nuevo.
+        if umbrales is not None:
+            umbrales.actualizar()
+            confirmador.segundos = umbrales.confirmacion_segundos
+
         frame = video.read_frame()
 
         if frame is None:
@@ -324,10 +381,9 @@ def bucle(video, detector, cliente, zonas, confirmador, camara_id, publicador=No
         publicador.publicar(cliente, camara_id, detector, detecciones, frame)
         etapas["publicar"] = time.monotonic() - t
 
+        overlap_minimo = umbrales.overlap_minimo if umbrales is not None else config.OVERLAP_MINIMO
         t = time.monotonic()
-        ocupacion = zonas_mod.resolver_ocupacion(
-            zonas, detecciones, config.OVERLAP_MINIMO, config.ANCLAJE_OVERLAP
-        )
+        ocupacion = zonas_mod.resolver_ocupacion(zonas, detecciones, overlap_minimo, config.ANCLAJE_OVERLAP)
         etapas["ocupacion"] = time.monotonic() - t
 
         t = time.monotonic()
@@ -371,6 +427,26 @@ def esperar_proximo_frame(inicio):
         time.sleep(restante)
 
 
+def cargar_umbrales_iniciales(cliente):
+    """CacheUmbrales arrancado con lo que diga la API, o el default del .env si no responde.
+
+    Un backend caído justo al arrancar no tiene por qué impedir que el módulo procese: ya
+    es el criterio de aplicar_cambio() y CacheUmbrales.actualizar() durante el loop, así que
+    el arranque no debería ser más estricto.
+    """
+    try:
+        config_remota = cliente.obtener_configuracion()
+        confirmacion_segundos = config_remota["confirmacion_segundos"]
+        overlap_minimo = config_remota["overlap_minimo"]
+    except ErrorBackend as error:
+        logger.warning(
+            "No se pudo leer /configuracion al arrancar, se usan los valores del .env: %s", error
+        )
+        confirmacion_segundos = config.CONFIRMACION_SEGUNDOS
+        overlap_minimo = config.OVERLAP_MINIMO
+    return CacheUmbrales(cliente, confirmacion_segundos, overlap_minimo, config.CONFIGURACION_REFRESCO_ITERACIONES)
+
+
 def run():
     logger.info("Módulo de visión iniciado — sector piloto %s", config.SECTOR_ID)
     validar_configuracion()
@@ -384,6 +460,7 @@ def run():
     logger.info("Cámara %s (%s): %s", camara["id"], camara["nombre"], camara["rtsp_url"])
     zonas = cargar_zonas(cliente, camara, config.SECTOR_ID)
     fuente = resolver_fuente(camara)
+    umbrales = cargar_umbrales_iniciales(cliente)
 
     detector = Detector(
         config.YOLO_MODEL_PATH, config.YOLO_CONFIDENCE, config.YOLO_CLASSES, imgsz=config.YOLO_IMGSZ
@@ -396,12 +473,20 @@ def run():
         "Procesando %s cada %ss — overlap mínimo %.2f, confirmación a los %ss",
         rtsp_url.enmascarar(fuente),
         config.FRAME_INTERVAL_SECONDS,
-        config.OVERLAP_MINIMO,
-        config.CONFIRMACION_SEGUNDOS,
+        umbrales.overlap_minimo,
+        umbrales.confirmacion_segundos,
     )
 
     try:
-        bucle(video, detector, cliente, zonas, Confirmador(config.CONFIRMACION_SEGUNDOS), camara["id"])
+        bucle(
+            video,
+            detector,
+            cliente,
+            zonas,
+            Confirmador(umbrales.confirmacion_segundos),
+            camara["id"],
+            umbrales=umbrales,
+        )
     except KeyboardInterrupt:
         logger.info("Módulo de visión detenido")
     finally:

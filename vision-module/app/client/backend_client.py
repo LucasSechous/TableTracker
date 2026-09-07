@@ -101,6 +101,12 @@ class BackendClient:
         # GET /roi-mesa/ — solo los ROI activos de esa cámara.
         return self._request("GET", "/roi-mesa/", params={"camara_id": camara_id}).json()
 
+    def obtener_configuracion(self):
+        # GET /configuracion — fila singleton con, entre otros, los umbrales de
+        # detección (T26-183): confirmacion_segundos y overlap_minimo. No exige
+        # rol admin, a diferencia de /camaras y /roi-mesa.
+        return self._request("GET", "/configuracion").json()
+
     def listar_mesas(self, sector_id=None):
         # GET /mesas/ — solo las activas, para validar los mesa_id de los ROI.
         params = {} if sector_id is None else {"sector_id": sector_id}

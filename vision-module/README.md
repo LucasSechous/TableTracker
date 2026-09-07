@@ -106,8 +106,13 @@ tener presentes:
   fuente (webcam, `.mp4`, imagen) en lugar del stream de la cámara registrada, y
   el módulo lo avisa al arrancar. En producción va vacío.
 
-Para calibrar `OVERLAP_MINIMO` contra la cámara del local, correr con
-`LOG_LEVEL=DEBUG`: se loguea el overlap máximo de cada mesa en cada frame.
+`OVERLAP_MINIMO` y `CONFIRMACION_SEGUNDOS` ya **no** se calibran acá (T26-183):
+se editan desde la pantalla de configuración de admin y el módulo los relee de
+`GET /configuracion` cada `CONFIGURACION_REFRESCO_ITERACIONES` iteraciones del
+loop, sin reiniciar el proceso. Los valores del `.env` quedan solo como
+respaldo si la API no responde al arrancar. Con `LOG_LEVEL=DEBUG` se sigue
+logueando el overlap máximo de cada mesa en cada frame, útil para ver el efecto
+de un cambio.
 
 ## Pruebas
 

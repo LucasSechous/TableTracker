@@ -46,6 +46,22 @@ export interface Configuracion {
   // Minutos en pendiente_limpieza antes de marcar la mesa como atrasada (T26-173).
   // null = alerta apagada.
   minutos_limpieza_demorada?: number | null
+  // Umbrales de detección de vision-module (T26-183, RF-28). Nunca null: son NOT NULL
+  // con default en el backend desde que se creó la columna.
+  //
+  // confirmacion_segundos: cuánto tiene que sostenerse una observación antes de que se
+  // confirme el cambio de estado de una mesa. overlap_minimo: qué fracción de la persona
+  // detectada tiene que superponerse con la mesa para contarla como ocupada.
+  confirmacion_segundos: number
+  overlap_minimo: number
+}
+
+// Respuesta del PATCH cuando cambia alguno de los umbrales de detección: el backend
+// informa el valor anterior porque cambiarlos en caliente afecta a la detección en curso
+// sin que nadie lo vea venir, y no queda ningún otro registro de qué valía antes.
+export interface ConfiguracionActualizada extends Configuracion {
+  confirmacion_segundos_anterior?: number | null
+  overlap_minimo_anterior?: number | null
 }
 
 // Origen de un cambio de estado (T26-163). null en las filas anteriores al ticket: el dato

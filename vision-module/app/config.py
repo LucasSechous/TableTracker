@@ -79,6 +79,12 @@ CAMARA_PASSWORD = os.getenv("CAMARA_PASSWORD") or None
 
 # Ocupación: qué fracción de un bounding box tiene que caer dentro del ROI para
 # contar como una persona en esa mesa.
+#
+# Este valor y CONFIRMACION_SEGUNDOS (más abajo) son overrides de arranque nada más
+# (T26-183): en cuanto el pipeline arranca, main.CacheUmbrales los reemplaza por lo que
+# devuelva GET /configuracion y los va actualizando sin reiniciar el proceso. Quedan acá
+# por si la API no responde en el primer pedido —ver main.run()— y como referencia de
+# cuáles son los nombres que la pantalla de configuración terminó exponiendo.
 OVERLAP_MINIMO = float(os.getenv("OVERLAP_MINIMO", "0.30"))
 
 # Qué parte del bounding box se compara contra el ROI (T26-180):
@@ -93,6 +99,15 @@ ANCLAJE_OVERLAP = os.getenv("ANCLAJE_OVERLAP", "bbox_completo").strip()
 # Cuánto tiene que sostenerse una observación antes de confirmar el cambio de
 # estado. Evita que alguien que pasa caminando marque la mesa como ocupada.
 CONFIRMACION_SEGUNDOS = float(os.getenv("CONFIRMACION_SEGUNDOS", "6"))
+
+# Cada cuántas iteraciones del bucle principal se relee GET /configuracion para
+# actualizar CONFIRMACION_SEGUNDOS y OVERLAP_MINIMO (T26-183). Releerla en cada
+# iteración sumaría una llamada HTTP cada FRAME_INTERVAL_SECONDS por información que
+# rara vez cambia; hacerlo solo al arrancar obligaría a reiniciar el proceso para que
+# un ajuste tenga efecto, que es justo lo que este ticket vino a evitar. Con el default
+# de 2s de FRAME_INTERVAL_SECONDS, 15 iteraciones son ~30s de demora máxima entre
+# guardar un cambio en la pantalla de configuración y que la detección lo use.
+CONFIGURACION_REFRESCO_ITERACIONES = int(os.getenv("CONFIGURACION_REFRESCO_ITERACIONES", "15"))
 
 # Reconexión de la cámara: frames nulos seguidos que se toleran antes de cerrar
 # y reabrir el stream, y espera entre intentos de reapertura.

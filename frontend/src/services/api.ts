@@ -7,6 +7,7 @@ import type {
   Sector,
   HistorialEstado,
   Configuracion,
+  ConfiguracionActualizada,
   Camara,
   RoiMesa,
   PuntoRoi,
@@ -22,6 +23,7 @@ export type {
   Sector,
   HistorialEstado,
   Configuracion,
+  ConfiguracionActualizada,
   Camara,
   RoiMesa,
   PuntoRoi,
@@ -196,6 +198,9 @@ export const configuracionApi = {
   // Las horas van como "HH:MM" y el backend las parsea a time. Igual que
   // cantidad_mesas_referencia, una vez cargadas NO se pueden vaciar desde la API por el
   // exclude_none: habría que mandar null y el backend lo descarta (T26-171).
+  //
+  // La respuesta es ConfiguracionActualizada (T26-183, no Configuracion): si el PATCH tocó
+  // confirmacion_segundos u overlap_minimo, el backend agrega el valor previo de cada uno.
   actualizar: (datos: {
     ancho_salon?: number
     alto_salon?: number
@@ -203,7 +208,10 @@ export const configuracionApi = {
     cantidad_mesas_referencia?: number
     hora_apertura?: string
     hora_cierre?: string
-  }) => api.patch<Configuracion>("/configuracion", datos),
+    minutos_limpieza_demorada?: number
+    confirmacion_segundos?: number
+    overlap_minimo?: number
+  }) => api.patch<ConfiguracionActualizada>("/configuracion", datos),
 };
 
 export const camarasApi = {

@@ -289,6 +289,12 @@ export interface ConfiguracionResponse {
   hora_apertura: string | null;
   hora_cierre: string | null;
   minutos_limpieza_demorada: number | null;
+  // Umbrales de detección de vision-module (T26-183). Nunca null: NOT NULL con default.
+  confirmacion_segundos: number;
+  overlap_minimo: number;
+  // Solo presentes cuando el PATCH cambió el umbral correspondiente.
+  confirmacion_segundos_anterior?: number | null;
+  overlap_minimo_anterior?: number | null;
 }
 
 export async function obtenerConfiguracion(
@@ -311,6 +317,8 @@ export async function actualizarConfiguracion(
     hora_apertura?: string;
     hora_cierre?: string;
     minutos_limpieza_demorada?: number;
+    confirmacion_segundos?: number;
+    overlap_minimo?: number;
   }
 ): Promise<ConfiguracionResponse> {
   const res = await request.patch(`${BACKEND_URL}/configuracion`, { headers: authHeaders(token), data: datos });

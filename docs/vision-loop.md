@@ -34,7 +34,7 @@ de fallar más tarde con algo indirecto:
 | Condición | Si no se cumple |
 |---|---|
 | `BACKEND_EMAIL`, `BACKEND_PASSWORD` y `SECTOR_ID` presentes | `ConfiguracionInvalida` nombrando las que faltan |
-| `OVERLAP_MINIMO` dentro de (0, 1] | `ConfiguracionInvalida` — es una fracción, no un porcentaje |
+| `OVERLAP_MINIMO` del `.env` dentro de (0, 1] | `ConfiguracionInvalida` — es una fracción, no un porcentaje. Solo valida el respaldo local; el valor que manda la API se valida del lado del backend (T26-183) |
 | El sector tiene al menos una cámara activa | `ConfiguracionInvalida`: registrá una en `/camaras` |
 | Si tiene más de una, `CAMARA_ID` desempata | `ConfiguracionInvalida` listando las disponibles |
 | La cámara tiene al menos un ROI activo | `ConfiguracionInvalida`: dibujá uno en `/roi-mesa` |
@@ -61,7 +61,9 @@ Por cada ROI se calcula qué fracción del bounding box de cada persona cae dent
 overlap = área(bbox ∩ ROI) / área(bbox)
 ```
 
-Si alguna detección supera `OVERLAP_MINIMO`, la mesa se lee como ocupada **en ese frame**.
+Si alguna detección supera `OVERLAP_MINIMO`, la mesa se lee como ocupada **en ese frame**. Desde
+T26-183 este umbral no es una constante: lo mantiene `main.CacheUmbrales` actualizado contra
+`GET /configuracion` (ver más abajo, "Umbrales editables en caliente").
 
 **Por qué contra el área del bbox y no IoU.** Una persona y una mesa tienen tamaños muy distintos en
 el frame: alguien de pie ocupa una fracción del rectángulo de una mesa. El IoU divide por la unión,
@@ -89,7 +91,8 @@ oscilación llenaría `historial_estados` de basura y haría parpadear el tabler
 
 Por eso una observación tiene que repetirse durante `CONFIRMACION_SEGUNDOS` seguidos antes de valer
 como cambio. Si se corta antes, el reloj vuelve a cero y el estado confirmado no se toca. El default
-es **6 s**, dentro del rango de 5-8 s que pedía el ticket.
+es **6 s**, dentro del rango de 5-8 s que pedía el ticket originalmente — hoy es apenas el valor de
+arranque si la API no responde, editable desde la pantalla de configuración (T26-183).
 
 Tres detalles que no se deducen del enunciado:
 
@@ -171,6 +174,38 @@ filtrar el secreto.
   primer frame: no es fatal —el recorte contra el bbox ignora lo que sobra— pero casi siempre
   significa que el ROI se dibujó sobre un frame de otra resolución y está corrido.
 
+## Umbrales editables en caliente (T26-183)
+
+`OVERLAP_MINIMO` y `CONFIRMACION_SEGUNDOS` son los dos parámetros que más impactan la calidad de la
+detección, y son justo los que hay que calibrar contra cada salón: la altura de la cámara, el
+tamaño de las mesas y el flujo de gente cambian el número óptimo. Hasta este ticket vivían en el
+`.env` y ajustarlos exigía entrar a la máquina, editar el archivo y reiniciar el proceso.
+
+Ahora viven en `configuracion_general` (columnas `confirmacion_segundos` y `overlap_minimo`,
+`GET`/`PATCH /configuracion`), se editan desde la pantalla de configuración de admin y el módulo
+los lee de la API en vez del `.env`:
+
+- **`main.CacheUmbrales`** guarda el último valor conocido y lo refresca cada
+  `CONFIGURACION_REFRESCO_ITERACIONES` iteraciones del loop (15 por default, ~30 s con
+  `FRAME_INTERVAL_SECONDS=2`) — no en cada una. Preguntarle a la API en cada frame sumaría una
+  llamada HTTP cada `FRAME_INTERVAL_SECONDS` por un dato que rara vez cambia; hacerlo solo al
+  arrancar habría obligado a reiniciar el proceso para que un ajuste tenga efecto, que es
+  justamente lo que el ticket vino a evitar.
+- **Un backend caído no tumba la detección.** Si `GET /configuracion` falla, `CacheUmbrales`
+  mantiene el último valor bueno y loguea un `WARNING` — mismo criterio que `aplicar_cambio()` ya
+  usa para los cambios de estado. Al arrancar, si la API no responde, `cargar_umbrales_iniciales()`
+  cae a los valores del `.env`.
+  Cuando un valor cambia efectivamente (al arrancar o durante el loop), sale un `WARNING` con el
+  valor anterior y el nuevo: cambiar un umbral en caliente altera la detección en curso sin que
+  nadie lo vea venir, así que queda un rastro en el log además del que deja el backend en la
+  respuesta del `PATCH`.
+- `Confirmador.segundos` se sincroniza con el valor cacheado en cada iteración del `bucle()`, así
+  que un cambio de `CONFIRMACION_SEGUNDOS` aplica al instante — no hace falta un `Confirmador`
+  nuevo.
+
+Esto cierra, para estos dos parámetros nada más, el mismo problema que sigue abierto para los
+ROI (ver "Fuera de alcance" más abajo): los ROI todavía se leen una sola vez al arrancar.
+
 ## Configuración
 
 Todas las variables están documentadas en
@@ -182,8 +217,9 @@ loop:
 | `SECTOR_ID` | — | Sector piloto. Obligatoria |
 | `CAMARA_ID` | — | Solo si el sector tiene más de una cámara activa |
 | `CAMARA_PASSWORD` | — | Contraseña del stream; obligatoria si la cámara tiene credenciales |
-| `OVERLAP_MINIMO` | `0.30` | Fracción del bbox dentro del ROI para contar la persona |
-| `CONFIRMACION_SEGUNDOS` | `6` | Tiempo sostenido antes de confirmar un cambio |
+| `OVERLAP_MINIMO` | `0.30` | Respaldo si `GET /configuracion` no responde al arrancar (T26-183); en operación normal manda el valor de la API |
+| `CONFIRMACION_SEGUNDOS` | `6` | Mismo respaldo, para el tiempo sostenido antes de confirmar un cambio |
+| `CONFIGURACION_REFRESCO_ITERACIONES` | `15` | Cada cuántas iteraciones del loop se relee `/configuracion` |
 | `FRAME_INTERVAL_SECONDS` | `2` | Cadencia de análisis |
 | `FRAMES_FALLIDOS_MAXIMOS` | `5` | Frames nulos tolerados antes de reconectar |
 | `RECONEXION_SEGUNDOS` | `5` | Espera entre intentos de reapertura |
@@ -197,9 +233,10 @@ porque permite probar el pipeline sin una cámara IP a mano.
 
 ## Verificación
 
-**142 pruebas unitarias en verde** (90 previas más las de este ticket), incluyendo la geometría del
-overlap contra casos calculados a mano: polígono cóncavo, bbox degenerado, ROI que no toca el bbox,
-ROI que lo contiene entero.
+**188 pruebas unitarias en verde** (incluidas las de T26-183: `CacheUmbrales`, la caída a los valores
+del `.env` cuando la API no responde al arrancar, y el refresco cada N iteraciones dentro del
+`bucle()`), más la geometría del overlap contra casos calculados a mano: polígono cóncavo, bbox
+degenerado, ROI que no toca el bbox, ROI que lo contiene entero.
 
 **Prueba de punta a punta** con el backend levantado sobre SQLite —sin tocar Supabase— y un frame
 real con dos personas, con los ROI diseñados contra los bounding boxes que YOLO devuelve
@@ -224,7 +261,9 @@ detecciones se procesan en memoria y se descartan; lo único que se escribe es e
 - **Los ROI se leen una sola vez, al arrancar.** Dibujar, mover o dar de baja un ROI en la UI no
   tiene efecto hasta reiniciar el proceso. `Confirmador.olvidar()` está escrito para esa recarga en
   caliente y hoy no lo llama nadie fuera de su prueba. Vale un ticket para releer periódicamente
-  `/roi-mesa` y aplicar los cambios sin reiniciar.
+  `/roi-mesa` y aplicar los cambios sin reiniciar — T26-183 resolvió exactamente este problema para
+  `OVERLAP_MINIMO` y `CONFIRMACION_SEGUNDOS` con `main.CacheUmbrales`; el mismo patrón (cache +
+  refresco cada N iteraciones + tolerancia a que la API no responda) es reutilizable acá.
 - **El usuario del módulo tiene que ser `admin`.** `GET /camaras/` y `GET /roi-mesa/` son solo
   `admin` en todos los verbos ([roles-permisos.md](roles-permisos.md)), así que el proceso corre con
   el rol de mayor privilegio del sistema para hacer dos lecturas y un `PATCH` de estado. Es más

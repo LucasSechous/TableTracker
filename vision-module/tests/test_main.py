@@ -437,6 +437,216 @@ class TestBucle:
         cliente.cambiar_estado.assert_called_once_with(1, "ocupada")
 
 
+class TestCacheUmbrales:
+    # T26-183: los dos parámetros que antes vivían en el .env de vision-module.
+
+    def test_no_llama_a_la_api_antes_de_la_iteracion_n(self):
+        cliente = MagicMock()
+        umbrales = main.CacheUmbrales(cliente, confirmacion_segundos=6, overlap_minimo=0.3, cada_iteraciones=3)
+
+        umbrales.actualizar()
+        umbrales.actualizar()
+
+        cliente.obtener_configuracion.assert_not_called()
+
+    def test_llama_a_la_api_en_la_iteracion_n(self):
+        cliente = MagicMock()
+        cliente.obtener_configuracion.return_value = {"confirmacion_segundos": 6, "overlap_minimo": 0.3}
+        umbrales = main.CacheUmbrales(cliente, confirmacion_segundos=6, overlap_minimo=0.3, cada_iteraciones=3)
+
+        for _ in range(3):
+            umbrales.actualizar()
+
+        cliente.obtener_configuracion.assert_called_once()
+
+    def test_actualiza_los_valores_con_lo_que_devuelve_la_api(self):
+        cliente = MagicMock()
+        cliente.obtener_configuracion.return_value = {"confirmacion_segundos": 10, "overlap_minimo": 0.5}
+        umbrales = main.CacheUmbrales(cliente, confirmacion_segundos=6, overlap_minimo=0.3, cada_iteraciones=1)
+
+        umbrales.actualizar()
+
+        assert umbrales.confirmacion_segundos == 10
+        assert umbrales.overlap_minimo == 0.5
+
+    def test_avisa_en_el_log_cuando_un_valor_cambia(self, caplog):
+        cliente = MagicMock()
+        cliente.obtener_configuracion.return_value = {"confirmacion_segundos": 10, "overlap_minimo": 0.3}
+        umbrales = main.CacheUmbrales(cliente, confirmacion_segundos=6, overlap_minimo=0.3, cada_iteraciones=1)
+
+        with caplog.at_level("WARNING"):
+            umbrales.actualizar()
+
+        assert "CONFIRMACION_SEGUNDOS cambió de 6 a 10" in caplog.text
+        assert "OVERLAP_MINIMO" not in caplog.text
+
+    def test_no_avisa_si_no_cambio_nada(self, caplog):
+        cliente = MagicMock()
+        cliente.obtener_configuracion.return_value = {"confirmacion_segundos": 6, "overlap_minimo": 0.3}
+        umbrales = main.CacheUmbrales(cliente, confirmacion_segundos=6, overlap_minimo=0.3, cada_iteraciones=1)
+
+        with caplog.at_level("WARNING"):
+            umbrales.actualizar()
+
+        assert caplog.text == ""
+
+    def test_un_fallo_de_la_api_mantiene_el_ultimo_valor_conocido(self, caplog):
+        cliente = MagicMock()
+        cliente.obtener_configuracion.side_effect = ErrorBackend("backend caído")
+        umbrales = main.CacheUmbrales(cliente, confirmacion_segundos=6, overlap_minimo=0.3, cada_iteraciones=1)
+
+        with caplog.at_level("WARNING"):
+            umbrales.actualizar()
+
+        assert umbrales.confirmacion_segundos == 6
+        assert umbrales.overlap_minimo == 0.3
+        assert "No se pudo refrescar la configuración" in caplog.text
+
+
+class TestCargarUmbralesIniciales:
+    def test_usa_lo_que_devuelve_la_api(self):
+        cliente = MagicMock()
+        cliente.obtener_configuracion.return_value = {"confirmacion_segundos": 10, "overlap_minimo": 0.5}
+
+        umbrales = main.cargar_umbrales_iniciales(cliente)
+
+        assert umbrales.confirmacion_segundos == 10
+        assert umbrales.overlap_minimo == 0.5
+
+    def test_cae_al_env_si_la_api_no_responde_al_arrancar(self, monkeypatch, caplog):
+        monkeypatch.setattr(config, "CONFIRMACION_SEGUNDOS", 6)
+        monkeypatch.setattr(config, "OVERLAP_MINIMO", 0.3)
+        cliente = MagicMock()
+        cliente.obtener_configuracion.side_effect = ErrorBackend("backend caído")
+
+        with caplog.at_level("WARNING"):
+            umbrales = main.cargar_umbrales_iniciales(cliente)
+
+        assert umbrales.confirmacion_segundos == 6
+        assert umbrales.overlap_minimo == 0.3
+        assert "se usan los valores del .env" in caplog.text
+
+    def test_usa_la_cadencia_de_refresco_configurada(self, monkeypatch):
+        monkeypatch.setattr(config, "CONFIGURACION_REFRESCO_ITERACIONES", 7)
+        cliente = MagicMock()
+        cliente.obtener_configuracion.return_value = {"confirmacion_segundos": 6, "overlap_minimo": 0.3}
+
+        umbrales = main.cargar_umbrales_iniciales(cliente)
+
+        assert umbrales.cada_iteraciones == 7
+
+
+class TestBucleConUmbrales:
+    def _video(self, frames):
+        video = MagicMock()
+        video.read_frame.side_effect = list(frames) + [KeyboardInterrupt]
+        return video
+
+    def test_el_bucle_refresca_los_umbrales_en_cada_iteracion(self, monkeypatch):
+        from app.mapping.zonas import Zona
+
+        monkeypatch.setattr(config, "OVERLAP_MINIMO", 0.3)
+        cliente = cliente_falso()
+        confirmador = MagicMock()
+        confirmador.actualizar.return_value = {}
+        umbrales = MagicMock()
+        umbrales.confirmacion_segundos = 6
+        umbrales.overlap_minimo = 0.3
+        frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+
+        with patch("app.main.time.sleep"), pytest.raises(KeyboardInterrupt):
+            main.bucle(
+                self._video([frame]),
+                MagicMock(detect=MagicMock(return_value=[])),
+                cliente,
+                [Zona(1, [(0, 0), (10, 0), (10, 10)])],
+                confirmador,
+                CAMARA["id"],
+                umbrales=umbrales,
+            )
+
+        # Una vez por el frame real y otra en la iteración que corta con KeyboardInterrupt:
+        # umbrales.actualizar() se llama al principio de CADA vuelta del bucle, antes de leer
+        # el frame, así que la cuenta incluye la iteración que aborta.
+        assert umbrales.actualizar.call_count == 2
+
+    def test_el_bucle_usa_el_overlap_minimo_de_los_umbrales_y_no_el_del_env(self, monkeypatch):
+        from app.mapping.zonas import Zona
+
+        # OVERLAP_MINIMO del .env queda alto a propósito: si el bucle lo usara en vez del
+        # de umbrales, la zona nunca se marcaría ocupada y el test lo detectaría.
+        monkeypatch.setattr(config, "OVERLAP_MINIMO", 0.99)
+        cliente = cliente_falso()
+        confirmador = MagicMock()
+        confirmador.actualizar.return_value = {}
+        umbrales = MagicMock()
+        umbrales.confirmacion_segundos = 6
+        umbrales.overlap_minimo = 0.1
+        # Detección que cubre la zona entera: con overlap_minimo=0.1 cuenta como ocupada.
+        deteccion = MagicMock(bbox=(0, 0, 10, 10))
+        frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+
+        with patch("app.main.time.sleep"), pytest.raises(KeyboardInterrupt):
+            main.bucle(
+                self._video([frame]),
+                MagicMock(detect=MagicMock(return_value=[deteccion])),
+                cliente,
+                [Zona(1, [(0, 0), (10, 0), (10, 10)])],
+                confirmador,
+                CAMARA["id"],
+                umbrales=umbrales,
+            )
+
+        assert confirmador.actualizar.call_args.args[0] == {1: True}
+
+    def test_el_bucle_sincroniza_confirmador_segundos_con_umbrales(self, monkeypatch):
+        from app.mapping.zonas import Zona
+
+        monkeypatch.setattr(config, "OVERLAP_MINIMO", 0.3)
+        cliente = cliente_falso()
+        confirmador = Confirmador(segundos=6)
+        umbrales = MagicMock()
+        umbrales.confirmacion_segundos = 99
+        umbrales.overlap_minimo = 0.3
+        frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+
+        with patch("app.main.time.sleep"), pytest.raises(KeyboardInterrupt):
+            main.bucle(
+                self._video([frame]),
+                MagicMock(detect=MagicMock(return_value=[])),
+                cliente,
+                [Zona(1, [(0, 0), (10, 0), (10, 10)])],
+                confirmador,
+                CAMARA["id"],
+                umbrales=umbrales,
+            )
+
+        assert confirmador.segundos == 99
+
+    def test_sin_umbrales_sigue_usando_el_env_como_antes(self, monkeypatch):
+        # Compatibilidad: bucle() se puede seguir llamando sin umbrales (default None),
+        # tal como lo hacen los tests preexistentes de TestBucle.
+        from app.mapping.zonas import Zona
+
+        monkeypatch.setattr(config, "OVERLAP_MINIMO", 0.3)
+        cliente = cliente_falso()
+        confirmador = MagicMock()
+        confirmador.actualizar.return_value = {}
+        frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+
+        with patch("app.main.time.sleep"), pytest.raises(KeyboardInterrupt):
+            main.bucle(
+                self._video([frame]),
+                MagicMock(detect=MagicMock(return_value=[])),
+                cliente,
+                [Zona(1, [(0, 0), (10, 0), (10, 10)])],
+                confirmador,
+                CAMARA["id"],
+            )
+
+        assert confirmador.actualizar.call_args.args[0] == {1: False}
+
+
 class TestMain:
     # Todo fallo de arranque tiene que salir por SystemExit con el mismo mensaje
     # entendible: el operador que levanta el módulo lee la última línea de la

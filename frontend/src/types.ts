@@ -185,6 +185,20 @@ export interface RotacionMesa {
   rotaciones: number
 }
 
+// Fila de GET/PATCH /usuarios/{id} (T26-175): gestión de usuarios desde la app.
+//
+// es_cuenta_servicio marca la cuenta de vision-module (por email, no por rol: hoy esa
+// cuenta puede tener rol "mozo" — ver docs/vision-loop.md) para que la pantalla avise
+// antes de desactivarla; el backend igual la protege aunque la UI no mostrara el aviso.
+export interface UsuarioAdmin {
+  id: number
+  nombre: string
+  email: string
+  rol: string
+  activo: boolean
+  es_cuenta_servicio: boolean
+}
+
 // Un estado posible de mesa, tal como lo lista GET /estados/ (T26-157, RF-29).
 //
 // `valor` es la clave del enum EstadoMesa del backend (libre, ocupada,

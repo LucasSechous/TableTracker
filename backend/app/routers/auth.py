@@ -93,7 +93,11 @@ def get_usuario_actual(
     except JWTError:
         raise credenciales_invalidas
     usuario = db.query(User).filter(User.email == email).first()
-    if usuario is None:
+    # Se revalida activo en cada request (no solo en el login) para que dar de baja a
+    # alguien (T26-175) corte el acceso al toque, incluido un token ya emitido que
+    # todavía no venció — si solo se chequeara en /login, un usuario desactivado a
+    # mitad de sesión podría seguir usando la API hasta que el JWT expirara solo.
+    if usuario is None or not usuario.activo:
         raise credenciales_invalidas
     return usuario
 
@@ -159,6 +163,13 @@ def login(datos: UserLogin, request: Request, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas",
+        )
+    # No cuenta como intento fallido para el rate limit: la contraseña era correcta,
+    # lo que falla es la baja lógica (T26-175), no una adivinanza de credenciales.
+    if not usuario.activo:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="El usuario está inactivo. Contactá a un administrador.",
         )
     token = crear_token({"sub": usuario.email, "rol": usuario.rol})
     return {"access_token": token, "token_type": "bearer"}

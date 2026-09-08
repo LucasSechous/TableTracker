@@ -46,6 +46,8 @@ un `String` libre) — ver "Fuera de alcance" más abajo.
 | * | resto de `/camaras/*` | `admin` | No existía (RF-30, RF-31) |
 | GET | `/roi-mesa/` | `admin`, `vision_module` | No existía (RF-12) |
 | * | resto de `/roi-mesa/*` | `admin` | No existía (RF-12) |
+| GET | `/usuarios/` | `admin` | No existía (T26-175) |
+| PATCH | `/usuarios/{id}` | `admin` | No existía (T26-175) |
 
 ## Criterios usados donde el ticket no daba un ejemplo directo
 
@@ -101,16 +103,18 @@ suite.
 - **Frontend sin gating por rol**: `DashboardPage` muestra "Editar disposición" (crear/mover
   sectores y mesas) a cualquier usuario logueado, sin ocultar la acción a roles que el backend
   ahora rechaza con 403 (ej. un `mozo` ve el botón y recién al hacer la request recibe el error).
-  No hay endpoint de gestión de usuarios en la UI hoy, así que este problema es exclusivo de la
-  edición de layout.
+  `UsuariosPage` (T26-175) sí gatea por rol con `AdminRoute`, igual que `/camaras` y
+  `/calibracion-roi`; este hallazgo queda acotado a la edición de layout del salón.
 - **`User.rol` sin validación**: es un `String` libre, sin `enum` ni `CHECK` en la base. Un typo
   al crear un usuario (`"admim"`) no falla en el alta — el usuario queda autenticado pero sin
   poder pasar ningún `requiere_rol(...)`, y el error solo aparece como 403 al primer intento de
   uso, no como un mensaje claro al crearlo.
-- **No hay endpoint para gestión de usuarios más allá del alta**: no existe listado, edición de
-  rol ni baja de usuarios. El Capítulo 2 (bitácora de desarrollo) documenta `PUT /auth/users/{id}`
-  y `PATCH /auth/users/{id}/deactivate` como si existieran y RF-02/RF-03 como "✓ Completado" —
-  ninguno de los dos endpoints está en el código actual. Vale la pena abrir un ticket aparte para
-  esa gestión de usuarios y corregir la documentación de la tesis.
+- ~~**No hay endpoint para gestión de usuarios más allá del alta**~~ Lo resolvió T26-175:
+  `GET /usuarios/` y `PATCH /usuarios/{id}` (rol y baja lógica vía `activo`), los dos
+  `admin`-only. El Capítulo 2 (bitácora de desarrollo) documenta `PUT /auth/users/{id}` y
+  `PATCH /auth/users/{id}/deactivate` como si existieran desde antes y RF-02/RF-03 como "✓
+  Completado" — esos dos paths puntuales siguen sin existir (la ruta real quedó bajo
+  `/usuarios/`, no `/auth/users/`), así que la documentación de la tesis todavía necesita la
+  corrección aparte que este párrafo ya pedía.
 - **RLS de Supabase, CORS, bug del interceptor Axios**: mencionados en el epic T26-113 pero
   cubiertos por otros tickets, no por este.

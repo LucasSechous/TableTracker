@@ -84,3 +84,32 @@ def test_token_invalido_da_401(client):
 
 def test_sin_header_da_401(client):
     assert client.get("/camaras/").status_code == 401
+
+
+# --------------------------------------------------------- baja lógica (T26-175)
+
+def test_login_de_usuario_inactivo_da_401(client, db):
+    email, password = _crear_admin_directo(email="inactivo@tabletracker-test.com")
+    usuario = db.query(User).filter(User.email == email).first()
+    usuario.activo = False
+    db.commit()
+
+    respuesta = client.post("/auth/login", json={"email": email, "password": password})
+    assert respuesta.status_code == 401
+
+
+def test_desactivar_a_alguien_corta_el_acceso_de_un_token_ya_emitido(client, db):
+    """No solo /auth/login rechaza a un inactivo: un token sacado ANTES de la baja
+    también deja de servir en el próximo pedido, porque get_usuario_actual revalida
+    `activo` en cada request (T26-175) — si no, la baja lógica no revocaría nada
+    hasta que ese JWT venciera solo."""
+    email, password = _crear_admin_directo(email="a-desactivar@tabletracker-test.com")
+    token = client.post("/auth/login", json={"email": email, "password": password}).json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    assert client.get("/auth/me", headers=headers).status_code == 200
+
+    usuario = db.query(User).filter(User.email == email).first()
+    usuario.activo = False
+    db.commit()
+
+    assert client.get("/auth/me", headers=headers).status_code == 401

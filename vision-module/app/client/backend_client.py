@@ -8,6 +8,8 @@
 # el servicio lo vería expirar; acá el 401 se resuelve reloqueándose una vez y
 # reintentando el pedido, de forma transparente para el pipeline.
 
+import threading
+
 import requests
 
 from app.utils.logger import get_logger
@@ -36,6 +38,13 @@ class BackendClient:
         self.timeout = timeout
         self.token = None
         self.sesion = requests.Session()
+        # Desde T26-183 el cliente se usa desde varios hilos a la vez (el aplicador
+        # de cambios en segundo plano). Lo único que no tolera concurrencia es la
+        # renovación del token: sin este candado, N hilos que reciben 401 al mismo
+        # tiempo disparan N logins, y el backend limita los intentos a 5 por minuto
+        # por IP — nos bloquearíamos solos justo cuando el token vence. El resto de
+        # requests.Session sí es seguro de compartir (el pool de urllib3 lo es).
+        self._candado_login = threading.Lock()
 
     def _headers(self):
         return {"Authorization": f"Bearer {self.token}"} if self.token else {}
@@ -70,8 +79,7 @@ class BackendClient:
         # intento vuelve a dar 401 el problema es otro y hay que verlo.
         respuesta = self._enviar(metodo, ruta, **kwargs)
         if respuesta.status_code == 401:
-            logger.info("Token vencido, renovando")
-            self.login()
+            self._renovar_token()
             respuesta = self._enviar(metodo, ruta, **kwargs)
 
         if respuesta.status_code == 403:
@@ -82,6 +90,21 @@ class BackendClient:
         if not respuesta.ok:
             raise ErrorBackend(f"{metodo} {ruta} devolvió {respuesta.status_code}: {_detalle(respuesta)}")
         return respuesta
+
+    def _renovar_token(self):
+        """Relogin serializado: un solo hilo pide token nuevo y el resto lo aprovecha.
+
+        El doble chequeo es lo que evita la avalancha: cuando varios hilos chocan con
+        el mismo token vencido, el primero renueva y los que entran después ven que el
+        token ya cambió y salen sin volver a loguearse.
+        """
+        token_vencido = self.token
+        with self._candado_login:
+            if self.token != token_vencido:
+                # Otro hilo ya renovó mientras esperábamos el candado.
+                return
+            logger.info("Token vencido, renovando")
+            self.login()
 
     def _enviar(self, metodo, ruta, **kwargs):
         try:

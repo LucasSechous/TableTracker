@@ -10,6 +10,7 @@
 
 import threading
 import time
+from collections import deque
 from datetime import datetime, timezone
 
 from app import config
@@ -299,6 +300,11 @@ def aplicar_cambio(cliente, confirmador, mesa_id, hay_gente):
     El estado actual se relee justo antes: entre dos cambios de una misma mesa
     pasan segundos en los que un mozo o recepción pudieron tocarla, y la
     política se decide sobre el estado real, no sobre uno cacheado.
+
+    Desde T26-183 esto NO corre en el hilo del ciclo sino en un worker de
+    AplicadorEnSegundoPlano. `confirmador` se sigue aceptando para no romper a
+    quien la llame directo, pero el aplicador pasa None y recoge los fallos por
+    su cuenta: Confirmador no es thread-safe (ver la clase para el detalle).
     """
     try:
         mesa = cliente.obtener_mesa(mesa_id)
@@ -310,7 +316,8 @@ def aplicar_cambio(cliente, confirmador, mesa_id, hay_gente):
                 "hay gente" if hay_gente else "vacía",
                 mesa["estado"],
             )
-            return
+            # No-op deliberado, no un fallo: no hay nada que reintentar.
+            return True
         cliente.cambiar_estado(mesa_id, objetivo)
         logger.info("Mesa nº %s: %s → %s", mesa["numero"], mesa["estado"], objetivo)
     except CredencialesInvalidas:
@@ -320,8 +327,157 @@ def aplicar_cambio(cliente, confirmador, mesa_id, hay_gente):
         # Se olvida la confirmación para que el próximo frame la vuelva a
         # confirmar y reintente; si no, la mesa quedaría desincronizada hasta
         # que la ocupación cambiara de nuevo.
-        confirmador.revertir(mesa_id)
+        if confirmador is not None:
+            confirmador.revertir(mesa_id)
         logger.error("No se pudo actualizar la mesa %s, se reintenta: %s", mesa_id, error)
+        return False
+    return True
+
+
+class AplicadorEnSegundoPlano:
+    """Aplica los cambios de estado fuera del hilo del ciclo, sin perder ninguno (T26-183).
+
+    El problema medido: aplicar_cambio() hace dos llamadas sincrónicas al backend
+    (GET del estado real + PATCH) y cuesta ~1.3s por mesa contra la base remota. En
+    el ciclo eso se acumula —tres mesas juntas dieron 4.4s contra un presupuesto de
+    2s— y cuando se pasa, esperar_proximo_frame() deja de dormir: la detección
+    entera se degrada justo en la ráfaga de apertura del servicio, que es cuando
+    más importa.
+
+    Por qué NO se copia PublicadorEnSegundoPlano: aquel descarta el envío si el
+    anterior sigue en curso, y está bien, porque publicar una foto vieja para una
+    vista en vivo no sirve. Un cambio de estado es lo contrario: es el producto del
+    sistema, no se puede perder ni aplicar fuera de orden.
+
+    Garantías:
+
+    * Nada se descarta. Un cambio que no se pudo aplicar vuelve como fallo y el
+      ciclo revierte su confirmación para que el próximo frame lo reintente.
+    * Orden por mesa. Cada mesa tiene su propia cola FIFO y nunca la procesan dos
+      workers a la vez, así que sus cambios se aplican en el orden en que se
+      confirmaron. Entre mesas distintas no hay orden que preservar: son
+      independientes, y ahí está el paralelismo que corta el tiempo de la ráfaga.
+    * Acotado. Cada cola tiene tope; si se desborda, el cambio se reporta como
+      fallo en vez de crecer sin límite.
+
+    Los fallos NO se revierten desde el worker: Confirmador muta dos diccionarios
+    sin candado y está pensado para un solo hilo. El worker los deja anotados y el
+    ciclo los recoge con `recoger_fallidas()`, así toda la mutación del confirmador
+    sigue ocurriendo en el mismo hilo de siempre.
+    """
+
+    def __init__(self, cliente, hilos=None, maximo_por_mesa=None):
+        self._cliente = cliente
+        self._hilos = hilos if hilos is not None else config.APLICADOR_HILOS
+        self._maximo_por_mesa = (
+            maximo_por_mesa if maximo_por_mesa is not None else config.APLICADOR_MAXIMO_POR_MESA
+        )
+        # mesa_id -> deque de valores confirmados pendientes de aplicar, en orden.
+        self._colas = {}
+        # Mesas con trabajo pendiente que ningún worker tomó todavía. Que una mesa
+        # esté acá o en manos de un worker (y en ningún caso en los dos lugares) es
+        # lo que garantiza que no se procese dos veces en paralelo.
+        self._listas = deque()
+        self._fallidas = set()
+        # Un problema de permisos no se arregla reintentando, y antes de T26-183
+        # cortaba el proceso porque aplicar_cambio corría en el hilo principal.
+        # Desde un worker, relanzar solo mataría ese hilo: se guarda acá y el ciclo
+        # la vuelve a levantar, conservando el comportamiento de siempre.
+        self._fatal = None
+        self._condicion = threading.Condition()
+        self._cerrando = False
+        self._workers = [
+            threading.Thread(target=self._trabajar, name=f"aplicador-{i}", daemon=True)
+            for i in range(self._hilos)
+        ]
+        for worker in self._workers:
+            worker.start()
+
+    def encolar(self, cambios):
+        """Registra los cambios confirmados de un frame. No bloquea."""
+        if not cambios:
+            return
+        with self._condicion:
+            for mesa_id, hay_gente in cambios.items():
+                cola = self._colas.setdefault(mesa_id, deque())
+                if len(cola) >= self._maximo_por_mesa:
+                    # El backend viene tan lento que la mesa acumuló más cambios de
+                    # los que tiene sentido guardar. Se reporta como fallo para que
+                    # el ciclo revierta y reintente, en vez de crecer sin techo.
+                    logger.warning(
+                        "La mesa %s acumuló %d cambios sin aplicar: se descarta el último y se reintentará",
+                        mesa_id,
+                        len(cola),
+                    )
+                    self._fallidas.add(mesa_id)
+                    continue
+                cola.append(hay_gente)
+                if len(cola) == 1 and mesa_id not in self._listas:
+                    self._listas.append(mesa_id)
+            self._condicion.notify_all()
+
+    def recoger_fallidas(self):
+        """Mesas cuyo cambio no se pudo aplicar. Las devuelve una sola vez."""
+        with self._condicion:
+            fallidas, self._fallidas = self._fallidas, set()
+        return fallidas
+
+    def revisar_fatal(self):
+        """Relanza en el hilo del ciclo un error que no tiene sentido reintentar."""
+        with self._condicion:
+            fatal = self._fatal
+        if fatal is not None:
+            raise fatal
+
+    def pendientes(self):
+        with self._condicion:
+            return sum(len(cola) for cola in self._colas.values())
+
+    def _trabajar(self):
+        while True:
+            with self._condicion:
+                while not self._listas and not self._cerrando:
+                    self._condicion.wait()
+                if self._cerrando and not self._listas:
+                    return
+                mesa_id = self._listas.popleft()
+                # Se lee sin sacar: si el cambio falla igual hay que quitarlo (lo
+                # reintenta el ciclo vía revertir), pero mientras se aplica la mesa
+                # no puede volver a _listas y por eso nadie más la toma.
+                hay_gente = self._colas[mesa_id][0]
+
+            try:
+                aplicado = aplicar_cambio(self._cliente, None, mesa_id, hay_gente)
+            except CredencialesInvalidas as error:
+                # Reintentar un 403 no lo arregla. Se guarda para que el ciclo corte
+                # el proceso, igual que hacía antes de mover esto a segundo plano.
+                with self._condicion:
+                    self._fatal = error
+                aplicado = False
+            except Exception as error:
+                # Un worker que muere deja su mesa colgada para siempre. Cualquier
+                # error inesperado se trata como fallo reintentable.
+                logger.exception("Error inesperado aplicando la mesa %s: %s", mesa_id, error)
+                aplicado = False
+
+            with self._condicion:
+                self._colas[mesa_id].popleft()
+                if not aplicado:
+                    self._fallidas.add(mesa_id)
+                if self._colas[mesa_id]:
+                    self._listas.append(mesa_id)
+                else:
+                    del self._colas[mesa_id]
+                self._condicion.notify_all()
+
+    def cerrar(self, timeout=5):
+        """Corta los workers. Lo pendiente que no llegue a aplicarse se pierde a propósito:
+        al apagar el módulo, un cambio viejo escrito tarde es peor que no escribirlo."""
+        with self._condicion:
+            self._cerrando = True
+            self._condicion.notify_all()
+        for worker in self._workers:
+            worker.join(timeout=timeout)
 
 
 def reconectar(video):
@@ -337,10 +493,23 @@ def reconectar(video):
             time.sleep(config.RECONEXION_SEGUNDOS)
 
 
-def bucle(video, detector, cliente, zonas, confirmador, camara_id, publicador=None, umbrales=None):
+def bucle(video, detector, cliente, zonas, confirmador, camara_id, publicador=None, aplicador=None):
+    publicador = publicador if publicador is not None else PublicadorEnSegundoPlano()
+    # Si lo creamos nosotros, también lo cerramos: al salir por Ctrl+C conviene darle
+    # unos segundos a los cambios en vuelo en vez de que los workers mueran de golpe
+    # con el intérprete. Un aplicador inyectado (los tests) lo cierra quien lo pasó.
+    aplicador_propio = aplicador is None
+    aplicador = aplicador if aplicador is not None else AplicadorEnSegundoPlano(cliente)
+    try:
+        _ciclar(video, detector, cliente, zonas, confirmador, camara_id, publicador, aplicador)
+    finally:
+        if aplicador_propio:
+            aplicador.cerrar()
+
+
+def _ciclar(video, detector, cliente, zonas, confirmador, camara_id, publicador, aplicador):
     fallidos = 0
     primer_frame = True
-    publicador = publicador if publicador is not None else PublicadorEnSegundoPlano()
     while True:
         inicio = time.monotonic()
 
@@ -387,8 +556,17 @@ def bucle(video, detector, cliente, zonas, confirmador, camara_id, publicador=No
         etapas["ocupacion"] = time.monotonic() - t
 
         t = time.monotonic()
-        for mesa_id, hay_gente in confirmador.actualizar(ocupacion, inicio).items():
-            aplicar_cambio(cliente, confirmador, mesa_id, hay_gente)
+        # Encolar y seguir: el trabajo caro (dos idas y vueltas al backend por mesa)
+        # lo hacen los workers del aplicador. Esta etapa pasa a costar microsegundos,
+        # que es justamente lo que T26-183 vino a arreglar.
+        aplicador.encolar(confirmador.actualizar(ocupacion, inicio))
+        # Los cambios que no se pudieron aplicar se revierten ACÁ y no en el worker:
+        # Confirmador no es thread-safe y toda su mutación tiene que quedar en este hilo.
+        for mesa_id in aplicador.recoger_fallidas():
+            confirmador.revertir(mesa_id)
+        # Un 403 no se reintenta: se levanta en este hilo y corta el proceso, igual
+        # que cuando aplicar_cambio corría en línea.
+        aplicador.revisar_fatal()
         etapas["cambios"] = time.monotonic() - t
 
         registrar_presupuesto(inicio, etapas)

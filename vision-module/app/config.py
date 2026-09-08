@@ -132,4 +132,21 @@ BACKEND_EMAIL = os.getenv("BACKEND_EMAIL")
 BACKEND_PASSWORD = os.getenv("BACKEND_PASSWORD")
 BACKEND_TIMEOUT = float(os.getenv("BACKEND_TIMEOUT", "10"))
 
+# --- Aplicación de cambios de estado (T26-183) ------------------------------
+# Cuántos cambios de mesa se aplican en paralelo contra el backend. Cada uno
+# cuesta dos idas y vueltas (GET del estado real + PATCH), ~1.3s medidos contra
+# la base remota, y en el ciclo se acumulaban: tres mesas juntas dieron 4.4s
+# contra un presupuesto de 2s. Ahora corren fuera del ciclo y en paralelo entre
+# mesas distintas; el orden DENTRO de cada mesa se respeta igual.
+#
+# 4 es un compromiso: la ganancia es lineal hasta que el backend se vuelve el
+# cuello de botella, y no tiene sentido abrirle 20 conexiones simultáneas a un
+# Supabase compartido para un salón que rara vez cambia 20 mesas de golpe.
+APLICADOR_HILOS = int(os.getenv("APLICADOR_HILOS", "4"))
+
+# Tope de cambios encolados por mesa antes de dejar de acumular. Llegar acá
+# significa que el backend viene mucho más lento que la detección; el cambio se
+# reporta como fallo y el ciclo lo reintenta, en vez de crecer sin techo.
+APLICADOR_MAXIMO_POR_MESA = int(os.getenv("APLICADOR_MAXIMO_POR_MESA", "8"))
+
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

@@ -15,6 +15,7 @@ import type {
   OcupacionResponse,
   RotacionMesa,
   EstadoOpcion,
+  UsuarioAdmin,
 } from "../types";
 
 export type {
@@ -31,6 +32,7 @@ export type {
   OcupacionResponse,
   RotacionMesa,
   EstadoOpcion,
+  UsuarioAdmin,
 } from "../types";
 export type { Modo } from "../types";
 
@@ -256,6 +258,18 @@ export const roiMesaApi = {
 
   // Baja lógica: el backend deja activa=false, no borra la fila (ver roi.py).
   eliminar: (id: number) => api.delete(`/roi-mesa/${id}`),
+};
+
+export const usuariosApi = {
+  listar: (params?: { incluir_inactivos?: boolean }) =>
+    api.get<UsuarioAdmin[]>("/usuarios/", { params }),
+
+  // Rol y baja lógica únicamente (T26-175): las salvaguardas (no auto-desactivarse,
+  // no dejar el sistema sin admin, no desactivar la cuenta de vision-module) las
+  // aplica el backend y devuelven 409 — este cliente no las duplica, solo muestra
+  // el detail que llega.
+  actualizar: (id: number, datos: { rol?: string; activo?: boolean }) =>
+    api.patch<UsuarioAdmin>(`/usuarios/${id}`, datos),
 };
 
 export const estadosApi = {

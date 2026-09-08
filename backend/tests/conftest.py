@@ -183,6 +183,28 @@ def crear_camara(db, crear_sector):
 
 
 @pytest.fixture
+def crear_usuario(db):
+    contador = {"n": 0}
+
+    def _crear(nombre: str = None, email: str = None, rol: str = "mozo", activo: bool = True, password: str = "x", **campos):
+        contador["n"] += 1
+        usuario = User(
+            nombre=nombre or f"Usuario {contador['n']}",
+            email=email or f"usuario{contador['n']}@test.local",
+            password=password,
+            rol=rol,
+            activo=activo,
+            **campos,
+        )
+        db.add(usuario)
+        db.commit()
+        db.refresh(usuario)
+        return usuario
+
+    return _crear
+
+
+@pytest.fixture
 def crear_roi(db, crear_mesa, crear_camara):
     def _crear(mesa_id: int = None, camara_id: int = None, coordenadas: list = None, **campos):
         roi = RoiMesa(

@@ -13,6 +13,8 @@ import {
   limpiezaDemorada,
   minutosEnEstado,
 } from "../constants"
+import { useAuth } from "../hooks/useAuth"
+import { puedeBorrar, puedeEditarLayout } from "../permisos"
 
 interface MesaVisualProps {
   mesa: Mesa
@@ -36,6 +38,11 @@ export default function MesaVisual({
   onPosicionChange,
   onMesaEliminada,
 }: MesaVisualProps) {
+  // Mismo criterio que SectorBloque: el rol se lee del contexto en vez de bajarlo por
+  // props a través de SalonCanvas y SectorBloque, que no lo usan para nada propio.
+  const { rol } = useAuth()
+  const puedeEditar = puedeEditarLayout(rol)
+
   const [eliminando, setEliminando] = useState(false)
   const [localPos, setLocalPos] = useState({ x: mesa.pos_x, y: mesa.pos_y })
   const isDragging = useRef(false)
@@ -84,7 +91,10 @@ export default function MesaVisual({
   }, [mesa.id, onPosicionChange, anchoSector, altoSector])
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (modo !== "edicion") return
+    // Igual que en SectorBloque: el arrastre nace de un mousedown sobre la mesa, así que
+    // esconder botones no alcanza. Sin este chequeo un rol sin permiso movería la mesa y
+    // el 403 del PATCH /mesas/{id}/posicion llegaría recién al soltarla.
+    if (modo !== "edicion" || !puedeEditar) return
     e.preventDefault()
     e.stopPropagation()
     isDragging.current = true
@@ -142,7 +152,7 @@ export default function MesaVisual({
           color: "white",
           fontWeight: "bold",
           fontSize: 16,
-          cursor: modo === "edicion" ? "grab" : "pointer",
+          cursor: modo === "edicion" && puedeEditar ? "grab" : "pointer",
           userSelect: "none",
           position: "relative",
           zIndex: 2,
@@ -183,7 +193,9 @@ export default function MesaVisual({
         </div>
       )}
 
-      {modo === "edicion" && (
+      {/* DELETE /mesas/{id} pide admin, no encargado: por eso acá va puedeBorrar y no
+          puedeEditar, aunque el botón viva dentro del mismo modo edición. */}
+      {modo === "edicion" && puedeBorrar(rol) && (
         <button
           onMouseDown={(e) => e.stopPropagation()}
           onClick={handleEliminarClick}

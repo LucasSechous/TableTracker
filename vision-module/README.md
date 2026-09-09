@@ -95,9 +95,15 @@ falta:
 
 ## Configuración
 
-Las variables se documentan en [.env.example](.env.example). Dos que conviene
+Las variables se documentan en [.env.example](.env.example). Tres que conviene
 tener presentes:
 
+- **`YOLO_MODEL_PATH` / `YOLO_IMGSZ`**: el default de producción es
+  **`models/yolov8s.pt` con `imgsz=960`** — no el `yolov8n` de la prueba de
+  concepto (T26-93) ni el `640` que trae ultralytics. La elección está medida en
+  T26-178 / T26-179: costo p90 por modelo y resolución contra el presupuesto de
+  2 s por ciclo, con la tabla en [app/config.py](app/config.py) y el
+  procedimiento en [docs/banco-pruebas-vision.md](../docs/banco-pruebas-vision.md).
 - **`CAMARA_PASSWORD`**: la API devuelve la URL RTSP con la contraseña tapada
   (`rtsp://admin:***@...`) por diseño, así que el módulo la completa desde el
   `.env`. Del backend salen host, puerto, ruta y usuario; el secreto no viaja

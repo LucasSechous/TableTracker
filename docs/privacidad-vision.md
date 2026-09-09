@@ -2,8 +2,8 @@
 
 **Proyecto:** TableTracker
 **Referencia normativa:** Anteproyecto de Tesis, secciones 9.2 (Requerimientos no funcionales — Privacidad y uso de imágenes), 13.6 (Riesgos de privacidad) y 14.4 (Factibilidad legal y de privacidad).
-**Alcance:** Sprint 5 — módulo `vision-module`.
-**Última revisión:** Sprint 5, previo a la implementación de `app/main.py` y `app/detection/zonas.py`.
+**Alcance:** módulo `vision-module` — documento abierto en Sprint 5, actualizado en Sprint 7 con el pipeline ya completo.
+**Última revisión:** Sprint 7, con el pipeline completo (`app/main.py` y `app/mapping/zonas.py`) ya implementado y en operación.
 
 ## 1. Objetivo
 
@@ -11,7 +11,9 @@ Este documento deja constancia de cómo el módulo de visión por computadora de
 
 ## 2. Estado actual del pipeline
 
-A la fecha de esta revisión, los componentes de captura (`app/capture/camera.py`) y detección (`app/detection/detector.py`) están implementados y probados de forma unitaria, pero el flujo que los conecta de punta a punta (`app/main.py`) y el mapeo de detecciones a zonas/mesas (`app/detection/zonas.py`) aún no están implementados; ambos elevan `NotImplementedError` de forma explícita como marcador de trabajo pendiente. En consecuencia, no existe hoy un pipeline en ejecución continua sobre el cual auditar comportamiento en producción, y las verificaciones de este documento se basan en una revisión directa del código fuente de cada componente ya construido.
+A la fecha de esta revisión el pipeline está implementado de punta a punta. A los componentes de captura (`app/capture/camera.py`) y detección (`app/detection/detector.py`), que ya existían en Sprint 5, se sumaron el flujo que los conecta (`app/main.py`) y el mapeo de detecciones a zonas/mesas, que vive en `app/mapping/zonas.py` — no en `app/detection/zonas.py`, como anticipaba la revisión anterior de este documento. Ninguno de los dos eleva ya `NotImplementedError`: ese marcador de trabajo pendiente desapareció del módulo. Ambos están cubiertos por pruebas unitarias —51 en `tests/test_main.py` y 27 en `tests/test_zonas.py`—, y el módulo completo corre 184 pruebas en verde.
+
+En consecuencia, las verificaciones de este documento ya no describen un sistema a medio construir: existe un pipeline en ejecución continua sobre el cual auditar comportamiento, y lo que sigue vale para el sistema tal como opera, no solo para sus partes aisladas. Las dos excepciones al principio de no persistir material visual —la vista en vivo de detecciones y el banco de pruebas— están documentadas en la sección 3.
 
 ## 3. Verificación: almacenamiento de imágenes y video
 
@@ -64,7 +66,7 @@ El módulo depende únicamente de `ultralytics`, `opencv-python`, `numpy`, `requ
 
 Se evaluó si existe algún mecanismo que registre o almacene por separado las coordenadas o recortes visuales correspondientes a detecciones de personas, distinto del tratamiento dado a mesas o sillas.
 
-La salida del detector es genérica para cualquier clase detectada (bounding box, clase, confianza), sin distinción de tratamiento entre personas, sillas o mesas. El filtrado de clases se realiza únicamente a nivel de configuración de inferencia (variable de entorno), no como un mecanismo de registro diferenciado. El componente encargado de cruzar detecciones con zonas del salón para determinar el estado de una mesa está aún sin implementar, por lo que tampoco existe hoy ningún archivo, tabla o registro que persista coordenadas o recortes de personas detectadas.
+La salida del detector es genérica para cualquier clase detectada (bounding box, clase, confianza), sin distinción de tratamiento entre personas, sillas o mesas. El filtrado de clases se realiza únicamente a nivel de configuración de inferencia (variable de entorno), no como un mecanismo de registro diferenciado. El componente encargado de cruzar detecciones con zonas del salón para determinar el estado de una mesa (`app/mapping/zonas.py`) ya está implementado, y no cambia esta conclusión: lo que produce es el estado resultante de cada mesa —ocupada o vacía—, no un registro de las personas que lo motivaron. Las coordenadas de detección solo sobreviven al frame en el caso acotado de la vista en vivo (sección 3), que las mantiene en memoria del proceso y sin historial. No existe archivo, tabla ni registro que persista recortes de personas detectadas.
 
 **Conclusión:** no existe actualmente registro diferenciado ni almacenamiento de información asociada específicamente a personas.
 

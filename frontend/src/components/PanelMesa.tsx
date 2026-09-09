@@ -12,6 +12,8 @@ import type { CSSProperties } from "react"
 import type { Mesa } from "../types"
 import { historialApi, mesasApi, extraerDetalle } from "../services/api"
 import { COLOR_POR_ESTADO, ETIQUETA_POR_ESTADO } from "../constants"
+import { useAuth } from "../hooks/useAuth"
+import { puedeCambiarEstado, puedeConfirmarLimpieza, puedeReservar } from "../permisos"
 
 interface Props {
   mesa: Mesa | null
@@ -29,6 +31,10 @@ function formatearTranscurrido(desde: Date): string {
 }
 
 export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActualizada }: Props) {
+  // Mismo patrón que SectorBloque y MesaVisual (T26-194): el rol se lee del contexto en vez
+  // de bajarlo por props desde DashboardPage a través de SalonCanvas, que no lo usa.
+  const { rol } = useAuth()
+
   const [desde, setDesde] = useState<Date | null>(null)
   const [expandido, setExpandido] = useState(false)
   const [accionando, setAccionando] = useState(false)
@@ -182,7 +188,9 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                 </div>
               </div>
 
-              {mesa.estado === "pendiente_limpieza" && (
+              {/* PATCH /mesas/{id}/limpieza pide encargado o limpieza (T26-195): un mozo
+                  veía este botón y se comía el 403 recién al tocarlo. */}
+              {mesa.estado === "pendiente_limpieza" && puedeConfirmarLimpieza(rol) && (
                 <button
                   disabled={accionando}
                   onClick={() => ejecutarAccion(() => mesasApi.confirmarLimpieza(mesa.id))}
@@ -205,70 +213,79 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                 </button>
               )}
 
-              <div>
-                <button
-                  data-testid="panel-mesa-toggle-correccion"
-                  onClick={() => setExpandido((v) => !v)}
-                  style={{
-                    minHeight: 44,
-                    padding: "8px 14px",
-                    borderRadius: 8,
-                    border: "1px solid #cbd5e1",
-                    backgroundColor: "#fff",
-                    color: "#475569",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  {expandido ? "Ocultar corrección manual" : "Corregir estado manualmente"}
-                </button>
-                {/* Anclas estables para los tests: la corrección manual pasó de ser un
-                    <select> inline sobre el canvas a este panel colapsable, y los specs
-                    que la ejercitan necesitan poder llegar sin depender del texto. */}
+              {/* El desplegable contiene dos cosas con permisos distintos —reservar y
+                  corregir estado—, así que se muestra si el rol puede al menos una. Para
+                  `limpieza`, que no puede ninguna, abrirlo mostraría una caja vacía. */}
+              {(puedeReservar(rol) || puedeCambiarEstado(rol)) && (
+                <div>
+                  <button
+                    data-testid="panel-mesa-toggle-correccion"
+                    onClick={() => setExpandido((v) => !v)}
+                    style={{
+                      minHeight: 44,
+                      padding: "8px 14px",
+                      borderRadius: 8,
+                      border: "1px solid #cbd5e1",
+                      backgroundColor: "#fff",
+                      color: "#475569",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {expandido ? "Ocultar corrección manual" : "Corregir estado manualmente"}
+                  </button>
+                  {/* Anclas estables para los tests: la corrección manual pasó de ser un
+                      <select> inline sobre el canvas a este panel colapsable, y los specs
+                      que la ejercitan necesitan poder llegar sin depender del texto. */}
 
-                {expandido && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-                    {mesa.estado !== "reservada" && (
-                      <button
-                        disabled={accionando}
-                        onClick={() => ejecutarAccion(() => mesasApi.marcarReservada(mesa.id))}
-                        style={estiloBotonAccion("#cbd5e1", accionando)}
-                      >
-                        Marcar como reservada
-                      </button>
-                    )}
-                    {Object.entries(ETIQUETA_POR_ESTADO).map(([estado, etiqueta]) => (
-                      <button
-                        key={estado}
-                        data-testid={`panel-mesa-estado-${estado}`}
-                        disabled={accionando || estado === mesa.estado}
-                        onClick={() => {
-                          onEstadoChange(mesa.id, estado)
-                          setExpandido(false)
-                        }}
-                        style={estiloBotonAccion(
-                          COLOR_POR_ESTADO[estado] ?? "#cbd5e1",
-                          accionando || estado === mesa.estado
-                        )}
-                      >
-                        <span
-                          style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: 3,
-                            backgroundColor: COLOR_POR_ESTADO[estado] ?? "#9e9e9e",
-                            display: "inline-block",
-                            marginRight: 8,
-                            flexShrink: 0,
-                          }}
-                        />
-                        {etiqueta}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+                  {expandido && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+                      {/* PATCH /mesas/{id}/reserva pide encargado o recepcion (T26-195). */}
+                      {mesa.estado !== "reservada" && puedeReservar(rol) && (
+                        <button
+                          disabled={accionando}
+                          onClick={() => ejecutarAccion(() => mesasApi.marcarReservada(mesa.id))}
+                          style={estiloBotonAccion("#cbd5e1", accionando)}
+                        >
+                          Marcar como reservada
+                        </button>
+                      )}
+                      {/* PATCH /mesas/{id}/estado pide encargado o mozo (T26-195): recepcion
+                          y limpieza no corrigen estados a mano. */}
+                      {puedeCambiarEstado(rol) &&
+                        Object.entries(ETIQUETA_POR_ESTADO).map(([estado, etiqueta]) => (
+                          <button
+                            key={estado}
+                            data-testid={`panel-mesa-estado-${estado}`}
+                            disabled={accionando || estado === mesa.estado}
+                            onClick={() => {
+                              onEstadoChange(mesa.id, estado)
+                              setExpandido(false)
+                            }}
+                            style={estiloBotonAccion(
+                              COLOR_POR_ESTADO[estado] ?? "#cbd5e1",
+                              accionando || estado === mesa.estado
+                            )}
+                          >
+                            <span
+                              style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: 3,
+                                backgroundColor: COLOR_POR_ESTADO[estado] ?? "#9e9e9e",
+                                display: "inline-block",
+                                marginRight: 8,
+                                flexShrink: 0,
+                              }}
+                            />
+                            {etiqueta}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </>
         )}

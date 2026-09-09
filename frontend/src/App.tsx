@@ -10,6 +10,7 @@ import RotacionPage from "./pages/RotacionPage";
 import ConfiguracionPage from "./pages/ConfiguracionPage";
 import CalibracionRoiPage from "./pages/CalibracionRoiPage";
 import CamarasPage from "./pages/CamarasPage";
+import UsuariosPage from "./pages/UsuariosPage";
 import AdminRoute from "./components/AdminRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { AuthProvider } from "./hooks/useAuth";
@@ -90,6 +91,16 @@ export default function App() {
                 <PrivateRoute>
                   <AdminRoute>
                     <CamarasPage />
+                  </AdminRoute>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/usuarios"
+              element={
+                <PrivateRoute>
+                  <AdminRoute>
+                    <UsuariosPage />
                   </AdminRoute>
                 </PrivateRoute>
               }

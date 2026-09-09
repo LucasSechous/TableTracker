@@ -7,6 +7,7 @@ import type {
   Sector,
   HistorialEstado,
   Configuracion,
+  ConfiguracionActualizada,
   Camara,
   RoiMesa,
   PuntoRoi,
@@ -15,6 +16,7 @@ import type {
   OcupacionResponse,
   RotacionMesa,
   EstadoOpcion,
+  UsuarioAdmin,
 } from "../types";
 
 export type {
@@ -22,6 +24,7 @@ export type {
   Sector,
   HistorialEstado,
   Configuracion,
+  ConfiguracionActualizada,
   Camara,
   RoiMesa,
   PuntoRoi,
@@ -31,6 +34,7 @@ export type {
   OcupacionResponse,
   RotacionMesa,
   EstadoOpcion,
+  UsuarioAdmin,
 } from "../types";
 export type { Modo } from "../types";
 
@@ -196,6 +200,9 @@ export const configuracionApi = {
   // Las horas van como "HH:MM" y el backend las parsea a time. Igual que
   // cantidad_mesas_referencia, una vez cargadas NO se pueden vaciar desde la API por el
   // exclude_none: habría que mandar null y el backend lo descarta (T26-171).
+  //
+  // La respuesta es ConfiguracionActualizada (T26-183, no Configuracion): si el PATCH tocó
+  // confirmacion_segundos u overlap_minimo, el backend agrega el valor previo de cada uno.
   actualizar: (datos: {
     ancho_salon?: number
     alto_salon?: number
@@ -203,7 +210,10 @@ export const configuracionApi = {
     cantidad_mesas_referencia?: number
     hora_apertura?: string
     hora_cierre?: string
-  }) => api.patch<Configuracion>("/configuracion", datos),
+    minutos_limpieza_demorada?: number
+    confirmacion_segundos?: number
+    overlap_minimo?: number
+  }) => api.patch<ConfiguracionActualizada>("/configuracion", datos),
 };
 
 export const camarasApi = {
@@ -256,6 +266,18 @@ export const roiMesaApi = {
 
   // Baja lógica: el backend deja activa=false, no borra la fila (ver roi.py).
   eliminar: (id: number) => api.delete(`/roi-mesa/${id}`),
+};
+
+export const usuariosApi = {
+  listar: (params?: { incluir_inactivos?: boolean }) =>
+    api.get<UsuarioAdmin[]>("/usuarios/", { params }),
+
+  // Rol y baja lógica únicamente (T26-175): las salvaguardas (no auto-desactivarse,
+  // no dejar el sistema sin admin, no desactivar la cuenta de vision-module) las
+  // aplica el backend y devuelven 409 — este cliente no las duplica, solo muestra
+  // el detail que llega.
+  actualizar: (id: number, datos: { rol?: string; activo?: boolean }) =>
+    api.patch<UsuarioAdmin>(`/usuarios/${id}`, datos),
 };
 
 export const estadosApi = {

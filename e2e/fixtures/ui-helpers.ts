@@ -364,6 +364,18 @@ export function getConfiguracionError(page: Page): Locator {
   return page.getByTestId("configuracion-error");
 }
 
+export function getConfiguracionAviso(page: Page): Locator {
+  return page.getByTestId("configuracion-aviso");
+}
+
+export function getConfiguracionConfirmacionSegundosInput(page: Page): Locator {
+  return page.getByTestId("configuracion-confirmacion-segundos");
+}
+
+export function getConfiguracionOverlapMinimoInput(page: Page): Locator {
+  return page.getByTestId("configuracion-overlap-minimo");
+}
+
 export async function gotoRotacionAuthed(page: Page, token: string): Promise<void> {
   await injectToken(page, token);
   await page.goto("/rotacion");

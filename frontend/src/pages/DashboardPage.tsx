@@ -256,6 +256,63 @@ export default function DashboardPage() {
     navigate("/login")
   }
 
+  // El estado del filtro vive acá (es esta pantalla la que refiltra pidiendo /mesas), pero el
+  // control se dibuja dentro de SalonCanvas, a la derecha de los tabs de sector, para que los
+  // dos filtros del salón queden juntos en la misma fila.
+  //
+  // Solo en monitoreo: en edición el filtro se limpia al entrar (ver el botón "Editar
+  // disposición") y mostrar el control ahí invitaría a re-filtrar justo cuando conviene ver
+  // el salón completo.
+  const filtroEstado =
+    modo === "monitoreo" ? (
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
+        <label style={labelStyle}>
+          Estado
+          <select
+            data-testid="dashboard-filtro-estado"
+            value={estadoFiltro}
+            onChange={(e) => setEstadoFiltro(e.target.value)}
+            style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", minWidth: 200 }}
+          >
+            <option value={SIN_FILTRO}>Todos los estados</option>
+            {OPCIONES_ESTADO.map(([valor, etiqueta]) => (
+              <option key={valor} value={valor}>
+                {etiqueta}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {/* Un salón filtrado se ve igual que un salón al que le faltan mesas. El aviso
+            existe para que esa diferencia no dependa de que el usuario recuerde que
+            dejó un filtro puesto. */}
+        {estadoFiltro !== SIN_FILTRO && (
+          <span
+            data-testid="dashboard-filtro-aviso"
+            style={{ fontSize: 13, color: "#1d4ed8", paddingBottom: 6 }}
+          >
+            Mostrando solo mesas en «{ETIQUETA_POR_ESTADO[estadoFiltro]}».{" "}
+            <button
+              data-testid="dashboard-filtro-limpiar"
+              onClick={() => setEstadoFiltro(SIN_FILTRO)}
+              style={{
+                border: "none",
+                background: "none",
+                padding: 0,
+                color: "#1d4ed8",
+                fontSize: 13,
+                fontWeight: 600,
+                textDecoration: "underline",
+                cursor: "pointer",
+              }}
+            >
+              Ver todas
+            </button>
+          </span>
+        )}
+      </div>
+    ) : undefined
+
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
       <header
@@ -386,70 +443,6 @@ export default function DashboardPage() {
             {error}
           </p>
         )}
-        {/* Solo en monitoreo: en edición el filtro se limpia al entrar (ver el botón
-            "Editar disposición") y mostrar el control ahí invitaría a re-filtrar
-            justo cuando conviene ver el salón completo. */}
-        {!loading && !error && configuracion && modo === "monitoreo" && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-end",
-              gap: 16,
-              flexWrap: "wrap",
-              backgroundColor: "#fff",
-              border: "1px solid #e0e0e0",
-              borderRadius: 8,
-              padding: 16,
-              marginBottom: 20,
-            }}
-          >
-            <label style={labelStyle}>
-              Estado
-              <select
-                data-testid="dashboard-filtro-estado"
-                value={estadoFiltro}
-                onChange={(e) => setEstadoFiltro(e.target.value)}
-                style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", minWidth: 200 }}
-              >
-                <option value={SIN_FILTRO}>Todos los estados</option>
-                {OPCIONES_ESTADO.map(([valor, etiqueta]) => (
-                  <option key={valor} value={valor}>
-                    {etiqueta}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {/* Un salón filtrado se ve igual que un salón al que le faltan mesas. El aviso
-                existe para que esa diferencia no dependa de que el usuario recuerde que
-                dejó un filtro puesto. */}
-            {estadoFiltro !== SIN_FILTRO && (
-              <span
-                data-testid="dashboard-filtro-aviso"
-                style={{ fontSize: 13, color: "#1d4ed8", paddingBottom: 6 }}
-              >
-                Mostrando solo mesas en «{ETIQUETA_POR_ESTADO[estadoFiltro]}».{" "}
-                <button
-                  data-testid="dashboard-filtro-limpiar"
-                  onClick={() => setEstadoFiltro(SIN_FILTRO)}
-                  style={{
-                    border: "none",
-                    background: "none",
-                    padding: 0,
-                    color: "#1d4ed8",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    textDecoration: "underline",
-                    cursor: "pointer",
-                  }}
-                >
-                  Ver todas
-                </button>
-              </span>
-            )}
-          </div>
-        )}
-
         {!loading && !error && configuracion && (
           <SalonCanvas
             sectores={sectores}
@@ -460,6 +453,7 @@ export default function DashboardPage() {
             // Sale de la configuración que esta pantalla ya carga para el tamaño del
             // salón: no agrega ninguna request al ciclo de refresco (T26-173).
             umbralLimpiezaMinutos={configuracion.minutos_limpieza_demorada}
+            filtroEstado={filtroEstado}
             onMesaEstadoChange={handleMesaEstadoChange}
             onMesaPosicionChange={handleMesaPosicionChange}
             onSectorPosicionChange={handleSectorPosicionChange}

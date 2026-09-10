@@ -3,9 +3,9 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Pencil, Menu } from "lucide-react"
-import { mesasApi, sectoresApi, configuracionApi, extraerDetalle } from "../services/api"
-import type { Mesa, Sector, Modo, Configuracion } from "../types"
+import { Pencil, Menu, TriangleAlert } from "lucide-react"
+import { mesasApi, sectoresApi, configuracionApi, metricasApi, extraerDetalle } from "../services/api"
+import type { Mesa, Sector, Modo, Configuracion, OcupacionResponse } from "../types"
 import SalonCanvas from "../components/SalonCanvas"
 import ModalAltaSector from "../components/ModalAltaSector"
 import ModalAltaMesa from "../components/ModalAltaMesa"
@@ -13,7 +13,7 @@ import MenuLateral from "../components/MenuLateral"
 import { useAuth } from "../hooks/useAuth"
 import { esAdmin, puedeEditarLayout } from "../permisos"
 import { labelStyle } from "../components/RangoFechas"
-import { ETIQUETA_POR_ESTADO } from "../constants"
+import { COLOR_OCUPACION_ALTA, ETIQUETA_POR_ESTADO } from "../constants"
 
 // Cada cuánto se refresca el estado de las mesas en modo monitoreo, para reflejar
 // los cambios que escribe vision-module sin que alguien tenga que recargar la
@@ -54,6 +54,17 @@ export default function DashboardPage() {
   // recortando el array en el cliente: el endpoint ya lo soporta y así el canvas no
   // recibe mesas que no va a dibujar.
   const [estadoFiltro, setEstadoFiltro] = useState<string>(SIN_FILTRO)
+  // Alerta de alta ocupación (T26-187, RF-26). Sale de GET /metricas/ocupacion y NO se
+  // calcula acá a partir de `sectores`, aunque a primera vista alcanzaría: ese array está
+  // recortado por estadoFiltro, así que con un filtro puesto el porcentaje que saldría de
+  // contarlo sería el del subconjunto visible y no el del salón. Con filtro "libre" daría
+  // 0% de ocupación y la alerta se apagaría justo cuando el salón está lleno.
+  //
+  // Es una request más por ciclo de refresco, a diferencia de la alerta de limpieza
+  // demorada (T26-173), que se resuelve con la configuración ya cargada. La diferencia es
+  // esa: aquella depende de datos que el canvas ya tiene (estado y reloj de cada mesa),
+  // esta depende del total del salón, que el canvas filtrado no conoce.
+  const [ocupacion, setOcupacion] = useState<OcupacionResponse | null>(null)
   // El spinner de "Cargando salón..." solo tiene sentido la primera vez. Al cambiar el
   // filtro el canvas ya está dibujado, y desmontarlo por unos milisegundos se ve como un
   // parpadeo del salón entero.
@@ -127,6 +138,41 @@ export default function DashboardPage() {
     // el filtro vigente: sin esto el intervalo quedaría capturando el valor que había
     // cuando se montó el efecto y devolvería el salón completo cada 3 segundos.
   }, [modo, estadoFiltro])
+
+  // Alerta de alta ocupación (T26-187, RF-26), solo en monitoreo y por el mismo motivo que
+  // el resto: en edición el canvas es para acomodar mesas y un aviso ahí compite con los
+  // controles de arrastre, igual que decidió T26-173 para la limpieza demorada.
+  //
+  // NO depende de estadoFiltro: el % de ocupación es del salón entero, así que filtrar la
+  // vista no tiene por qué mover el aviso. Comparte el intervalo con el refresco de mesas
+  // para que el canvas y el aviso no se contradigan — si el aviso fuera más lento, el
+  // salón se vería lleno unos segundos antes de que apareciera la alerta.
+  useEffect(() => {
+    if (modo !== "monitoreo") {
+      setOcupacion(null)
+      return
+    }
+
+    let cancelado = false
+
+    async function refrescarOcupacion() {
+      try {
+        const { data } = await metricasApi.ocupacion()
+        if (!cancelado) setOcupacion(data)
+      } catch {
+        // Igual que el refresco de mesas: un fallo puntual se reintenta en el próximo tick.
+        // No se apaga el aviso ni se pisa `error`, que está reservado para el fallo de
+        // carga del salón: quedarse sin la métrica no impide seguir operando.
+      }
+    }
+
+    refrescarOcupacion()
+    const intervalId = setInterval(refrescarOcupacion, INTERVALO_REFRESCO_MESAS_MS)
+    return () => {
+      cancelado = true
+      clearInterval(intervalId)
+    }
+  }, [modo])
 
   function handleMesaEstadoChange(mesaId: number, nuevoEstado: string) {
     const estadoAnterior = sectores.flatMap((s) => s.mesas ?? []).find((m) => m.id === mesaId)?.estado
@@ -443,6 +489,48 @@ export default function DashboardPage() {
             {error}
           </p>
         )}
+
+        {/* Alerta de alta ocupación (T26-187, RF-26).
+            Banner de ancho completo y no un badge sobre el canvas, a diferencia de la
+            alerta de limpieza demorada (T26-173): aquella señala UNA mesa y por eso se
+            dibuja encima de ella, mientras que esta habla del salón entero y no tiene una
+            mesa a la que colgarse. El banner de ancho completo es además el patrón que
+            esta misma pantalla ya usa para hablar de todo el salón (el aviso de error de
+            arriba y la barra de "Editando disposición").
+            La condición la resuelve el backend: acá no se compara nada contra el umbral. */}
+        {!loading && !error && ocupacion?.ocupacion_alta && configuracion && (
+          <p
+            data-testid="dashboard-ocupacion-alta"
+            title={`${ocupacion.conteo_por_estado.ocupada} de ${ocupacion.total_mesas} mesas activas están ocupadas`}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              margin: "0 0 16px 0",
+              // Mismo ancho que el canvas, para que el aviso quede alineado con el salón del
+              // que habla en vez de estirarse hasta el borde del <main>. Se lee de la
+              // configuración y no del localSize de SalonCanvas —que es el que manda durante
+              // un resize— porque este aviso solo existe en monitoreo, donde no se redimensiona.
+              width: configuracion.ancho_salon,
+              fontSize: 14,
+              fontWeight: 600,
+              color: COLOR_OCUPACION_ALTA,
+              backgroundColor: "#fffbeb",
+              // Borde izquierdo grueso, el mismo recurso con el que T26-173 refuerza el
+              // borde de una mesa atrasada: marca la condición sin depender solo del color,
+              // que por sí solo no se lee en un monitor lavado ni con daltonismo.
+              border: "1px solid #fcd34d",
+              borderLeft: `4px solid ${COLOR_OCUPACION_ALTA}`,
+              borderRadius: 6,
+              padding: "10px 16px",
+            }}
+          >
+            <TriangleAlert size={16} />
+            Salón al límite: {ocupacion.porcentaje_ocupacion}% de las mesas ocupadas (umbral{" "}
+            {ocupacion.umbral_ocupacion_alta}%).
+          </p>
+        )}
+
         {!loading && !error && configuracion && (
           <SalonCanvas
             sectores={sectores}

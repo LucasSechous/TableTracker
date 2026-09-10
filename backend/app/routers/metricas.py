@@ -2,6 +2,11 @@
 # GET /metricas/ocupacion: % de ocupación del salón y conteo de mesas por
 # estado, calculado en el momento a partir de mesas (sin tabla ni modelo
 # propio: es una consulta agregada, no un dato persistente).
+#
+# El mismo endpoint resuelve la alerta de alta ocupación de RF-26 (T26-187): compara ese %
+# contra el umbral de configuracion_general y devuelve el booleano ya resuelto. No hay
+# endpoint nuevo porque el dato es exactamente el que este ya calcula; uno aparte tendría
+# que repetir la misma consulta agregada para responder una pregunta sobre ella.
 
 from datetime import datetime
 from typing import Optional
@@ -11,7 +16,7 @@ from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.configuracion import ConfiguracionGeneral
+from app.models.configuracion import UMBRAL_OCUPACION_ALTA_DEFECTO, ConfiguracionGeneral
 from app.models.historial import HistorialEstado
 from app.models.mesa import EstadoMesa, Mesa
 from app.models.sector import Sector
@@ -51,10 +56,29 @@ def obtener_ocupacion(sector_id: Optional[int] = Query(None), db: Session = Depe
 
     porcentaje_ocupacion = round((ocupadas / total_mesas) * 100, 2) if total_mesas > 0 else 0.0
 
+    # Alerta de alta ocupación (T26-187, RF-26). Sin fila de configuración se cae al mismo
+    # default que la columna en vez de apagar la alerta: una instalación recién creada, que
+    # es justo el caso sin fila, no debería quedarse sin el aviso.
+    config = db.query(ConfiguracionGeneral).filter(ConfiguracionGeneral.id == 1).first()
+    umbral = config.umbral_ocupacion_alta if config else UMBRAL_OCUPACION_ALTA_DEFECTO
+
+    # >= y no >: el umbral es el punto a partir del cual el salón se considera al límite, no
+    # el último valor tolerado. Es el mismo criterio que limpiezaDemorada() aplica sobre
+    # minutos_limpieza_demorada en el frontend (T26-173), y mantenerlos iguales evita que
+    # dos alertas del producto respondan distinto a "justo el umbral".
+    #
+    # El guard por total_mesas evita que un salón vacío alerte: sin mesas activas el
+    # porcentaje es 0.0 por definición, no un 0% medido, y con un umbral de 100 la
+    # comparación 0 >= 100 ya da False — pero con el salón vacío tampoco hay nada que
+    # reportar, así que se corta antes y no se depende de esa coincidencia.
+    ocupacion_alta = total_mesas > 0 and porcentaje_ocupacion >= umbral
+
     return OcupacionResponse(
         total_mesas=total_mesas,
         porcentaje_ocupacion=porcentaje_ocupacion,
         conteo_por_estado=conteo,
+        umbral_ocupacion_alta=umbral,
+        ocupacion_alta=ocupacion_alta,
     )
 
 

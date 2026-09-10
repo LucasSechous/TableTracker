@@ -62,6 +62,31 @@ export const BORDE_POR_ESTADO: Record<string, string> = {
 // rompería la correspondencia uno a uno entre la leyenda y el enum EstadoMesa.
 export const COLOR_LIMPIEZA_DEMORADA = "#b71c1c"
 
+// Color del aviso de alta ocupación del salón (T26-187, RF-26).
+//
+// Por el mismo motivo que COLOR_LIMPIEZA_DEMORADA no entra en COLOR_POR_ESTADO: "el salón
+// está al límite" no es un estado de mesa sino una condición del conjunto.
+//
+// Ámbar y no el rojo de la limpieza demorada, a propósito: las dos alertas pueden estar
+// encendidas al mismo tiempo y con el mismo color el usuario no sabría cuál está mirando.
+// Además difieren en urgencia — una limpieza atrasada es algo que alguien tiene que ir a
+// resolver ahora, mientras que un salón lleno es una situación a la que hay que estar
+// atento, no un error que corregir.
+export const COLOR_OCUPACION_ALTA = "#b45309"
+
+// Color del aviso de estado dudoso (T26-188, RF-27).
+//
+// Tercer color de condición, por el mismo motivo que los dos de arriba no entran en
+// COLOR_POR_ESTADO: "puede estar mal detectada" no es un estado de mesa.
+//
+// Violeta y no rojo ni ámbar: los tres avisos del producto tienen que distinguirse de un
+// vistazo, y este además dice algo distinto. El de limpieza demorada y el de salón lleno
+// afirman un hecho ("hace 40 minutos que está así"); este afirma una DUDA sobre el dato
+// —la mesa figura ocupada pero el local está cerrado, así que probablemente el estado esté
+// mal—. Un rojo lo leería como una urgencia operativa que no es: nadie tiene que correr a
+// la mesa, hay que revisar por qué la detección la dejó colgada.
+export const COLOR_ESTADO_DUDOSO = "#6d28d9"
+
 /**
  * Minutos que una mesa lleva en su estado actual, o null si no se sabe.
  *

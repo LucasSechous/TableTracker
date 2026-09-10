@@ -300,6 +300,26 @@ export async function listarRois(
 }
 
 /** Soft-delete: desactiva el ROI (activa=false) en vez de borrarlo físicamente. */
+/**
+ * Da de alta un ROI para una mesa en una cámara (T26-188).
+ *
+ * Solo admin. Las coordenadas son un polígono en píxeles del frame; el contenido no importa
+ * para los tests que solo necesitan que la mesa tenga cobertura de detección, pero el
+ * backend exige un polígono válido, así que va un triángulo mínimo.
+ */
+export async function crearRoi(
+  request: APIRequestContext,
+  token: string,
+  datos: { mesa_id: number; camara_id: number; coordenadas?: number[][] }
+): Promise<RoiMesaResponse> {
+  const res = await request.post(`${BACKEND_URL}/roi-mesa/`, {
+    headers: authHeaders(token),
+    data: { coordenadas: [[0, 0], [40, 0], [40, 40]], ...datos },
+  });
+  if (!res.ok()) throw new Error(`No se pudo crear el ROI: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
 export async function desactivarRoi(request: APIRequestContext, token: string, roiId: number): Promise<void> {
   await request.delete(`${BACKEND_URL}/roi-mesa/${roiId}`, { headers: authHeaders(token) });
 }
@@ -322,6 +342,9 @@ export interface OcupacionMetricaResponse {
   total_mesas: number;
   porcentaje_ocupacion: number;
   conteo_por_estado: ConteoPorEstadoResponse;
+  // Alerta de alta ocupación (T26-187, RF-26). La comparación la resuelve el backend.
+  umbral_ocupacion_alta: number;
+  ocupacion_alta: boolean;
 }
 
 export async function obtenerOcupacion(
@@ -346,6 +369,8 @@ export interface ConfiguracionResponse {
   // Umbrales de detección de vision-module (T26-183). Nunca null: NOT NULL con default.
   confirmacion_segundos: number;
   overlap_minimo: number;
+  // Umbral de alta ocupación en % (T26-187). Tampoco es null nunca: NOT NULL con default 85.
+  umbral_ocupacion_alta: number;
   // Solo presentes cuando el PATCH cambió el umbral correspondiente.
   confirmacion_segundos_anterior?: number | null;
   overlap_minimo_anterior?: number | null;
@@ -373,6 +398,7 @@ export async function actualizarConfiguracion(
     minutos_limpieza_demorada?: number;
     confirmacion_segundos?: number;
     overlap_minimo?: number;
+    umbral_ocupacion_alta?: number;
   }
 ): Promise<ConfiguracionResponse> {
   const res = await request.patch(`${BACKEND_URL}/configuracion`, { headers: authHeaders(token), data: datos });

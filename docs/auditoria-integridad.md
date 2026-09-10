@@ -76,7 +76,7 @@ Dos decisiones de alcance ya cerradas se respetan y **no** se reportan como falt
 | Ítem | Estado | Evidencia | Observación |
 |---|---|---|---|
 | RF-25 Alerta de mesa pendiente de limpieza | **Implementado (alerta visual)** | `configuracion_general.minutos_limpieza_demorada`; `frontend/src/constants.ts:limpiezaDemorada()`; `MesaVisual.tsx`; e2e `15-limpieza-demorada.spec.ts` | Es un **indicador visual en el canvas** cuando se supera el umbral, no una notificación push ni un mail. Apagado por defecto (umbral nullable). Si la defensa entiende "alerta" como notificación activa, esto es parcial. |
-| RF-26 Alerta de alta ocupación | **No encontrado** | — | Sin implementación. Prioridad Baja / Opcional. El dato (`porcentaje_ocupacion`) ya lo calcula `/metricas/ocupacion`. |
+| RF-26 Alerta de alta ocupación | **Implementado (alerta visual)** | `configuracion_general.umbral_ocupacion_alta`; `metricas.py:obtener_ocupacion()` devuelve `ocupacion_alta`; banner en `DashboardPage.tsx`; e2e `19-alerta-ocupacion.spec.ts` | T26-187. Mismo alcance que RF-25: **indicador visual en el panel de monitoreo**, no una notificación push ni un mail. A diferencia de RF-25 viene **encendido** por defecto (umbral NOT NULL en 85%); para desactivarlo hay que ponerlo en 100. La comparación la resuelve el backend, así que la UI no reimplementa el criterio. |
 | RF-27 Alerta por posible error de detección | **No encontrado** | — | Sin implementación. Prioridad Baja / Opcional. `origen_cambio` habilita medirlo a futuro (correcciones manuales sobre cambios automáticos). |
 
 ### 8. Administración del sistema
@@ -167,7 +167,7 @@ Los 3 skipped de e2e (confirmados con una corrida dirigida a esos specs):
 | RF-03 Alta/baja/modificación de usuarios | **Solo el alta** | `test_auth.py::test_register_exige_admin`. Baja y modificación no existen, así que no hay nada que probar. |
 | RF-15 Filtrado por estado | **Ninguna** | El parámetro `estado` de `GET /mesas/` no tiene test unitario ni e2e. Es código sin cobertura *y* sin UI. |
 | RF-24 Horarios de mayor demanda | **Ninguna** | No implementado. |
-| RF-26 Alerta de alta ocupación | **Ninguna** | No implementado. |
+| RF-26 Alerta de alta ocupación | **Cubierta** | 8 unitarios en `test_metricas.py` (por debajo, al superar, al bajar de nuevo, justo en el umbral, umbral configurado, reservadas, mesas inactivas, por sector) + 8 en `test_configuracion.py` (incluye el parametrizado de rango) + 4 e2e en `19-alerta-ocupacion.spec.ts`. |
 | RF-27 Alerta por error de detección | **Ninguna** | No implementado. |
 | RF-32 Reporte de ocupación diaria | **Ninguna** | No implementado. |
 

@@ -18,6 +18,9 @@ class ConfiguracionResponse(BaseModel):
     # nunca None, porque la columna es NOT NULL con default desde que se creó.
     confirmacion_segundos: float
     overlap_minimo: float
+    # Umbral de alta ocupación en porcentaje (T26-187, RF-26). Tampoco es None nunca: NOT
+    # NULL con default 85. Misma escala que porcentaje_ocupacion de /metricas/ocupacion.
+    umbral_ocupacion_alta: float
 
     model_config = {"from_attributes": True}
 
@@ -37,6 +40,9 @@ class ConfiguracionUpdate(BaseModel):
     # el .env: > 0 sin techo para la confirmación, fracción (0, 1] para el overlap.
     confirmacion_segundos: Optional[float] = Field(None, gt=0)
     overlap_minimo: Optional[float] = Field(None, gt=0, le=1)
+    # Porcentaje (0, 100]: los mismos límites que el CHECK de la columna. Un 0 dejaría la
+    # alerta encendida para siempre y un valor mayor a 100 no podría dispararse nunca.
+    umbral_ocupacion_alta: Optional[float] = Field(None, gt=0, le=100)
 
 
 class ConfiguracionActualizadaResponse(ConfiguracionResponse):

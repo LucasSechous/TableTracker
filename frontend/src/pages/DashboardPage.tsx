@@ -407,6 +407,7 @@ export default function DashboardPage() {
         onVerHistorial={() => navigate("/historial")}
         onVerOcupacion={() => navigate("/ocupacion")}
         onVerRotacion={() => navigate("/rotacion")}
+        onVerOcupacionDiaria={() => navigate("/ocupacion-diaria")}
         onCamaras={() => navigate("/camaras")}
         onCalibrarRoi={() => navigate("/calibracion-roi")}
         onConfiguracion={() => navigate("/configuracion")}

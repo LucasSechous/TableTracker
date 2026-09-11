@@ -343,6 +343,41 @@ export async function obtenerRotacion(
   return res.json();
 }
 
+export interface TiempoPorEstadoResponse {
+  libre: number;
+  ocupada: number;
+  pendiente_limpieza: number;
+  reservada: number;
+}
+
+export interface OcupacionDiariaMesaResponse {
+  mesa_id: number;
+  numero: number;
+  sector_id: number;
+  minutos_por_estado: TiempoPorEstadoResponse;
+  porcentaje_ocupacion: number;
+}
+
+export interface OcupacionDiariaResponse {
+  fecha: string;
+  inicio: string;
+  fin: string;
+  total_mesas: number;
+  porcentaje_ocupacion: number;
+  minutos_por_estado: TiempoPorEstadoResponse;
+  mesas: OcupacionDiariaMesaResponse[];
+}
+
+export async function obtenerOcupacionDiaria(
+  request: APIRequestContext,
+  token: string,
+  params?: { fecha?: string; sector_id?: number }
+): Promise<OcupacionDiariaResponse> {
+  const res = await request.get(`${BACKEND_URL}/metricas/ocupacion-diaria`, { headers: authHeaders(token), params });
+  if (!res.ok()) throw new Error(`No se pudo obtener ocupación diaria: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
 export async function listarHistorial(
   request: APIRequestContext,
   token: string,

@@ -256,9 +256,9 @@ Hoy los dos coinciden. Nada garantiza que sigan coincidiendo: agregar un estado 
 
 | # | Hallazgo | Módulo | Tipo | Esfuerzo |
 |---|---|---|---|---|
-| I-1 | Dos `GET` sin barra final → 307 en la ruta más caliente | Integración | Inconsistencia | Trivial |
-| F-1 | `UsuariosPage` duplica `authApi.me()` teniendo `useAuth` | Frontend | Duplicación | Bajo |
-| F-7 | Tres exports sin consumidor externo (`esEncargado` entre ellos) | Frontend | Código muerto | Trivial |
+| ~~I-1~~ | ~~Dos `GET` sin barra final → 307 en la ruta más caliente~~ · **RESUELTO** | Integración | Inconsistencia | — |
+| ~~F-1~~ | ~~`UsuariosPage` duplica `authApi.me()` teniendo `useAuth`~~ · **RESUELTO** | Frontend | Duplicación | — |
+| F-7 | Dos exports sin consumidor externo · **PARCIAL**: `esEncargado` eliminado; quedan `TAMANO_MINIMO_SALON` y `formatearNumeroCsv` | Frontend | Código muerto | Trivial |
 | B-1 | "Buscar o 404" inline en 10 handlers de dos routers | Backend | Duplicación | Bajo |
 | B-2 | Validación de sector repetida en tres routers | Backend | Duplicación | Bajo |
 | F-11 | `permisos.ts` contradice su propio invariante declarado | Frontend | Inconsistencia | Bajo (decisión en B-4/B-5) |
@@ -287,3 +287,50 @@ Tres puntos de este informe no se pueden cerrar sin mirar `vision-module`, que q
 3. **F-2 (la regla de horario duplicada) gana un tercer lado si vision-module llega a consumirla.** Hoy no la usa —lee `confirmacion_segundos` y `overlap_minimo` de `/configuracion`, no las horas—, pero es el mismo endpoint, así que conviene confirmarlo cuando el módulo se estabilice.
 
 Además, y fuera del alcance de este informe pero relevante para planificar: la instrumentación de latencia de T26-181 **no persiste nada** (solo loguea a stderr, sin archivo ni rotación). Quedó documentado en el relevamiento de T26-188/RF-27 y es el insumo que faltaría para auditar el rendimiento del pipeline.
+
+
+---
+
+# 6. Estado de los hallazgos
+
+Actualizado al 2026-09-11. Esta sección se mantiene a mano: el informe es el relevamiento, y
+acá se anota qué se fue cerrando para no tener que releerlo entero.
+
+| Hallazgo | Estado | Dónde se resolvió |
+|---|---|---|
+| I-1 · barras finales que provocaban 307 | **Resuelto** | `services/api.ts:91` y `:172` |
+| F-1 · `UsuariosPage` duplicaba `authApi.me()` | **Resuelto** | ahora consume `useAuth()` |
+| F-7 · `esEncargado` exportado sin consumidor | **Resuelto** | eliminado; su única llamada quedó inline en `puedeEditarLayout` |
+| F-7 · `TAMANO_MINIMO_SALON`, `formatearNumeroCsv` | Pendiente | pasar a privados del módulo |
+| B-1, B-2, B-3, B-4, B-5 | Pendientes | — |
+| F-2 a F-6, F-8 a F-12 | Pendientes | — |
+| I-2, I-3 | Pendientes | — |
+
+## Hallazgos nuevos, posteriores al relevamiento
+
+Aparecieron trabajando sobre el código después de cerrar la auditoría. Se anotan acá para no
+perderlos, con el mismo formato que el resto.
+
+### N-1 · `11-rotacion.spec.ts` dependía de la hora del día · **RESUELTO**
+
+Desde que se cargó un horario de servicio real (07:00 → 01:00), los cuatro tests del bloque
+sembrado fallaban de forma determinista entre las 01:00 y las 07:00: crean sus transiciones
+en el momento de correr, y `GET /metricas/rotacion` descarta las que caen fuera de la franja.
+El endpoint estaba bien; el spec asumía que toda transición cuenta, cosa que era cierta
+mientras `hora_apertura`/`hora_cierre` estuvieran en NULL.
+
+Resuelto haciendo que el bloque fije su propia ventana en el `beforeEach` y la restaure en el
+`afterEach`, el mismo patrón que usan los specs 20, 21 y 23. Verificado poniendo el horario
+global en una ventana que excluye la hora actual: los 6 tests pasan igual.
+
+### N-2 · `/usuarios` no tenía ningún test e2e · **RESUELTO**
+
+Detectado al cruzar pantallas contra specs: la pantalla de administración de usuarios, con
+tres salvaguardas de negocio que el backend devuelve como 409, no tenía cobertura. Cubierto
+por `e2e/tests/23-usuarios.spec.ts` (8 casos). Para que fuera testeable hubo que agregarle
+`data-testid` por fila, que la pantalla no tenía — parte de por qué llegó sin cobertura.
+
+### N-3 · Dos specs numerados 16 · **RESUELTO**
+
+`16-filtro-estado` y `16-ocupacion-diaria` colisionaban. El segundo pasó a `22-`, respetando
+que el número identifica la sección y que el 16 ya estaba tomado.

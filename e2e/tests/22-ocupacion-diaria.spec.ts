@@ -24,7 +24,7 @@ import {
   getOcupacionDiariaFilas,
 } from "../fixtures/ui-helpers";
 
-// Sección 16 — Reporte de ocupación diaria (T26-185, RF-32)
+// Sección 22 — Reporte de ocupación diaria (T26-185, RF-32)
 //
 // El backend reconstruye minutos por estado desde historial_estados y el algoritmo en sí
 // (corte de día, arrastre de estado, mesas inactivas, etc.) ya está cubierto por

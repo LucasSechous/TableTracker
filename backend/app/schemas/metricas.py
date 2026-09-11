@@ -61,3 +61,27 @@ class OcupacionDiariaResponse(BaseModel):
     porcentaje_ocupacion: float
     minutos_por_estado: TiempoPorEstado
     mesas: list[OcupacionDiariaMesaResponse]
+
+
+# Una franja horaria del reporte de demanda (T26-186, RF-24).
+#
+# `hora` es la hora del reloj LOCAL (0-23), no UTC: el reporte responde "¿a qué hora se llena
+# el salón?" y esa pregunta se contesta en el reloj del local.
+#
+# Se devuelven los minutos además del porcentaje para que el consumidor pueda juzgar cuánto
+# pesa cada barra: 100% sobre 20 minutos medidos no es lo mismo que 100% sobre 18 horas, y
+# sin el crudo el gráfico invita a leer una tendencia donde solo hay una muestra chica.
+class DemandaFranjaResponse(BaseModel):
+    hora: int
+    porcentaje_ocupacion: float
+    minutos_ocupada: float
+    minutos_medidos: float
+
+
+class DemandaResponse(BaseModel):
+    fecha_inicio: date
+    fecha_fin: date
+    # Días operativos efectivamente incluidos. Es el tamaño de muestra del reporte: con 1 día
+    # el resultado es una anécdota, no un patrón, y la UI lo dice en vez de dibujar un pico.
+    dias: int
+    franjas: list[DemandaFranjaResponse]

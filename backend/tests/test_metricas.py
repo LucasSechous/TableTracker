@@ -613,3 +613,167 @@ def test_ocupacion_diaria_cualquier_rol_autenticado_puede_leer(client, como, cre
 def test_ocupacion_diaria_sin_autenticar_da_401(client, crear_mesa):
     crear_mesa()
     assert client.get("/metricas/ocupacion-diaria").status_code == 401
+
+
+# --------------------------------------------------------------- /demanda (T26-186, RF-24)
+#
+# Lo que hay que proteger acá es el REPARTO por franja. Sumar bien el total ya lo cubre
+# /ocupacion-diaria; lo nuevo es que una ocupación que cruza el borde de la hora caiga
+# partida y no entera en la franja donde arrancó, porque eso es justo lo que fabricaría un
+# pico falso en el gráfico que este reporte existe para dibujar.
+
+
+def _franjas(cuerpo):
+    return {f["hora"]: f for f in cuerpo["franjas"]}
+
+
+def test_demanda_sin_mesas_no_devuelve_franjas(client, como):
+    como("admin")
+    cuerpo = client.get("/metricas/demanda", params={"fecha_inicio": "2026-08-30", "fecha_fin": "2026-08-30"}).json()
+    assert cuerpo["franjas"] == []
+    assert cuerpo["dias"] == 1
+
+
+def test_demanda_agrupa_por_hora_local_y_no_utc(client, como, db, crear_mesa):
+    """La franja es la del reloj del local. Con TZ_LOCAL en UTC-3 la diferencia son 3 horas.
+
+    Si se agrupara por UTC, esta ocupación de 14:00 a 15:00 local aparecería en la franja 17.
+    """
+    mesa = crear_mesa(estado=EstadoMesa.libre)
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(14, dia=30))
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(15, dia=30))
+    como("admin")
+
+    franjas = _franjas(
+        client.get("/metricas/demanda", params={"fecha_inicio": "2026-08-30", "fecha_fin": "2026-08-30"}).json()
+    )
+    assert franjas[14]["minutos_ocupada"] == 60
+    assert franjas[15]["minutos_ocupada"] == 0
+    assert 17 not in franjas or franjas[17]["minutos_ocupada"] == 0
+
+
+def test_demanda_reparte_una_ocupacion_que_cruza_el_borde_de_la_hora(client, como, db, crear_mesa):
+    """De 20:50 a 21:40 son 10 minutos en la franja 20 y 40 en la 21, no 50 en la 20."""
+    from datetime import timedelta as _td
+
+    mesa = crear_mesa(estado=EstadoMesa.libre)
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(20, dia=30) + _td(minutes=50))
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(21, dia=30) + _td(minutes=40))
+    como("admin")
+
+    franjas = _franjas(
+        client.get("/metricas/demanda", params={"fecha_inicio": "2026-08-30", "fecha_fin": "2026-08-30"}).json()
+    )
+    assert franjas[20]["minutos_ocupada"] == 10
+    assert franjas[21]["minutos_ocupada"] == 40
+    # Y el total sigue siendo el real: el reparto no inventa ni pierde minutos.
+    assert franjas[20]["minutos_ocupada"] + franjas[21]["minutos_ocupada"] == 50
+
+
+def test_demanda_acumula_varios_dias_en_la_misma_franja(client, como, db, crear_mesa):
+    """Dos días con la misma hora ocupada suman en la misma franja: eso es el patrón."""
+    mesa = crear_mesa(estado=EstadoMesa.libre)
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(13, dia=30))
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(14, dia=30))
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(13, dia=31))
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(14, dia=31))
+    como("admin")
+
+    cuerpo = client.get("/metricas/demanda", params={"fecha_inicio": "2026-08-30", "fecha_fin": "2026-08-31"}).json()
+    assert cuerpo["dias"] == 2
+    assert _franjas(cuerpo)[13]["minutos_ocupada"] == 120
+
+
+def test_demanda_el_porcentaje_es_sobre_lo_medido_no_sobre_la_franja_entera(client, como, db, crear_mesa):
+    """Una mesa ocupada media hora de dos mesas-hora medidas es 25%, no 50%."""
+    from datetime import timedelta as _td
+
+    ocupada = crear_mesa(estado=EstadoMesa.libre)
+    crear_mesa(estado=EstadoMesa.libre)  # segunda mesa, libre toda la franja
+    _historial(db, ocupada.id, EstadoMesa.ocupada, _a_las(13, dia=30))
+    _historial(db, ocupada.id, EstadoMesa.libre, _a_las(13, dia=30) + _td(minutes=30))
+    como("admin")
+
+    franja = _franjas(
+        client.get("/metricas/demanda", params={"fecha_inicio": "2026-08-30", "fecha_fin": "2026-08-30"}).json()
+    )[13]
+    assert franja["minutos_ocupada"] == 30
+    assert franja["minutos_medidos"] == 120  # 2 mesas x 60 min
+    assert franja["porcentaje_ocupacion"] == 25.0
+
+
+def test_demanda_reservada_no_cuenta_como_ocupacion(client, como, db, crear_mesa):
+    """Coherencia con T26-154: reservada es un bucket aparte, no ocupación física."""
+    mesa = crear_mesa(estado=EstadoMesa.libre)
+    _historial(db, mesa.id, EstadoMesa.reservada, _a_las(13, dia=30))
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(14, dia=30))
+    como("admin")
+
+    franja = _franjas(
+        client.get("/metricas/demanda", params={"fecha_inicio": "2026-08-30", "fecha_fin": "2026-08-30"}).json()
+    )[13]
+    assert franja["minutos_ocupada"] == 0
+    assert franja["porcentaje_ocupacion"] == 0.0
+
+
+def test_demanda_solo_devuelve_franjas_del_horario_de_servicio(client, como, db, crear_mesa):
+    """Con horario 20:00->02:00 el reporte habla de 6 franjas, no de 24 con ceros.
+
+    Una hora con el local cerrado no es "0% de ocupación": es una hora sobre la que el
+    reporte no dice nada, y dibujarla en cero la haría parecer un valle medido.
+    """
+    crear_mesa(estado=EstadoMesa.libre)
+    _configurar_horario(db, 20, 2)
+    como("admin")
+
+    cuerpo = client.get("/metricas/demanda", params={"fecha_inicio": "2026-08-30", "fecha_fin": "2026-08-30"}).json()
+    # 20:00 -> 02:00 son seis franjas: 20, 21, 22, 23, 0 y 1.
+    assert sorted(_franjas(cuerpo)) == [0, 1, 20, 21, 22, 23]
+
+
+def test_demanda_rango_por_defecto_es_una_semana(client, como, crear_mesa):
+    crear_mesa()
+    como("admin")
+    cuerpo = client.get("/metricas/demanda").json()
+    assert cuerpo["dias"] == 7
+
+
+def test_demanda_fecha_inicio_posterior_a_fin_da_400(client, como):
+    como("admin")
+    respuesta = client.get(
+        "/metricas/demanda", params={"fecha_inicio": "2026-08-31", "fecha_fin": "2026-08-30"}
+    )
+    assert respuesta.status_code == 400
+
+
+def test_demanda_sector_inexistente_da_400(client, como):
+    como("admin")
+    assert client.get("/metricas/demanda", params={"sector_id": 9999}).status_code == 400
+
+
+def test_demanda_filtra_por_sector(client, como, db, crear_sector, crear_mesa):
+    sector_a = crear_sector(nombre="A")
+    sector_b = crear_sector(nombre="B")
+    mesa_a = crear_mesa(sector_id=sector_a.id, estado=EstadoMesa.libre)
+    mesa_b = crear_mesa(sector_id=sector_b.id, estado=EstadoMesa.libre)
+    _historial(db, mesa_a.id, EstadoMesa.ocupada, _a_las(13, dia=30))
+    _historial(db, mesa_b.id, EstadoMesa.ocupada, _a_las(13, dia=30))
+    como("admin")
+
+    cuerpo = client.get(
+        "/metricas/demanda",
+        params={"fecha_inicio": "2026-08-30", "fecha_fin": "2026-08-30", "sector_id": sector_a.id},
+    ).json()
+    # Solo la mesa de A: 60 min medidos en la franja 13, no 120.
+    assert _franjas(cuerpo)[13]["minutos_medidos"] == 60
+
+
+def test_demanda_cualquier_rol_autenticado_puede_leer(client, como, crear_mesa):
+    crear_mesa()
+    como("mozo")
+    assert client.get("/metricas/demanda").status_code == 200
+
+
+def test_demanda_sin_autenticar_da_401(client, crear_mesa):
+    crear_mesa()
+    assert client.get("/metricas/demanda").status_code == 401

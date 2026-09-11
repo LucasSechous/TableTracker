@@ -170,6 +170,11 @@ export default function UsuariosPage() {
                 return (
                   <div
                     key={usuario.id}
+                    // Ancla estable para los tests (T26-161). Esta pantalla no la tenía, y esa
+                    // es parte de la razón por la que llegó sin cobertura e2e: sin un testid
+                    // por fila, ubicar la tarjeta de un usuario obliga a filtrar divs por
+                    // texto, que engancha el nodo más interno y no la tarjeta.
+                    data-testid={`usuario-fila-${usuario.id}`}
                     style={{
                       backgroundColor: "#fff",
                       border: "1px solid #eee",

@@ -261,3 +261,26 @@ export interface EstadoOpcion {
   valor: string
   etiqueta: string
 }
+
+// Una franja del reporte de horarios de mayor demanda (T26-186, RF-24).
+//
+// `hora` es la hora del reloj LOCAL (0-23). Solo vienen las franjas DENTRO del horario de
+// servicio y con datos medidos: la lista no tiene 24 elementos, y una hora ausente significa
+// "el reporte no dice nada de esa hora", no "0% de ocupación".
+export interface DemandaFranja {
+  hora: number
+  porcentaje_ocupacion: number
+  // Crudos además del porcentaje: 100% sobre 20 minutos medidos no es lo mismo que 100%
+  // sobre 18 horas, y sin esto el gráfico invita a leer una tendencia donde hay una muestra
+  // chica. La UI los usa para rotular el tamaño de muestra.
+  minutos_ocupada: number
+  minutos_medidos: number
+}
+
+export interface DemandaResponse {
+  fecha_inicio: string
+  fecha_fin: string
+  // Días operativos incluidos: con 1 el resultado es una anécdota, no un patrón.
+  dias: number
+  franjas: DemandaFranja[]
+}

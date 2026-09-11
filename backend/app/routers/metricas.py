@@ -8,7 +8,7 @@
 # endpoint nuevo porque el dato es exactamente el que este ya calcula; uno aparte tendría
 # que repetir la misma consulta agregada para responder una pregunta sobre ella.
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -23,6 +23,8 @@ from app.models.sector import Sector
 from app.routers.auth import get_usuario_actual
 from app.schemas.metricas import (
     ConteoPorEstado,
+    DemandaFranjaResponse,
+    DemandaResponse,
     OcupacionDiariaMesaResponse,
     OcupacionDiariaResponse,
     OcupacionResponse,
@@ -30,7 +32,7 @@ from app.schemas.metricas import (
     TiempoPorEstado,
 )
 from app.services.horario import en_horario_de_servicio, hoy_local, rango_dia_operativo
-from app.services.ocupacion import calcular_ocupacion_por_mesa
+from app.services.ocupacion import calcular_demanda_por_franja, calcular_ocupacion_por_mesa
 
 router = APIRouter(dependencies=[Depends(get_usuario_actual)])
 
@@ -41,6 +43,10 @@ router = APIRouter(dependencies=[Depends(get_usuario_actual)])
 # devolviendo como bucket aparte en conteo_por_estado para que el panel pueda
 # mostrarla sin mezclarla con el %.
 ESTADOS_QUE_CUENTAN_COMO_OCUPACION = {EstadoMesa.ocupada}
+
+# Ventana por defecto del reporte de demanda (T26-186): una semana. Suficiente para que un
+# patrón semanal se note y corto para que el resultado siga describiendo el salón actual.
+DIAS_DEMANDA_POR_DEFECTO = 7
 
 
 @router.get("/ocupacion", response_model=OcupacionResponse)
@@ -248,4 +254,80 @@ def obtener_ocupacion_diaria(
         porcentaje_ocupacion=porcentaje_general,
         minutos_por_estado=TiempoPorEstado(**total_minutos),
         mesas=mesas_respuesta,
+    )
+
+
+# Horarios de mayor demanda (T26-186, RF-24).
+#
+# "Demanda" se mide como OCUPACIÓN media por franja, no como cantidad de llegadas. Las dos
+# lecturas son defendibles, pero el ticket pide "identificar los picos de ocupación del
+# salón", y además la ocupación es la que responde la pregunta operativa de fondo —cuándo
+# conviene tener más gente en el salón—: cinco mesas que se ocupan a las 21 y se liberan a
+# las 21:30 no cargan el salón igual que cinco que se quedan hasta el cierre, y un conteo de
+# llegadas las mostraría idénticas.
+#
+# Se apoya en la misma reconstrucción de historial que el reporte diario de T26-185 en vez de
+# contar filas: contar filas de historial_estados daría "cuántas veces se tocó la mesa", que
+# mezcla correcciones manuales con ocupaciones reales.
+@router.get("/demanda", response_model=DemandaResponse)
+def obtener_demanda(
+    fecha_inicio: Optional[date] = Query(None),
+    fecha_fin: Optional[date] = Query(None),
+    sector_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+):
+    if sector_id is not None and not db.query(Sector).filter(Sector.id == sector_id).first():
+        raise HTTPException(status_code=400, detail="El sector indicado no existe")
+
+    # Por defecto, la última semana operativa terminada en hoy. Un rango por defecto acotado
+    # y no "todo el historial" a propósito: el patrón horario de hace tres meses no describe
+    # el salón de hoy, y barrer todo haría más lenta la consulta más común.
+    hoy = hoy_local()
+    if fecha_fin is None:
+        fecha_fin = hoy
+    if fecha_inicio is None:
+        fecha_inicio = fecha_fin - timedelta(days=DIAS_DEMANDA_POR_DEFECTO - 1)
+    if fecha_inicio > fecha_fin:
+        raise HTTPException(status_code=400, detail="fecha_inicio no puede ser posterior a fecha_fin")
+
+    config = db.query(ConfiguracionGeneral).filter(ConfiguracionGeneral.id == 1).first()
+    apertura = config.hora_apertura if config else None
+    cierre = config.hora_cierre if config else None
+
+    # Una ventana por día operativo. Los días futuros se piden igual y quedan vacíos solos:
+    # _intervalos_por_mesa() corta en `ahora` y no proyecta.
+    dias = [
+        rango_dia_operativo(fecha_inicio + timedelta(days=n), apertura, cierre)
+        for n in range((fecha_fin - fecha_inicio).days + 1)
+    ]
+
+    mesas_query = db.query(Mesa)
+    if sector_id is not None:
+        mesas_query = mesas_query.filter(Mesa.sector_id == sector_id)
+    mesas = mesas_query.all()
+
+    por_franja = calcular_demanda_por_franja(db, mesas, dias)
+
+    franjas = []
+    for hora in sorted(por_franja):
+        minutos = por_franja[hora]
+        medidos = sum(minutos.values())
+        ocupada = sum(minutos[estado.value] for estado in ESTADOS_QUE_CUENTAN_COMO_OCUPACION)
+        franjas.append(
+            DemandaFranjaResponse(
+                hora=hora,
+                porcentaje_ocupacion=round((ocupada / medidos) * 100, 2) if medidos > 0 else 0.0,
+                minutos_ocupada=round(ocupada, 2),
+                minutos_medidos=round(medidos, 2),
+            )
+        )
+
+    # Solo las franjas CON datos, y no las 24 rellenas con ceros: una franja fuera del horario
+    # de servicio no es "0% de ocupación", es una hora sobre la que el reporte no dice nada, y
+    # dibujarla en cero la haría parecer un valle medido.
+    return DemandaResponse(
+        fecha_inicio=fecha_inicio,
+        fecha_fin=fecha_fin,
+        dias=len(dias),
+        franjas=franjas,
     )

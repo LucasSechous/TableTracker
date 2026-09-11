@@ -127,6 +127,89 @@ export async function ensureUsuarioDeRol(
   return loginViaApi(request, credenciales.email, credenciales.password);
 }
 
+/** El usuario dueño del token. Útil para ubicar la propia fila sin adivinarla por email. */
+export async function obtenerUsuarioActual(
+  request: APIRequestContext,
+  token: string
+): Promise<{ id: number; nombre: string; email: string; rol: string }> {
+  const res = await request.get(`${BACKEND_URL}/auth/me`, { headers: authHeaders(token) });
+  if (!res.ok()) throw new Error(`No se pudo obtener /auth/me: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
+export interface UsuarioAdminResponse {
+  id: number;
+  nombre: string;
+  email: string;
+  rol: string;
+  activo: boolean;
+  es_cuenta_servicio: boolean;
+}
+
+export async function listarUsuarios(
+  request: APIRequestContext,
+  token: string,
+  params?: { incluir_inactivos?: boolean }
+): Promise<UsuarioAdminResponse[]> {
+  const res = await request.get(`${BACKEND_URL}/usuarios/`, { headers: authHeaders(token), params });
+  if (!res.ok()) throw new Error(`No se pudieron listar usuarios: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
+export async function actualizarUsuario(
+  request: APIRequestContext,
+  token: string,
+  usuarioId: number,
+  datos: { rol?: string; activo?: boolean }
+): Promise<UsuarioAdminResponse> {
+  const res = await request.patch(`${BACKEND_URL}/usuarios/${usuarioId}`, {
+    headers: authHeaders(token),
+    data: datos,
+  });
+  if (!res.ok()) throw new Error(`No se pudo actualizar el usuario: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
+/**
+ * Usuario descartable para los tests que MUTAN un usuario (rol, baja lógica).
+ *
+ * Separado de credencialesDeRol() a propósito: aquellos cuatro son los sujetos de los specs
+ * de permisos (17 y 18) y dependen de conservar su rol exacto. Si un test de la pantalla de
+ * usuarios les cambiara el rol y fallara antes de restaurarlo, rompería specs ajenos.
+ *
+ * Mismo esquema de alias `+` y por el mismo motivo: no hay endpoint para borrar usuarios, así
+ * que un email aleatorio por corrida dejaría cuentas muertas para siempre.
+ */
+export function credencialesEditable() {
+  const [local, dominio] = TEST_USER.email.split("@");
+  return {
+    nombre: "E2E editable",
+    email: `${local}+editable@${dominio}`,
+    password: TEST_USER.password,
+    rol: "mozo",
+  };
+}
+
+export async function ensureUsuarioEditable(
+  request: APIRequestContext,
+  tokenAdmin: string
+): Promise<UsuarioAdminResponse> {
+  const credenciales = credencialesEditable();
+  const res = await request.post(`${BACKEND_URL}/auth/register`, {
+    headers: authHeaders(tokenAdmin),
+    data: credenciales,
+  });
+  if (!res.ok() && res.status() !== 400) {
+    throw new Error(`No se pudo asegurar el usuario editable (${res.status()}): ${await res.text()}`);
+  }
+  // Se relee del listado en vez de usar la respuesta del register: a partir de la segunda
+  // corrida el register devuelve 400 y no hay cuerpo del cual sacar el id.
+  const usuarios = await listarUsuarios(request, tokenAdmin, { incluir_inactivos: true });
+  const usuario = usuarios.find((u) => u.email === credenciales.email);
+  if (!usuario) throw new Error("El usuario editable no aparece en el listado tras asegurarlo");
+  return usuario;
+}
+
 function authHeaders(token: string) {
   return { Authorization: `Bearer ${token}` };
 }
@@ -403,6 +486,31 @@ export async function actualizarConfiguracion(
 ): Promise<ConfiguracionResponse> {
   const res = await request.patch(`${BACKEND_URL}/configuracion`, { headers: authHeaders(token), data: datos });
   if (!res.ok()) throw new Error(`No se pudo actualizar configuración: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
+export interface DemandaFranjaResponse {
+  hora: number;
+  porcentaje_ocupacion: number;
+  minutos_ocupada: number;
+  minutos_medidos: number;
+}
+
+export interface DemandaResponse {
+  fecha_inicio: string;
+  fecha_fin: string;
+  dias: number;
+  franjas: DemandaFranjaResponse[];
+}
+
+/** Horarios de mayor demanda (T26-186, RF-24). Sin params devuelve la última semana. */
+export async function obtenerDemanda(
+  request: APIRequestContext,
+  token: string,
+  params?: { fecha_inicio?: string; fecha_fin?: string; sector_id?: number }
+): Promise<DemandaResponse> {
+  const res = await request.get(`${BACKEND_URL}/metricas/demanda`, { headers: authHeaders(token), params });
+  if (!res.ok()) throw new Error(`No se pudo obtener demanda: ${res.status()} ${await res.text()}`);
   return res.json();
 }
 

@@ -601,6 +601,7 @@ export default function DashboardPage() {
         onVerOcupacion={() => navigate("/ocupacion")}
         onVerRotacion={() => navigate("/rotacion")}
         onVerOcupacionDiaria={() => navigate("/ocupacion-diaria")}
+        onVerDemanda={() => navigate("/demanda")}
         onCamaras={() => navigate("/camaras")}
         onCalibrarRoi={() => navigate("/calibracion-roi")}
         onConfiguracion={() => navigate("/configuracion")}

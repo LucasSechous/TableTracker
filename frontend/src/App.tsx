@@ -8,6 +8,7 @@ import HistorialPage from "./pages/HistorialPage";
 import OcupacionPage from "./pages/OcupacionPage";
 import RotacionPage from "./pages/RotacionPage";
 import OcupacionDiariaPage from "./pages/OcupacionDiariaPage";
+import DemandaPage from "./pages/DemandaPage";
 import ConfiguracionPage from "./pages/ConfiguracionPage";
 import CalibracionRoiPage from "./pages/CalibracionRoiPage";
 import CamarasPage from "./pages/CamarasPage";
@@ -70,6 +71,16 @@ export default function App() {
               element={
                 <PrivateRoute>
                   <OcupacionDiariaPage />
+                </PrivateRoute>
+              }
+            />
+            {/* Sin AdminRoute por el mismo motivo que las otras tres vistas de métricas:
+                GET /metricas/demanda pide sesión pero no rol (T26-186). */}
+            <Route
+              path="/demanda"
+              element={
+                <PrivateRoute>
+                  <DemandaPage />
                 </PrivateRoute>
               }
             />

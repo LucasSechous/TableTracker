@@ -14,6 +14,7 @@ import type {
   CamaraTestResponse,
   DetectionFrameResult,
   OcupacionResponse,
+  DemandaResponse,
   RotacionMesa,
   OcupacionDiariaResponse,
   EstadoOpcion,
@@ -33,6 +34,7 @@ export type {
   DetectionFrameResult,
   ConteoPorEstado,
   OcupacionResponse,
+  DemandaResponse,
   RotacionMesa,
   OcupacionDiariaMesa,
   OcupacionDiariaResponse,
@@ -307,6 +309,13 @@ export const metricasApi = {
   // "hasta" sea inclusivo hay que mandar el fin del día (ver finDelDia en RangoFechas).
   rotacion: (params?: { fecha_inicio?: string; fecha_fin?: string; sector_id?: number }) =>
     api.get<RotacionMesa[]>("/metricas/rotacion", { params }),
+
+  // Horarios de mayor demanda (T26-186, RF-24): ocupación media por franja horaria. Las
+  // fechas son días (YYYY-MM-DD), no datetimes como en rotacion: el corte lo hace el día
+  // operativo del backend, no una hora que el cliente elija. Sin parámetros devuelve la
+  // última semana.
+  demanda: (params?: { fecha_inicio?: string; fecha_fin?: string; sector_id?: number }) =>
+    api.get<DemandaResponse>("/metricas/demanda", { params }),
 
   // Resumen diario de ocupación (T26-185, RF-32): minutos por estado y % de ocupación,
   // reconstruidos desde historial_estados para el día operativo de `fecha` (una fecha

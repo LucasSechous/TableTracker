@@ -6,9 +6,12 @@ import {
   desactivarMesa,
   desactivarSector,
   obtenerRotacion,
+  obtenerConfiguracion,
+  actualizarConfiguracion,
   uniqueSuffix,
   SectorResponse,
   MesaResponse,
+  ConfiguracionResponse,
 } from "../fixtures/api-helpers";
 import {
   gotoDashboardAuthed,
@@ -57,8 +60,19 @@ test.describe("con mesas que rotaron una cantidad conocida de veces", () => {
   let mesaDosRotaciones: MesaResponse;
   let mesaUnaRotacion: MesaResponse;
   let mesaSinRotar: MesaResponse;
+  let configPrevia: ConfiguracionResponse;
 
   test.beforeEach(async ({ request, token }) => {
+    // El horario de servicio se fija acá y no se hereda del que esté cargado (T26-171).
+    //
+    // GET /metricas/rotacion descarta las transiciones que caen fuera de la franja, y este
+    // bloque crea las suyas en el momento de correr. Con un horario real cargado —07:00 a
+    // 01:00, por ejemplo— estos tests pasaban de día y fallaban de madrugada, de forma
+    // determinista y sin que nada hubiera cambiado en el código. Una ventana propia los
+    // vuelve independientes de la hora a la que corra la suite.
+    configPrevia = await obtenerConfiguracion(request, token);
+    await actualizarConfiguracion(request, token, { hora_apertura: "00:00", hora_cierre: "23:59" });
+
     const suffix = uniqueSuffix(test.info().parallelIndex);
     sector = await createSector(request, token, { nombre: `E2E Rotación ${suffix}` });
 
@@ -79,6 +93,12 @@ test.describe("con mesas que rotaron una cantidad conocida de veces", () => {
   });
 
   test.afterEach(async ({ request, token }) => {
+    // El horario es configuración global: dejarlo abierto haría que el resto de la suite
+    // corriera con un local que nunca cierra, y eso cambia lo que cuentan las métricas.
+    await actualizarConfiguracion(request, token, {
+      hora_apertura: configPrevia.hora_apertura ?? undefined,
+      hora_cierre: configPrevia.hora_cierre ?? undefined,
+    }).catch(() => {});
     await desactivarMesa(request, token, mesaDosRotaciones.id).catch(() => {});
     await desactivarMesa(request, token, mesaUnaRotacion.id).catch(() => {});
     await desactivarMesa(request, token, mesaSinRotar.id).catch(() => {});

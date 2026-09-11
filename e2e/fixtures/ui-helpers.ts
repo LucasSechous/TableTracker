@@ -539,3 +539,14 @@ export async function getDashboardEstadoOpciones(page: Page): Promise<string[]> 
     opciones.map((o) => (o as HTMLOptionElement).value)
   );
 }
+
+/** Horarios de mayor demanda (T26-186, RF-24). */
+export async function gotoDemandaAuthed(page: Page, token: string): Promise<void> {
+  await injectToken(page, token);
+  await page.goto("/demanda");
+  await waitForDemandaLoaded(page);
+}
+
+export async function waitForDemandaLoaded(page: Page): Promise<void> {
+  await page.getByText("Cargando demanda...").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
+}

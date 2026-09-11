@@ -1,6 +1,10 @@
 # Loop de detección y actualización automática de estado (RF-10, RF-11)
 
-El módulo de visión pasa de ser una prueba de concepto de YOLOv8n a un proceso que corre continuo:
+El módulo de visión pasa de ser una prueba de concepto (T26-93, armada sobre YOLOv8n) a un proceso que
+corre continuo con **YOLOv8s a `imgsz=960`**, que es el default actual y no el de aquella prueba: la
+elección está medida en T26-178 / T26-179 (costo p90 por modelo y resolución contra el presupuesto de
+2 s por ciclo; la tabla está en `vision-module/app/config.py` y el procedimiento en
+[banco-pruebas-vision.md](banco-pruebas-vision.md)). El proceso:
 lee la cámara y los ROI del sector piloto desde el backend, detecta personas por frame, calcula el
 overlap contra cada ROI, confirma la lectura contra un umbral de tiempo sostenido y actualiza el
 estado de la mesa por la API.

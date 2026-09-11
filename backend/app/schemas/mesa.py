@@ -41,5 +41,17 @@ class MesaResponse(BaseModel):
     estado_desde: Optional[datetime] = None
     pos_x: int = 0
     pos_y: int = 0
+    # Posible error de detección (T26-188, RF-27): la mesa sigue 'ocupada' con el local
+    # cerrado, teniendo cobertura de cámara. Ver services/estado_dudoso.py para el criterio.
+    #
+    # Se calcula por request y no se guarda en la fila —a diferencia de estado_desde, que sí
+    # es una columna—: depende de qué hora es, así que un valor persistido quedaría viejo
+    # solo por el paso del tiempo, sin que nadie tocara la mesa.
+    #
+    # Default False y no None: los caminos que devuelven una mesa sin pasar por
+    # marcar_estados_dudosos() (el POST de alta, el PATCH de estado) responden "no dudosa",
+    # que es lo correcto para una mesa recién tocada, en vez de un null que cada cliente
+    # tendría que interpretar.
+    estado_dudoso: bool = False
 
     model_config = {"from_attributes": True}

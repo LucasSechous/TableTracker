@@ -75,6 +75,7 @@ interface FormState {
   minutosLimpieza: string
   confirmacionSegundos: string
   overlapMinimo: string
+  umbralOcupacion: string
 }
 
 // El backend devuelve "HH:MM:SS" y el <input type="time"> trabaja con "HH:MM". Sin
@@ -95,6 +96,7 @@ function aFormState(config: Configuracion): FormState {
     minutosLimpieza: config.minutos_limpieza_demorada?.toString() ?? "",
     confirmacionSegundos: config.confirmacion_segundos.toString(),
     overlapMinimo: config.overlap_minimo.toString(),
+    umbralOcupacion: config.umbral_ocupacion_alta.toString(),
   }
 }
 
@@ -224,6 +226,18 @@ export default function ConfiguracionPage() {
     if (f.overlapMinimo === "" || !Number.isFinite(overlap) || overlap <= 0 || overlap > 1) {
       return "La superposición mínima tiene que ser un número mayor que 0 y menor o igual a 1."
     }
+    // Mismos límites que el Field(gt=0, le=100) del backend y que el CHECK de la columna
+    // (T26-187). Se validan igual acá para que el error salga al lado del campo en vez de
+    // volver como un 422 genérico.
+    const umbralOcupacion = Number(f.umbralOcupacion)
+    if (
+      f.umbralOcupacion === "" ||
+      !Number.isFinite(umbralOcupacion) ||
+      umbralOcupacion <= 0 ||
+      umbralOcupacion > 100
+    ) {
+      return "El umbral de salón al límite tiene que ser un porcentaje mayor que 0 y menor o igual a 100."
+    }
     return null
   }
 
@@ -252,6 +266,7 @@ export default function ConfiguracionPage() {
       minutos_limpieza_demorada?: number
       confirmacion_segundos: number
       overlap_minimo: number
+      umbral_ocupacion_alta: number
     } = {
       ancho_salon: Number(form.ancho),
       alto_salon: Number(form.alto),
@@ -262,6 +277,8 @@ export default function ConfiguracionPage() {
       // (la validación ya lo exige), así que siempre viajan.
       confirmacion_segundos: Number(form.confirmacionSegundos),
       overlap_minimo: Number(form.overlapMinimo),
+      // Igual que los dos de arriba: NOT NULL en el backend, no se puede vaciar (T26-187).
+      umbral_ocupacion_alta: Number(form.umbralOcupacion),
     }
     // En cambio la cantidad no se puede vaciar: 0 falla la validación gt=0 y null se ignora,
     // así que si el campo quedó vacío se omite y se avisa abajo con lo que devolvió el server.
@@ -452,6 +469,26 @@ export default function ConfiguracionPage() {
                 value={form.minutosLimpieza}
                 onChange={(e) => editar("minutosLimpieza", e.target.value)}
                 placeholder="Sin aviso"
+                style={estiloInput}
+              />
+            </Campo>
+
+            {/* Va acá, pegado al aviso de limpieza demorada, porque las dos son alertas de
+                operación del salón; los umbrales de detección de abajo son otra cosa (qué
+                tan sensible es la cámara). A diferencia del de arriba, este no se puede
+                vaciar: el backend lo tiene NOT NULL con default 85 (T26-187). */}
+            <Campo
+              etiqueta="Avisar salón al límite a partir de (% ocupado)"
+              ayuda="Cuando este porcentaje de las mesas activas esté ocupado, el panel de monitoreo muestra un aviso. Las mesas reservadas no cuentan como ocupadas. Poné 100 para avisar solo con el salón completo."
+            >
+              <input
+                type="number"
+                min={1}
+                max={100}
+                step={5}
+                data-testid="configuracion-umbral-ocupacion"
+                value={form.umbralOcupacion}
+                onChange={(e) => editar("umbralOcupacion", e.target.value)}
                 style={estiloInput}
               />
             </Campo>

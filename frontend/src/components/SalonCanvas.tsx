@@ -5,7 +5,7 @@
 // de estado (RF-17), en vez del selector inline que había antes directamente sobre el canvas.
 
 import { useState, useRef, useEffect } from "react"
-import type { CSSProperties } from "react"
+import type { CSSProperties, ReactNode } from "react"
 import type { Sector, Mesa, Modo } from "../types"
 import SectorBloque from "./SectorBloque"
 import PanelMesa from "./PanelMesa"
@@ -19,6 +19,13 @@ interface Props {
   esAdmin: boolean
   /** Umbral de limpieza demorada, de paso hacia MesaVisual (T26-173). */
   umbralLimpiezaMinutos?: number | null
+  /**
+   * Control de filtro por estado, dibujado a la derecha de los tabs de sector para que los
+   * dos filtros del salón queden en la misma fila. Lo arma DashboardPage —que es quien tiene
+   * el estado del filtro—; acá solo se le reserva el lugar. Ausente en modo edición, donde
+   * el filtro no se ofrece.
+   */
+  filtroEstado?: ReactNode
   onMesaEstadoChange: (mesaId: number, nuevoEstado: string) => void
   onMesaPosicionChange: (mesaId: number, pos_x: number, pos_y: number) => void
   onSectorPosicionChange: (sectorId: number, pos_x: number, pos_y: number) => void
@@ -37,6 +44,7 @@ export default function SalonCanvas({
   altoSalon,
   esAdmin,
   umbralLimpiezaMinutos,
+  filtroEstado,
   onMesaEstadoChange,
   onMesaPosicionChange,
   onSectorPosicionChange,
@@ -119,7 +127,13 @@ export default function SalonCanvas({
       : sectores.flatMap((s) => s.mesas ?? []).find((m) => m.id === mesaSeleccionadaId) ?? null
 
   return (
-    <div>
+    // La columna del salón: leyenda, filtros y canvas comparten exactamente el ancho del
+    // canvas. Es lo que alinea el borde derecho del filtro de estado con el del salón —sin
+    // esto la fila de filtros se estira hasta el ancho del <main>, que es más ancho—. El
+    // preflight de Tailwind aplica border-box, así que este ancho ya incluye el borde de 2px
+    // del canvas. Sigue a localSize (y no a anchoSalon) para no descolgarse mientras se
+    // arrastra el resize.
+    <div style={{ width: localSize.ancho }}>
       <div
         style={{
           display: "flex",
@@ -147,27 +161,45 @@ export default function SalonCanvas({
         ))}
       </div>
 
+      {/* Los dos filtros del salón —sector y estado— comparten fila. Envuelve con flexWrap
+          para que en pantallas angostas el de estado baje entero a la línea de abajo en vez
+          de comerse el ancho de los tabs. */}
       <div
         style={{
           display: "flex",
-          gap: 8,
-          overflowX: "auto",
+          alignItems: "flex-end",
+          gap: 16,
+          flexWrap: "wrap",
           marginBottom: 16,
-          paddingBottom: 4,
         }}
       >
-        <button onClick={() => setSectorFiltrado(null)} style={estiloTab(sectorFiltrado === null)}>
-          Todos
-        </button>
-        {sectoresActivos.map((sector) => (
-          <button
-            key={sector.id}
-            onClick={() => setSectorFiltrado(sector.id)}
-            style={estiloTab(sectorFiltrado === sector.id)}
-          >
-            {sector.nombre}
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            overflowX: "auto",
+            paddingBottom: 4,
+            // Los tabs absorben el ancho sobrante y scrollean dentro de sí mismos. minWidth:0
+            // es lo que lo hace posible: sin eso un hijo flex no baja de su ancho de contenido
+            // y, con muchos sectores, empujaría el filtro de estado fuera de la pantalla.
+            flex: "1 1 320px",
+            minWidth: 0,
+          }}
+        >
+          <button onClick={() => setSectorFiltrado(null)} style={estiloTab(sectorFiltrado === null)}>
+            Todos
           </button>
-        ))}
+          {sectoresActivos.map((sector) => (
+            <button
+              key={sector.id}
+              onClick={() => setSectorFiltrado(sector.id)}
+              style={estiloTab(sectorFiltrado === sector.id)}
+            >
+              {sector.nombre}
+            </button>
+          ))}
+        </div>
+        {filtroEstado && <div style={{ flexShrink: 0, marginLeft: "auto" }}>{filtroEstado}</div>}
       </div>
 
       <div

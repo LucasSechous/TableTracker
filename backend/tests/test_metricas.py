@@ -2,6 +2,9 @@
 
 from datetime import datetime, timedelta
 
+import pytest
+
+from app.models.configuracion import ConfiguracionGeneral
 from app.models.historial import HistorialEstado
 from app.models.mesa import EstadoMesa
 
@@ -14,6 +17,10 @@ def test_ocupacion_sin_mesas(client, como):
         "total_mesas": 0,
         "porcentaje_ocupacion": 0.0,
         "conteo_por_estado": {"libre": 0, "ocupada": 0, "pendiente_limpieza": 0, "reservada": 0},
+        # Sin fila de configuración cae al default de la columna (T26-187), y un salón sin
+        # mesas nunca alerta: 0% no es una ocupación medida, es que no hay nada que medir.
+        "umbral_ocupacion_alta": 85.0,
+        "ocupacion_alta": False,
     }
 
 
@@ -86,6 +93,147 @@ def test_ocupacion_cualquier_rol_autenticado_puede_leer(client, como, crear_mesa
 def test_sin_autenticar_da_401(client, crear_mesa):
     crear_mesa()
     assert client.get("/metricas/ocupacion").status_code == 401
+
+
+# ------------------------------------------- alerta de alta ocupación (T26-187, RF-26)
+
+
+@pytest.fixture
+def umbral(db):
+    """Fija umbral_ocupacion_alta en la fila singleton, creándola si no existe."""
+
+    def _fijar(porcentaje):
+        config = db.query(ConfiguracionGeneral).filter(ConfiguracionGeneral.id == 1).first()
+        if config is None:
+            config = ConfiguracionGeneral(id=1)
+            db.add(config)
+        config.umbral_ocupacion_alta = porcentaje
+        db.commit()
+        return config
+
+    return _fijar
+
+
+def _ocupacion(client):
+    return client.get("/metricas/ocupacion").json()
+
+
+def test_por_debajo_del_umbral_no_alerta(client, como, crear_mesa, umbral):
+    umbral(85)
+    # 1 de 4 ocupadas = 25%.
+    crear_mesa(estado=EstadoMesa.ocupada)
+    for _ in range(3):
+        crear_mesa(estado=EstadoMesa.libre)
+    como("admin")
+
+    cuerpo = _ocupacion(client)
+    assert cuerpo["porcentaje_ocupacion"] == 25.0
+    assert cuerpo["ocupacion_alta"] is False
+    assert cuerpo["umbral_ocupacion_alta"] == 85.0
+
+
+def test_al_superar_el_umbral_alerta(client, como, crear_mesa, umbral):
+    umbral(85)
+    # 4 de 4 ocupadas = 100%.
+    for _ in range(4):
+        crear_mesa(estado=EstadoMesa.ocupada)
+    como("admin")
+
+    cuerpo = _ocupacion(client)
+    assert cuerpo["porcentaje_ocupacion"] == 100.0
+    assert cuerpo["ocupacion_alta"] is True
+
+
+def test_al_bajar_de_nuevo_deja_de_alertar(client, como, crear_mesa, umbral):
+    """El ciclo completo: la alerta tiene que apagarse sola cuando el salón se descomprime.
+
+    Es el caso que de verdad importa —una alerta que se enciende y no se apaga es peor que
+    no tenerla—, y por eso se recorre la transición en un solo test en vez de asumir que
+    dos tests independientes la cubren.
+    """
+    umbral(85)
+    mesas = [crear_mesa(estado=EstadoMesa.ocupada) for _ in range(4)]
+    como("admin")
+    assert _ocupacion(client)["ocupacion_alta"] is True
+
+    # Se libera una: 3 de 4 = 75%, por debajo del umbral.
+    assert client.patch(f"/mesas/{mesas[0].id}/estado", json={"estado": "libre"}).status_code == 200
+
+    cuerpo = _ocupacion(client)
+    assert cuerpo["porcentaje_ocupacion"] == 75.0
+    assert cuerpo["ocupacion_alta"] is False
+
+
+def test_justo_en_el_umbral_alerta(client, como, crear_mesa, umbral):
+    """El umbral es el punto a partir del cual se alerta, no el último valor tolerado.
+
+    Fija el criterio >= del router para que no se convierta en > por descuido: es el mismo
+    que usa la alerta de limpieza demorada (T26-173) y las dos deben responder igual.
+    """
+    umbral(50)
+    crear_mesa(estado=EstadoMesa.ocupada)
+    crear_mesa(estado=EstadoMesa.libre)
+    como("admin")
+
+    cuerpo = _ocupacion(client)
+    assert cuerpo["porcentaje_ocupacion"] == 50.0
+    assert cuerpo["ocupacion_alta"] is True
+
+
+def test_el_umbral_configurado_manda_sobre_el_default(client, como, crear_mesa, umbral):
+    # 50% de ocupación: no alerta con el default de 85, sí con un umbral de 40.
+    crear_mesa(estado=EstadoMesa.ocupada)
+    crear_mesa(estado=EstadoMesa.libre)
+    como("admin")
+
+    umbral(85)
+    assert _ocupacion(client)["ocupacion_alta"] is False
+
+    umbral(40)
+    cuerpo = _ocupacion(client)
+    assert cuerpo["ocupacion_alta"] is True
+    assert cuerpo["umbral_ocupacion_alta"] == 40.0
+
+
+def test_reservada_no_dispara_la_alerta(client, como, crear_mesa, umbral):
+    """Coherencia con la decisión de T26-154: reservada no es ocupación física.
+
+    Si la alerta contara las reservadas, el salón alertaría "al límite" con todas las mesas
+    vacías y la mitad reservadas, que es exactamente la lectura que ese ticket descartó.
+    """
+    umbral(50)
+    crear_mesa(estado=EstadoMesa.reservada)
+    crear_mesa(estado=EstadoMesa.reservada)
+    como("admin")
+
+    cuerpo = _ocupacion(client)
+    assert cuerpo["porcentaje_ocupacion"] == 0.0
+    assert cuerpo["ocupacion_alta"] is False
+
+
+def test_las_mesas_inactivas_no_cuentan_para_la_alerta(client, como, crear_mesa, umbral):
+    """El umbral es sobre el total ACTIVO: una mesa dada de baja no infla ni diluye el %."""
+    umbral(85)
+    crear_mesa(estado=EstadoMesa.ocupada)
+    crear_mesa(estado=EstadoMesa.libre, activa=False)
+    como("admin")
+
+    cuerpo = _ocupacion(client)
+    assert cuerpo["total_mesas"] == 1
+    assert cuerpo["ocupacion_alta"] is True
+
+
+def test_la_alerta_respeta_el_filtro_por_sector(client, como, crear_sector, crear_mesa, umbral):
+    """Con sector_id la alerta es la de ese sector, no la del salón entero."""
+    umbral(85)
+    lleno = crear_sector(nombre="Lleno")
+    vacio = crear_sector(nombre="Vacio")
+    crear_mesa(sector_id=lleno.id, estado=EstadoMesa.ocupada)
+    crear_mesa(sector_id=vacio.id, estado=EstadoMesa.libre)
+    como("admin")
+
+    assert client.get(f"/metricas/ocupacion?sector_id={lleno.id}").json()["ocupacion_alta"] is True
+    assert client.get(f"/metricas/ocupacion?sector_id={vacio.id}").json()["ocupacion_alta"] is False
 
 
 # --------------------------------------------------------------- /rotacion

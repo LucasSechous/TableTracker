@@ -493,7 +493,9 @@ def reconectar(video):
             time.sleep(config.RECONEXION_SEGUNDOS)
 
 
-def bucle(video, detector, cliente, zonas, confirmador, camara_id, publicador=None, aplicador=None):
+def bucle(
+    video, detector, cliente, zonas, confirmador, camara_id, publicador=None, aplicador=None, umbrales=None
+):
     publicador = publicador if publicador is not None else PublicadorEnSegundoPlano()
     # Si lo creamos nosotros, también lo cerramos: al salir por Ctrl+C conviene darle
     # unos segundos a los cambios en vuelo en vez de que los workers mueran de golpe
@@ -501,13 +503,16 @@ def bucle(video, detector, cliente, zonas, confirmador, camara_id, publicador=No
     aplicador_propio = aplicador is None
     aplicador = aplicador if aplicador is not None else AplicadorEnSegundoPlano(cliente)
     try:
-        _ciclar(video, detector, cliente, zonas, confirmador, camara_id, publicador, aplicador)
+        _ciclar(video, detector, cliente, zonas, confirmador, camara_id, publicador, aplicador, umbrales)
     finally:
         if aplicador_propio:
             aplicador.cerrar()
 
 
-def _ciclar(video, detector, cliente, zonas, confirmador, camara_id, publicador, aplicador):
+# umbrales por defecto en None y no obligatorio: sin caché de umbrales el ciclo cae al .env,
+# que es como funcionaba antes de T26-183. Los tests preexistentes de TestBucle llaman a
+# bucle() sin pasarlo, y tienen que seguir andando.
+def _ciclar(video, detector, cliente, zonas, confirmador, camara_id, publicador, aplicador, umbrales=None):
     fallidos = 0
     primer_frame = True
     while True:

@@ -12,6 +12,13 @@ export interface Mesa {
   // Desde cuándo está en este estado, ISO (T26-173). Lo manda el backend denormalizado
   // en la fila: el dashboard pide /mesas cada 3s y no puede pagar un cruce por ciclo.
   estado_desde?: string | null
+  // Posible error de detección (T26-188, RF-27): sigue 'ocupada' con el local cerrado y
+  // teniendo cobertura de cámara. Lo resuelve el backend, que es el único que sabe la hora
+  // de cierre y qué mesas tienen ROI activo; acá NO se recalcula nada.
+  //
+  // Opcional porque las respuestas anteriores al ticket no lo traen y porque el POST de
+  // alta y el PATCH de estado lo devuelven en su default; ausente se trata como false.
+  estado_dudoso?: boolean
   sector: { id: number; nombre: string }
 }
 
@@ -54,6 +61,13 @@ export interface Configuracion {
   // detectada tiene que superponerse con la mesa para contarla como ocupada.
   confirmacion_segundos: number
   overlap_minimo: number
+  // Porcentaje de mesas ocupadas a partir del cual el salón se considera al límite
+  // (T26-187, RF-26). Nunca null: NOT NULL con default 85 en el backend.
+  //
+  // A diferencia de minutos_limpieza_demorada, esta alerta no se puede apagar dejando el
+  // campo vacío. Si hiciera falta apagarla, el equivalente es ponerla en 100: solo alerta
+  // con el salón completo.
+  umbral_ocupacion_alta: number
 }
 
 // Respuesta del PATCH cuando cambia alguno de los umbrales de detección: el backend
@@ -166,6 +180,12 @@ export interface OcupacionResponse {
   total_mesas: number
   porcentaje_ocupacion: number
   conteo_por_estado: ConteoPorEstado
+  // Alerta de alta ocupación (T26-187, RF-26). La comparación la resuelve el backend y acá
+  // llega hecha: el cliente NO reimplementa el >= contra el umbral. El umbral viene igual
+  // para poder rotular el aviso ("92% del salón ocupado, umbral 85%") sin pedir
+  // /configuracion por separado.
+  umbral_ocupacion_alta: number
+  ocupacion_alta: boolean
 }
 
 // Una fila de GET /metricas/rotacion (RF-23): cuántas veces rotó cada mesa activa en el

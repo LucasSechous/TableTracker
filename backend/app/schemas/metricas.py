@@ -18,6 +18,13 @@ class OcupacionResponse(BaseModel):
     total_mesas: int
     porcentaje_ocupacion: float
     conteo_por_estado: ConteoPorEstado
+    # Alerta de alta ocupación (T26-187, RF-26). Se devuelven los dos: el umbral vigente
+    # además del booleano, porque el consumidor necesita poder decir "92% (umbral 85%)" sin
+    # pedir /configuracion aparte. Que la comparación la resuelva el backend evita que cada
+    # cliente reimplemente el >= y que dos pantallas discrepen sobre si el salón está al
+    # límite.
+    umbral_ocupacion_alta: float
+    ocupacion_alta: bool
 
 
 class RotacionMesaResponse(BaseModel):

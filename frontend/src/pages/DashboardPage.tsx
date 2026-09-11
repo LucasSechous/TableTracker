@@ -1,16 +1,19 @@
 // Panel principal de TableTracker con canvas 2D del salón del restaurante.
 // Carga mesas y sectores, los agrupa, y orquesta los cambios de estado y posición.
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Pencil, Menu } from "lucide-react"
-import { authApi, mesasApi, sectoresApi, configuracionApi, extraerDetalle } from "../services/api"
-import type { UserResponse } from "../services/api"
-import type { Mesa, Sector, Modo, Configuracion } from "../types"
+import { Pencil, Menu, TriangleAlert } from "lucide-react"
+import { mesasApi, sectoresApi, configuracionApi, metricasApi, extraerDetalle } from "../services/api"
+import type { Mesa, Sector, Modo, Configuracion, OcupacionResponse } from "../types"
 import SalonCanvas from "../components/SalonCanvas"
 import ModalAltaSector from "../components/ModalAltaSector"
 import ModalAltaMesa from "../components/ModalAltaMesa"
 import MenuLateral from "../components/MenuLateral"
+import { useAuth } from "../hooks/useAuth"
+import { esAdmin, puedeEditarLayout } from "../permisos"
+import { labelStyle } from "../components/RangoFechas"
+import { COLOR_OCUPACION_ALTA, ETIQUETA_POR_ESTADO } from "../constants"
 
 // Cada cuánto se refresca el estado de las mesas en modo monitoreo, para reflejar
 // los cambios que escribe vision-module sin que alguien tenga que recargar la
@@ -19,13 +22,27 @@ import MenuLateral from "../components/MenuLateral"
 // de un intervalo en aparecer una vez confirmado.
 const INTERVALO_REFRESCO_MESAS_MS = 3000
 
+// Opciones del filtro por estado (RF-15). Se derivan de ETIQUETA_POR_ESTADO en vez de
+// repetir los cuatro pares acá: ese mapa ya es la fuente de las etiquetas que el usuario
+// ve en el canvas y en el panel de mesa, y duplicarlo abriría la puerta a que el filtro
+// diga "Pendiente de limpieza" y la mesa diga otra cosa. El orden de las claves del
+// objeto es el de inserción (libre, ocupada, pendiente_limpieza, reservada), que es el
+// que corresponde al ciclo de vida de una mesa.
+const OPCIONES_ESTADO = Object.entries(ETIQUETA_POR_ESTADO)
+
+// Valor del filtro que significa "no filtrar". Cadena vacía y no null para poder usarlo
+// tal cual como value del <option>, igual que hacen los filtros de Historial y Rotación.
+const SIN_FILTRO = ""
+
 // El header pasó a position:fixed para quedar visible al scrollear un salón
 // grande; con altura fija se puede compensar con un spacer del mismo tamaño
 // en vez de medirla en runtime.
 const ALTURA_HEADER = 68
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<UserResponse | null>(null)
+  // El usuario sale del contexto y no de un authApi.me() propio: es la misma respuesta
+  // que ya resolvió AuthProvider una vez para todo el árbol.
+  const { user, rol } = useAuth()
   const [sectores, setSectores] = useState<Sector[]>([])
   const [configuracion, setConfiguracion] = useState<Configuracion | null>(null)
   const [loading, setLoading] = useState(true)
@@ -33,16 +50,35 @@ export default function DashboardPage() {
   const [modo, setModo] = useState<Modo>("monitoreo")
   const [modalAbierto, setModalAbierto] = useState<"sector" | "mesa" | null>(null)
   const [menuAbierto, setMenuAbierto] = useState(false)
+  // Filtro por estado (RF-15). Se resuelve contra el backend (GET /mesas?estado=...), no
+  // recortando el array en el cliente: el endpoint ya lo soporta y así el canvas no
+  // recibe mesas que no va a dibujar.
+  const [estadoFiltro, setEstadoFiltro] = useState<string>(SIN_FILTRO)
+  // Alerta de alta ocupación (T26-187, RF-26). Sale de GET /metricas/ocupacion y NO se
+  // calcula acá a partir de `sectores`, aunque a primera vista alcanzaría: ese array está
+  // recortado por estadoFiltro, así que con un filtro puesto el porcentaje que saldría de
+  // contarlo sería el del subconjunto visible y no el del salón. Con filtro "libre" daría
+  // 0% de ocupación y la alerta se apagaría justo cuando el salón está lleno.
+  //
+  // Es una request más por ciclo de refresco, a diferencia de la alerta de limpieza
+  // demorada (T26-173), que se resuelve con la configuración ya cargada. La diferencia es
+  // esa: aquella depende de datos que el canvas ya tiene (estado y reloj de cada mesa),
+  // esta depende del total del salón, que el canvas filtrado no conoce.
+  const [ocupacion, setOcupacion] = useState<OcupacionResponse | null>(null)
+  // El spinner de "Cargando salón..." solo tiene sentido la primera vez. Al cambiar el
+  // filtro el canvas ya está dibujado, y desmontarlo por unos milisegundos se ve como un
+  // parpadeo del salón entero.
+  const yaCargoUnaVez = useRef(false)
   const navigate = useNavigate()
 
   useEffect(() => {
-    authApi.me().then((res) => setUser(res.data)).catch(() => navigate("/login"))
-  }, [navigate])
-
-  useEffect(() => {
-    setLoading(true)
+    if (!yaCargoUnaVez.current) setLoading(true)
     setError(null)
-    Promise.all([mesasApi.listar(), sectoresApi.listar(), configuracionApi.obtener()])
+    Promise.all([
+      mesasApi.listar(estadoFiltro ? { estado: estadoFiltro } : undefined),
+      sectoresApi.listar(),
+      configuracionApi.obtener(),
+    ])
       .then(([mesasRes, sectoresRes, configuracionRes]) => {
         const mesas: Mesa[] = mesasRes.data
         const rawSectores: Sector[] = sectoresRes.data
@@ -60,8 +96,11 @@ export default function DashboardPage() {
       .catch((err: unknown) => {
         setError(extraerDetalle(err, "Error al cargar el salón"))
       })
-      .finally(() => setLoading(false))
-  }, [])
+      .finally(() => {
+        yaCargoUnaVez.current = true
+        setLoading(false)
+      })
+  }, [estadoFiltro])
 
   // Solo en monitoreo: en modo edición el usuario puede estar arrastrando una mesa
   // o un sector, y pisar `sectores` con lo que devuelve el servidor a mitad de un
@@ -73,7 +112,7 @@ export default function DashboardPage() {
 
     async function refrescarMesas() {
       try {
-        const { data: mesas } = await mesasApi.listar()
+        const { data: mesas } = await mesasApi.listar(estadoFiltro ? { estado: estadoFiltro } : undefined)
         if (cancelado) return
         const mesasBySector = new Map<number, Mesa[]>()
         mesas.forEach((m) => {
@@ -91,6 +130,44 @@ export default function DashboardPage() {
     }
 
     const intervalId = setInterval(refrescarMesas, INTERVALO_REFRESCO_MESAS_MS)
+    return () => {
+      cancelado = true
+      clearInterval(intervalId)
+    }
+    // estadoFiltro entra en las dependencias para que el refresco periódico siga pidiendo
+    // el filtro vigente: sin esto el intervalo quedaría capturando el valor que había
+    // cuando se montó el efecto y devolvería el salón completo cada 3 segundos.
+  }, [modo, estadoFiltro])
+
+  // Alerta de alta ocupación (T26-187, RF-26), solo en monitoreo y por el mismo motivo que
+  // el resto: en edición el canvas es para acomodar mesas y un aviso ahí compite con los
+  // controles de arrastre, igual que decidió T26-173 para la limpieza demorada.
+  //
+  // NO depende de estadoFiltro: el % de ocupación es del salón entero, así que filtrar la
+  // vista no tiene por qué mover el aviso. Comparte el intervalo con el refresco de mesas
+  // para que el canvas y el aviso no se contradigan — si el aviso fuera más lento, el
+  // salón se vería lleno unos segundos antes de que apareciera la alerta.
+  useEffect(() => {
+    if (modo !== "monitoreo") {
+      setOcupacion(null)
+      return
+    }
+
+    let cancelado = false
+
+    async function refrescarOcupacion() {
+      try {
+        const { data } = await metricasApi.ocupacion()
+        if (!cancelado) setOcupacion(data)
+      } catch {
+        // Igual que el refresco de mesas: un fallo puntual se reintenta en el próximo tick.
+        // No se apaga el aviso ni se pisa `error`, que está reservado para el fallo de
+        // carga del salón: quedarse sin la métrica no impide seguir operando.
+      }
+    }
+
+    refrescarOcupacion()
+    const intervalId = setInterval(refrescarOcupacion, INTERVALO_REFRESCO_MESAS_MS)
     return () => {
       cancelado = true
       clearInterval(intervalId)
@@ -225,6 +302,63 @@ export default function DashboardPage() {
     navigate("/login")
   }
 
+  // El estado del filtro vive acá (es esta pantalla la que refiltra pidiendo /mesas), pero el
+  // control se dibuja dentro de SalonCanvas, a la derecha de los tabs de sector, para que los
+  // dos filtros del salón queden juntos en la misma fila.
+  //
+  // Solo en monitoreo: en edición el filtro se limpia al entrar (ver el botón "Editar
+  // disposición") y mostrar el control ahí invitaría a re-filtrar justo cuando conviene ver
+  // el salón completo.
+  const filtroEstado =
+    modo === "monitoreo" ? (
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
+        <label style={labelStyle}>
+          Estado
+          <select
+            data-testid="dashboard-filtro-estado"
+            value={estadoFiltro}
+            onChange={(e) => setEstadoFiltro(e.target.value)}
+            style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", minWidth: 200 }}
+          >
+            <option value={SIN_FILTRO}>Todos los estados</option>
+            {OPCIONES_ESTADO.map(([valor, etiqueta]) => (
+              <option key={valor} value={valor}>
+                {etiqueta}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {/* Un salón filtrado se ve igual que un salón al que le faltan mesas. El aviso
+            existe para que esa diferencia no dependa de que el usuario recuerde que
+            dejó un filtro puesto. */}
+        {estadoFiltro !== SIN_FILTRO && (
+          <span
+            data-testid="dashboard-filtro-aviso"
+            style={{ fontSize: 13, color: "#1d4ed8", paddingBottom: 6 }}
+          >
+            Mostrando solo mesas en «{ETIQUETA_POR_ESTADO[estadoFiltro]}».{" "}
+            <button
+              data-testid="dashboard-filtro-limpiar"
+              onClick={() => setEstadoFiltro(SIN_FILTRO)}
+              style={{
+                border: "none",
+                background: "none",
+                padding: 0,
+                color: "#1d4ed8",
+                fontSize: 13,
+                fontWeight: 600,
+                textDecoration: "underline",
+                cursor: "pointer",
+              }}
+            >
+              Ver todas
+            </button>
+          </span>
+        )}
+      </div>
+    ) : undefined
+
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
       <header
@@ -247,9 +381,19 @@ export default function DashboardPage() {
           TableTracker
         </h1>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {modo === "monitoreo" && (
+          {/* Solo quien puede escribir el layout ve la puerta de entrada al modo edición.
+              El criterio es puedeEditarLayout (admin + encargado) y no esAdmin: mover y
+              crear mesas/sectores pide `encargado` en el backend, así que gatearlo con
+              "solo admin" dejaría al encargado sin su tarea (docs/roles-permisos.md). */}
+          {modo === "monitoreo" && puedeEditarLayout(rol) && (
             <button
-              onClick={() => setModo("edicion")}
+              onClick={() => {
+                // Se limpia el filtro al entrar en edición: acomodar el salón con mesas
+                // escondidas es peligroso —se puede soltar una encima de otra que no se
+                // ve— y además el filtro es una herramienta de monitoreo, no de armado.
+                setEstadoFiltro(SIN_FILTRO)
+                setModo("edicion")
+              }}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -345,16 +489,59 @@ export default function DashboardPage() {
             {error}
           </p>
         )}
+
+        {/* Alerta de alta ocupación (T26-187, RF-26).
+            Banner de ancho completo y no un badge sobre el canvas, a diferencia de la
+            alerta de limpieza demorada (T26-173): aquella señala UNA mesa y por eso se
+            dibuja encima de ella, mientras que esta habla del salón entero y no tiene una
+            mesa a la que colgarse. El banner de ancho completo es además el patrón que
+            esta misma pantalla ya usa para hablar de todo el salón (el aviso de error de
+            arriba y la barra de "Editando disposición").
+            La condición la resuelve el backend: acá no se compara nada contra el umbral. */}
+        {!loading && !error && ocupacion?.ocupacion_alta && configuracion && (
+          <p
+            data-testid="dashboard-ocupacion-alta"
+            title={`${ocupacion.conteo_por_estado.ocupada} de ${ocupacion.total_mesas} mesas activas están ocupadas`}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              margin: "0 0 16px 0",
+              // Mismo ancho que el canvas, para que el aviso quede alineado con el salón del
+              // que habla en vez de estirarse hasta el borde del <main>. Se lee de la
+              // configuración y no del localSize de SalonCanvas —que es el que manda durante
+              // un resize— porque este aviso solo existe en monitoreo, donde no se redimensiona.
+              width: configuracion.ancho_salon,
+              fontSize: 14,
+              fontWeight: 600,
+              color: COLOR_OCUPACION_ALTA,
+              backgroundColor: "#fffbeb",
+              // Borde izquierdo grueso, el mismo recurso con el que T26-173 refuerza el
+              // borde de una mesa atrasada: marca la condición sin depender solo del color,
+              // que por sí solo no se lee en un monitor lavado ni con daltonismo.
+              border: "1px solid #fcd34d",
+              borderLeft: `4px solid ${COLOR_OCUPACION_ALTA}`,
+              borderRadius: 6,
+              padding: "10px 16px",
+            }}
+          >
+            <TriangleAlert size={16} />
+            Salón al límite: {ocupacion.porcentaje_ocupacion}% de las mesas ocupadas (umbral{" "}
+            {ocupacion.umbral_ocupacion_alta}%).
+          </p>
+        )}
+
         {!loading && !error && configuracion && (
           <SalonCanvas
             sectores={sectores}
             modo={modo}
             anchoSalon={configuracion.ancho_salon}
             altoSalon={configuracion.alto_salon}
-            esAdmin={user?.rol === "admin"}
+            esAdmin={esAdmin(rol)}
             // Sale de la configuración que esta pantalla ya carga para el tamaño del
             // salón: no agrega ninguna request al ciclo de refresco (T26-173).
             umbralLimpiezaMinutos={configuracion.minutos_limpieza_demorada}
+            filtroEstado={filtroEstado}
             onMesaEstadoChange={handleMesaEstadoChange}
             onMesaPosicionChange={handleMesaPosicionChange}
             onSectorPosicionChange={handleSectorPosicionChange}
@@ -386,12 +573,18 @@ export default function DashboardPage() {
             boxShadow: "0 -4px 12px rgba(0,0,0,0.08)",
           }}
         >
-          <button onClick={() => setModalAbierto("sector")} style={editActionBtnStyle}>
-            + Nuevo sector
-          </button>
-          <button onClick={() => setModalAbierto("mesa")} style={editActionBtnStyle}>
-            + Nueva mesa
-          </button>
+          {puedeEditarLayout(rol) && (
+            <>
+              <button onClick={() => setModalAbierto("sector")} style={editActionBtnStyle}>
+                + Nuevo sector
+              </button>
+              <button onClick={() => setModalAbierto("mesa")} style={editActionBtnStyle}>
+                + Nueva mesa
+              </button>
+            </>
+          )}
+          {/* Sin gate: es la única salida del modo edición. Esconderla ante un rol sin
+              permiso lo dejaría encerrado en una pantalla que no puede usar. */}
           <button onClick={() => setModo("monitoreo")} style={editExitBtnStyle}>
             Salir de edición
           </button>
@@ -402,8 +595,8 @@ export default function DashboardPage() {
         abierto={menuAbierto}
         onClose={() => setMenuAbierto(false)}
         nombre={user?.nombre ?? ""}
-        rol={user?.rol ?? ""}
-        esAdmin={user?.rol === "admin"}
+        rol={rol ?? ""}
+        esAdmin={esAdmin(rol)}
         onVerHistorial={() => navigate("/historial")}
         onVerOcupacion={() => navigate("/ocupacion")}
         onVerRotacion={() => navigate("/rotacion")}

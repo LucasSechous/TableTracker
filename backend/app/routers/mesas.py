@@ -10,6 +10,7 @@ from app.models.historial import HistorialEstado, OrigenCambio
 from app.schemas.mesa import MesaCreate, MesaUpdate, MesaResponse, EstadoUpdate, PosicionUpdate
 from app.models.user import User
 from app.routers.auth import get_usuario_actual, requiere_rol, ROL_ADMIN, ROL_VISION_MODULE
+from app.services.estado_dudoso import marcar_estados_dudosos
 
 router = APIRouter(dependencies=[Depends(get_usuario_actual)])
 
@@ -54,7 +55,14 @@ def listar_mesas(
         query = query.filter(Mesa.sector_id == sector_id)
     if estado is not None:
         query = query.filter(Mesa.estado == estado)
-    return query.all()
+    mesas = query.all()
+    # RF-27 (T26-188): se resuelve acá y no en el schema porque necesita la base. Va en este
+    # endpoint, que el dashboard ya pide cada 3s, en vez de en uno propio: la señal es por
+    # mesa y este payload es por mesa, así que sumarla no agrega ni una request al ciclo de
+    # refresco. Cuesta dos consultas fijas para todo el lote, y cero si no hay ninguna mesa
+    # ocupada. Mismo criterio con el que T26-173 puso estado_desde en esta misma respuesta.
+    marcar_estados_dudosos(db, mesas)
+    return mesas
 
 
 @router.get("/{mesa_id}", response_model=MesaResponse)
@@ -62,6 +70,10 @@ def obtener_mesa(mesa_id: int, db: Session = Depends(get_db)):
     mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
     if not mesa:
         raise HTTPException(status_code=404, detail="Mesa no encontrada")
+    # También acá: es el endpoint que consulta vision-module antes de aplicar un cambio, y
+    # dejar el campo en su default sin evaluarlo haría que la misma mesa se viera dudosa por
+    # la lista y no dudosa por su detalle.
+    marcar_estados_dudosos(db, [mesa])
     return mesa
 
 

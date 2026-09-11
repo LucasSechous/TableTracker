@@ -73,6 +73,60 @@ export async function loginViaApi(
   return body.access_token as string;
 }
 
+/**
+ * Roles no-admin que la suite necesita para probar el gateo de la UI (RF-02).
+ *
+ * Arrancó con `encargado` y `mozo`, los dos que cambian algo en el modo edición (T26-194).
+ * T26-195 sumó `recepcion` y `limpieza`: en el panel de mesa los permisos son cruzados y
+ * cada uno de los cuatro ve una combinación distinta de controles, así que ahí sí aportan
+ * un caso propio.
+ */
+export type RolDePrueba = "encargado" | "mozo" | "recepcion" | "limpieza";
+
+/**
+ * Credenciales derivadas del usuario de e2e, una por rol.
+ *
+ * Se usa el alias `+rol` del email del runner (que EmailStr acepta) en vez de un email
+ * suelto: deja claro de dónde salen y las mantiene deterministas entre corridas. Eso
+ * último importa porque **no hay endpoint para borrar usuarios** (docs/roles-permisos.md),
+ * así que un email aleatorio por corrida iría dejando cuentas muertas en la base para
+ * siempre. Con este esquema son dos, se crean una vez y se reutilizan.
+ */
+export function credencialesDeRol(rol: RolDePrueba) {
+  const [local, dominio] = TEST_USER.email.split("@");
+  return {
+    nombre: `E2E ${rol}`,
+    email: `${local}+${rol}@${dominio}`,
+    password: TEST_USER.password,
+    rol,
+  };
+}
+
+/**
+ * Devuelve un token para un usuario con ese rol, creándolo si es la primera vez.
+ *
+ * Idempotente: POST /auth/register contesta 400 "El email ya está registrado" si ya
+ * existe, y eso no es un fallo sino el camino normal a partir de la segunda corrida.
+ * Necesita un token de admin porque el registro es admin-only desde T26-116.
+ */
+export async function ensureUsuarioDeRol(
+  request: APIRequestContext,
+  tokenAdmin: string,
+  rol: RolDePrueba
+): Promise<string> {
+  const credenciales = credencialesDeRol(rol);
+  const res = await request.post(`${BACKEND_URL}/auth/register`, {
+    headers: authHeaders(tokenAdmin),
+    data: credenciales,
+  });
+  if (!res.ok() && res.status() !== 400) {
+    throw new Error(
+      `No se pudo asegurar el usuario de rol "${rol}" (${res.status()}): ${await res.text()}`
+    );
+  }
+  return loginViaApi(request, credenciales.email, credenciales.password);
+}
+
 function authHeaders(token: string) {
   return { Authorization: `Bearer ${token}` };
 }
@@ -246,6 +300,26 @@ export async function listarRois(
 }
 
 /** Soft-delete: desactiva el ROI (activa=false) en vez de borrarlo físicamente. */
+/**
+ * Da de alta un ROI para una mesa en una cámara (T26-188).
+ *
+ * Solo admin. Las coordenadas son un polígono en píxeles del frame; el contenido no importa
+ * para los tests que solo necesitan que la mesa tenga cobertura de detección, pero el
+ * backend exige un polígono válido, así que va un triángulo mínimo.
+ */
+export async function crearRoi(
+  request: APIRequestContext,
+  token: string,
+  datos: { mesa_id: number; camara_id: number; coordenadas?: number[][] }
+): Promise<RoiMesaResponse> {
+  const res = await request.post(`${BACKEND_URL}/roi-mesa/`, {
+    headers: authHeaders(token),
+    data: { coordenadas: [[0, 0], [40, 0], [40, 40]], ...datos },
+  });
+  if (!res.ok()) throw new Error(`No se pudo crear el ROI: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
 export async function desactivarRoi(request: APIRequestContext, token: string, roiId: number): Promise<void> {
   await request.delete(`${BACKEND_URL}/roi-mesa/${roiId}`, { headers: authHeaders(token) });
 }
@@ -268,6 +342,9 @@ export interface OcupacionMetricaResponse {
   total_mesas: number;
   porcentaje_ocupacion: number;
   conteo_por_estado: ConteoPorEstadoResponse;
+  // Alerta de alta ocupación (T26-187, RF-26). La comparación la resuelve el backend.
+  umbral_ocupacion_alta: number;
+  ocupacion_alta: boolean;
 }
 
 export async function obtenerOcupacion(
@@ -292,6 +369,8 @@ export interface ConfiguracionResponse {
   // Umbrales de detección de vision-module (T26-183). Nunca null: NOT NULL con default.
   confirmacion_segundos: number;
   overlap_minimo: number;
+  // Umbral de alta ocupación en % (T26-187). Tampoco es null nunca: NOT NULL con default 85.
+  umbral_ocupacion_alta: number;
   // Solo presentes cuando el PATCH cambió el umbral correspondiente.
   confirmacion_segundos_anterior?: number | null;
   overlap_minimo_anterior?: number | null;
@@ -319,6 +398,7 @@ export async function actualizarConfiguracion(
     minutos_limpieza_demorada?: number;
     confirmacion_segundos?: number;
     overlap_minimo?: number;
+    umbral_ocupacion_alta?: number;
   }
 ): Promise<ConfiguracionResponse> {
   const res = await request.patch(`${BACKEND_URL}/configuracion`, { headers: authHeaders(token), data: datos });

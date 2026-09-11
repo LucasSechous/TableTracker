@@ -9,6 +9,8 @@ import MesaVisual from "./MesaVisual"
 import ModalEditarSector from "./ModalEditarSector"
 import { sectoresApi, extraerDetalle } from "../services/api"
 import { DIAMETRO_MESA } from "../constants"
+import { useAuth } from "../hooks/useAuth"
+import { puedeBorrar, puedeEditarLayout } from "../permisos"
 
 // Tamaño mínimo de un sector sin mesas, para evitar que el resize lo colapse a 0.
 const TAMANO_MINIMO_SECTOR = 80
@@ -43,6 +45,15 @@ export default function SectorBloque({
   onSectorEliminado,
   onMesaEliminada,
 }: SectorBloqueProps) {
+  // El rol se toma del contexto y no baja por props: SalonCanvas ya pasaba `modo` por dos
+  // niveles y sumarle dos booleanos más de permiso habría hecho que cada componente
+  // intermedio tuviera que reenviar algo que no usa.
+  const { rol } = useAuth()
+  // `modo === "edicion"` dice que el salón está en modo armado; esto dice si ESTE usuario
+  // puede escribirlo. Son cosas distintas: un mozo no llega al modo edición por la UI,
+  // pero si llegara igual no tiene que poder arrastrar nada.
+  const puedeEditar = puedeEditarLayout(rol)
+
   const [modalEditarAbierto, setModalEditarAbierto] = useState(false)
   const [eliminando, setEliminando] = useState(false)
 
@@ -150,13 +161,17 @@ export default function SectorBloque({
   }, [sector.id, sector.pos_x, sector.pos_y, sector.mesas, anchoSalon, altoSalon, onSectorResize])
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (modo !== "edicion") return
+    // El permiso se chequea en el handler y no solo en el cursor: el arrastre se dispara
+    // con un mousedown sobre el bloque entero, no sobre un botón que se pueda esconder.
+    // Sin esto, un rol sin permiso arrastraría el sector y recién al soltar se comería el
+    // 403 del PATCH, con la posición ya movida en pantalla.
+    if (modo !== "edicion" || !puedeEditar) return
     isDragging.current = true
     dragStart.current = { mouseX: e.clientX, mouseY: e.clientY, sectorX: sector.pos_x, sectorY: sector.pos_y }
   }
 
   const handleResizeMouseDown = (e: React.MouseEvent) => {
-    if (modo !== "edicion") return
+    if (modo !== "edicion" || !puedeEditar) return
     e.preventDefault()
     e.stopPropagation()
     isResizing.current = true
@@ -194,7 +209,7 @@ export default function SectorBloque({
           borderRadius: 6,
           boxSizing: "border-box",
           userSelect: "none",
-          cursor: modo === "edicion" ? "grab" : "default",
+          cursor: modo === "edicion" && puedeEditar ? "grab" : "default",
         }}
         onMouseDown={handleMouseDown}
       >
@@ -212,7 +227,7 @@ export default function SectorBloque({
           {sector.nombre}
         </div>
 
-        {modo === "edicion" && (
+        {modo === "edicion" && puedeEditar && (
           <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 4, zIndex: 3 }}>
             <button
               onMouseDown={(e) => e.stopPropagation()}
@@ -233,6 +248,9 @@ export default function SectorBloque({
             >
               <Pencil size={12} />
             </button>
+            {/* DELETE /sectores/{id} pide admin, a diferencia del PATCH que pide encargado:
+                por eso la papelera lleva un gate más estricto que el lápiz de al lado. */}
+            {puedeBorrar(rol) && (
             <button
               onMouseDown={(e) => e.stopPropagation()}
               onClick={handleEliminarClick}
@@ -254,6 +272,7 @@ export default function SectorBloque({
             >
               <Trash2 size={12} />
             </button>
+            )}
           </div>
         )}
 
@@ -273,7 +292,7 @@ export default function SectorBloque({
             />
           ))}
 
-        {modo === "edicion" && (
+        {modo === "edicion" && puedeEditar && (
           <div
             onMouseDown={handleResizeMouseDown}
             style={{

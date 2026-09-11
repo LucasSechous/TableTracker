@@ -10,9 +10,12 @@ import {
   COLOR_POR_ESTADO,
   BORDE_POR_ESTADO,
   COLOR_LIMPIEZA_DEMORADA,
+  COLOR_ESTADO_DUDOSO,
   limpiezaDemorada,
   minutosEnEstado,
 } from "../constants"
+import { useAuth } from "../hooks/useAuth"
+import { puedeBorrar, puedeEditarLayout } from "../permisos"
 
 interface MesaVisualProps {
   mesa: Mesa
@@ -36,6 +39,11 @@ export default function MesaVisual({
   onPosicionChange,
   onMesaEliminada,
 }: MesaVisualProps) {
+  // Mismo criterio que SectorBloque: el rol se lee del contexto en vez de bajarlo por
+  // props a través de SalonCanvas y SectorBloque, que no lo usan para nada propio.
+  const { rol } = useAuth()
+  const puedeEditar = puedeEditarLayout(rol)
+
   const [eliminando, setEliminando] = useState(false)
   const [localPos, setLocalPos] = useState({ x: mesa.pos_x, y: mesa.pos_y })
   const isDragging = useRef(false)
@@ -84,7 +92,10 @@ export default function MesaVisual({
   }, [mesa.id, onPosicionChange, anchoSector, altoSector])
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (modo !== "edicion") return
+    // Igual que en SectorBloque: el arrastre nace de un mousedown sobre la mesa, así que
+    // esconder botones no alcanza. Sin este chequeo un rol sin permiso movería la mesa y
+    // el 403 del PATCH /mesas/{id}/posicion llegaría recién al soltarla.
+    if (modo !== "edicion" || !puedeEditar) return
     e.preventDefault()
     e.stopPropagation()
     isDragging.current = true
@@ -117,6 +128,24 @@ export default function MesaVisual({
     modo === "monitoreo" && limpiezaDemorada(mesa.estado, mesa.estado_desde, umbralLimpiezaMinutos)
   const minutosAtraso = atrasada ? minutosEnEstado(mesa.estado_desde) : null
 
+  // Estado dudoso (T26-188, RF-27). Solo en monitoreo, igual que el aviso de arriba.
+  //
+  // Se lee tal cual del backend en vez de recalcularlo: el criterio necesita la hora de
+  // cierre del local y saber qué mesas tienen ROI activo en cámara activa, y ninguna de las
+  // dos cosas está en este componente.
+  //
+  // No puede coexistir con `atrasada`: aquella exige pendiente_limpieza y esta exige
+  // ocupada, así que los dos badges nunca compiten por el mismo lugar. Aun así el borde se
+  // resuelve con un if ordenado y no con dos ternarios anidados, para que agregar una
+  // tercera condición en el futuro no dependa de que sigan siendo excluyentes.
+  const dudosa = modo === "monitoreo" && mesa.estado_dudoso === true
+
+  const colorBorde = atrasada
+    ? COLOR_LIMPIEZA_DEMORADA
+    : dudosa
+      ? COLOR_ESTADO_DUDOSO
+      : BORDE_POR_ESTADO[mesa.estado] ?? "#757575"
+
   return (
     <div style={{ position: "absolute", left: localPos.x, top: localPos.y }}>
       <div
@@ -131,9 +160,7 @@ export default function MesaVisual({
           // El relleno NO cambia: sigue siendo el naranja de pendiente_limpieza, porque
           // el estado no cambió. Lo que se refuerza es el borde, que es la capa que
           // puede señalar una condición sin pisar la lectura del estado.
-          border: `${atrasada ? 3 : 2}px solid ${
-            atrasada ? COLOR_LIMPIEZA_DEMORADA : BORDE_POR_ESTADO[mesa.estado] ?? "#757575"
-          }`,
+          border: `${atrasada || dudosa ? 3 : 2}px solid ${colorBorde}`,
           backgroundColor: COLOR_POR_ESTADO[mesa.estado] ?? "#9e9e9e",
           boxSizing: "border-box",
           display: "flex",
@@ -142,7 +169,7 @@ export default function MesaVisual({
           color: "white",
           fontWeight: "bold",
           fontSize: 16,
-          cursor: modo === "edicion" ? "grab" : "pointer",
+          cursor: modo === "edicion" && puedeEditar ? "grab" : "pointer",
           userSelect: "none",
           position: "relative",
           zIndex: 2,
@@ -183,7 +210,42 @@ export default function MesaVisual({
         </div>
       )}
 
-      {modo === "edicion" && (
+      {/* Estado dudoso (T26-188, RF-27). Mismo anclaje y tamaño que el badge de arriba —no
+          pueden aparecer juntos, ver el comentario de `dudosa`—. El contenido es un signo
+          de pregunta y no un número porque acá no hay una magnitud que mostrar: lo que se
+          comunica es que el dato no es confiable, no cuánto lleva así. El detalle va en el
+          title, que es donde el usuario puede leer el motivo sin llenar el canvas. */}
+      {dudosa && (
+        <div
+          data-testid={`mesa-${mesa.numero}-estado-dudoso`}
+          title="Figura ocupada con el local cerrado: puede ser un error de detección"
+          style={{
+            position: "absolute",
+            top: -8,
+            left: DIAMETRO_MESA - 16,
+            minWidth: 26,
+            height: 18,
+            padding: "0 5px",
+            borderRadius: 9,
+            backgroundColor: COLOR_ESTADO_DUDOSO,
+            color: "#fff",
+            fontSize: 11,
+            fontWeight: 700,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 3,
+            pointerEvents: "none",
+            whiteSpace: "nowrap",
+          }}
+        >
+          ?
+        </div>
+      )}
+
+      {/* DELETE /mesas/{id} pide admin, no encargado: por eso acá va puedeBorrar y no
+          puedeEditar, aunque el botón viva dentro del mismo modo edición. */}
+      {modo === "edicion" && puedeBorrar(rol) && (
         <button
           onMouseDown={(e) => e.stopPropagation()}
           onClick={handleEliminarClick}

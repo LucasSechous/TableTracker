@@ -13,8 +13,9 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ShieldAlert } from "lucide-react"
-import { authApi, usuariosApi, extraerDetalleApi } from "../services/api"
+import { usuariosApi, extraerDetalleApi } from "../services/api"
 import type { UsuarioAdmin } from "../types"
+import { useAuth } from "../hooks/useAuth"
 
 // Valores de rol usados en el resto del sistema (docs/roles-permisos.md). No hay
 // enum ni CHECK del lado del backend —sigue siendo un String libre, a propósito
@@ -60,17 +61,17 @@ const estiloError: React.CSSProperties = {
 export default function UsuariosPage() {
   const navigate = useNavigate()
 
-  const [miId, setMiId] = useState<number | null>(null)
+  // El usuario propio sale del contexto y no de un authApi.me() de esta pantalla: es la
+  // misma respuesta que AuthProvider ya resolvió una sola vez para todo el árbol. Antes acá
+  // vivían un estado `miId` y un efecto que repetían ese GET /auth/me en cada visita.
+  const { user } = useAuth()
+
   const [usuarios, setUsuarios] = useState<UsuarioAdmin[]>([])
   const [incluirInactivos, setIncluirInactivos] = useState(false)
   const [cargandoInicial, setCargandoInicial] = useState(true)
   const [errorInicial, setErrorInicial] = useState<string | null>(null)
   const [errorFila, setErrorFila] = useState<Record<number, string | null>>({})
   const [guardando, setGuardando] = useState<Record<number, boolean>>({})
-
-  useEffect(() => {
-    authApi.me().then((res) => setMiId(res.data.id)).catch(() => {})
-  }, [])
 
   useEffect(() => {
     cargar(incluirInactivos, true)
@@ -157,7 +158,10 @@ export default function UsuariosPage() {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {usuarios.map((usuario) => {
-                const esUnoMismo = usuario.id === miId
+                // Mientras useAuth() resuelve la sesión, user es null y esto da false: el
+                // botón arranca habilitado y se deshabilita al confirmarse cuál es la cuenta
+                // propia. Es el mismo comportamiento que tenía con `miId` en null.
+                const esUnoMismo = usuario.id === user?.id
                 // Regla del backend (T26-175): la cuenta de servicio de vision-module no se
                 // puede desactivar, sea cual sea su rol actual — se deshabilita el botón acá
                 // para no dejar que alguien dispare el 409 sin saber por qué.

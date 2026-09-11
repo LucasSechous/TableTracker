@@ -87,8 +87,11 @@ export const authApi = {
 };
 
 export const mesasApi = {
+  // La barra final importa tanto acá como en el POST de abajo: sin ella FastAPI responde
+  // 307 y el navegador repite la llamada. Es la request que DashboardPage dispara cada 3
+  // segundos en monitoreo, así que el redirect duplicaba la ruta más caliente de la app.
   listar: (params?: { estado?: string; sector_id?: number }) =>
-    api.get<Mesa[]>("/mesas", { params }),
+    api.get<Mesa[]>("/mesas/", { params }),
 
   // La barra final apunta al path exacto del router y evita el 307 de FastAPI,
   // que en un POST obliga a repetir preflight y cuerpo.
@@ -169,7 +172,8 @@ export const historialApi = {
 };
 
 export const sectoresApi = {
-  listar: () => api.get<Sector[]>("/sectores"),
+  // Con barra final por el mismo motivo que mesasApi.listar: sin ella el GET se come un 307.
+  listar: () => api.get<Sector[]>("/sectores/"),
 
   crear: (datos: { nombre: string; descripcion?: string; activo?: boolean }) =>
     api.post<Sector>("/sectores/", datos),

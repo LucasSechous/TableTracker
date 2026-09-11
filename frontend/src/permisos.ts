@@ -30,11 +30,6 @@ export function esAdmin(rol?: string): boolean {
   return rol === ADMIN
 }
 
-/** Encargado estricto: NO incluye admin. Para preguntar "¿puede X?" usar las de abajo. */
-export function esEncargado(rol?: string): boolean {
-  return rol === ENCARGADO
-}
-
 /**
  * Mover, redimensionar, crear y editar mesas y sectores.
  *
@@ -45,7 +40,7 @@ export function esEncargado(rol?: string): boolean {
  * propia tarea.
  */
 export function puedeEditarLayout(rol?: string): boolean {
-  return esAdmin(rol) || esEncargado(rol)
+  return esAdmin(rol) || rol === ENCARGADO
 }
 
 /**

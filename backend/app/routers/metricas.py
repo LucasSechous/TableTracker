@@ -8,7 +8,7 @@
 # endpoint nuevo porque el dato es exactamente el que este ya calcula; uno aparte tendría
 # que repetir la misma consulta agregada para responder una pregunta sobre ella.
 
-from datetime import datetime
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -21,8 +21,16 @@ from app.models.historial import HistorialEstado
 from app.models.mesa import EstadoMesa, Mesa
 from app.models.sector import Sector
 from app.routers.auth import get_usuario_actual
-from app.schemas.metricas import ConteoPorEstado, OcupacionResponse, RotacionMesaResponse
-from app.services.horario import en_horario_de_servicio
+from app.schemas.metricas import (
+    ConteoPorEstado,
+    OcupacionDiariaMesaResponse,
+    OcupacionDiariaResponse,
+    OcupacionResponse,
+    RotacionMesaResponse,
+    TiempoPorEstado,
+)
+from app.services.horario import en_horario_de_servicio, hoy_local, rango_dia_operativo
+from app.services.ocupacion import calcular_ocupacion_por_mesa
 
 router = APIRouter(dependencies=[Depends(get_usuario_actual)])
 
@@ -168,3 +176,76 @@ def obtener_rotacion(
         )
         for mesa in mesas
     ]
+
+
+# Resumen diario de ocupación (T26-185, RF-32): a diferencia de /ocupacion (foto del
+# instante) y /rotacion (conteo de transiciones), acá se reconstruye cuánto tiempo estuvo
+# cada mesa en cada estado durante el "día operativo" de `fecha` — ver rango_dia_operativo
+# en app/services/horario.py para la decisión de dónde se corta ese día.
+#
+# Sin filtro de Mesa.activa en la query: a diferencia de /ocupacion y /rotacion, una mesa
+# hoy inactiva puede haber estado activa durante el día pedido y sí debe poder aparecer. Es
+# calcular_ocupacion_por_mesa quien decide, mesa por mesa, si hay datos suficientes para
+# incluirla (ver app/services/ocupacion.py).
+@router.get("/ocupacion-diaria", response_model=OcupacionDiariaResponse)
+def obtener_ocupacion_diaria(
+    fecha: Optional[date] = Query(None), sector_id: Optional[int] = Query(None), db: Session = Depends(get_db)
+):
+    if sector_id is not None and not db.query(Sector).filter(Sector.id == sector_id).first():
+        raise HTTPException(status_code=400, detail="El sector indicado no existe")
+
+    if fecha is None:
+        fecha = hoy_local()
+
+    config = db.query(ConfiguracionGeneral).filter(ConfiguracionGeneral.id == 1).first()
+    apertura = config.hora_apertura if config else None
+    cierre = config.hora_cierre if config else None
+    inicio, fin = rango_dia_operativo(fecha, apertura, cierre)
+
+    mesas_query = db.query(Mesa)
+    if sector_id is not None:
+        mesas_query = mesas_query.filter(Mesa.sector_id == sector_id)
+    mesas = mesas_query.all()
+
+    minutos_por_mesa = calcular_ocupacion_por_mesa(db, mesas, inicio, fin)
+
+    mesas_respuesta = []
+    total_minutos = {estado.value: 0.0 for estado in EstadoMesa}
+    ocupada_total = 0.0
+    ventana_total = 0.0
+
+    for mesa in mesas:
+        tiempos = minutos_por_mesa.get(mesa.id)
+        if tiempos is None:
+            continue
+
+        duracion_mesa = sum(tiempos.values())
+        ocupada_mesa = sum(tiempos[estado.value] for estado in ESTADOS_QUE_CUENTAN_COMO_OCUPACION)
+        porcentaje_mesa = round((ocupada_mesa / duracion_mesa) * 100, 2) if duracion_mesa > 0 else 0.0
+
+        mesas_respuesta.append(
+            OcupacionDiariaMesaResponse(
+                mesa_id=mesa.id,
+                numero=mesa.numero,
+                sector_id=mesa.sector_id,
+                minutos_por_estado=TiempoPorEstado(**tiempos),
+                porcentaje_ocupacion=porcentaje_mesa,
+            )
+        )
+        for estado_valor, minutos in tiempos.items():
+            total_minutos[estado_valor] += minutos
+        ventana_total += duracion_mesa
+        ocupada_total += ocupada_mesa
+
+    porcentaje_general = round((ocupada_total / ventana_total) * 100, 2) if ventana_total > 0 else 0.0
+    fin_efectivo = min(fin, datetime.now(timezone.utc))
+
+    return OcupacionDiariaResponse(
+        fecha=fecha,
+        inicio=inicio,
+        fin=fin_efectivo,
+        total_mesas=len(mesas_respuesta),
+        porcentaje_ocupacion=porcentaje_general,
+        minutos_por_estado=TiempoPorEstado(**total_minutos),
+        mesas=mesas_respuesta,
+    )

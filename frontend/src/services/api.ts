@@ -15,6 +15,7 @@ import type {
   DetectionFrameResult,
   OcupacionResponse,
   RotacionMesa,
+  OcupacionDiariaResponse,
   EstadoOpcion,
   UsuarioAdmin,
 } from "../types";
@@ -33,6 +34,9 @@ export type {
   ConteoPorEstado,
   OcupacionResponse,
   RotacionMesa,
+  OcupacionDiariaMesa,
+  OcupacionDiariaResponse,
+  TiempoPorEstado,
   EstadoOpcion,
   UsuarioAdmin,
 } from "../types";
@@ -303,6 +307,13 @@ export const metricasApi = {
   // "hasta" sea inclusivo hay que mandar el fin del día (ver finDelDia en RangoFechas).
   rotacion: (params?: { fecha_inicio?: string; fecha_fin?: string; sector_id?: number }) =>
     api.get<RotacionMesa[]>("/metricas/rotacion", { params }),
+
+  // Resumen diario de ocupación (T26-185, RF-32): minutos por estado y % de ocupación,
+  // reconstruidos desde historial_estados para el día operativo de `fecha` (una fecha
+  // suelta, no un datetime — el backend resuelve los bordes reales del día). Sin `fecha`
+  // el backend usa el día de hoy.
+  ocupacionDiaria: (params?: { fecha?: string; sector_id?: number }) =>
+    api.get<OcupacionDiariaResponse>("/metricas/ocupacion-diaria", { params }),
 };
 
 // El `detail` de FastAPI NO siempre es un string. Cuando la validación falla (422) es una

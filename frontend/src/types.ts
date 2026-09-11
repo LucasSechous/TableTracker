@@ -205,6 +205,37 @@ export interface RotacionMesa {
   rotaciones: number
 }
 
+// Respuesta de GET /metricas/ocupacion-diaria (T26-185, RF-32).
+//
+// A diferencia de OcupacionResponse (foto del instante) acá los números son minutos,
+// reconstruidos desde historial_estados para el "día operativo" de `fecha` — que no es
+// medianoche a medianoche sino el horario real del local (`inicio`/`fin`, tal como los
+// devuelve el backend), para no partir en dos un turno que cruza la medianoche.
+export interface TiempoPorEstado {
+  libre: number
+  ocupada: number
+  pendiente_limpieza: number
+  reservada: number
+}
+
+export interface OcupacionDiariaMesa {
+  mesa_id: number
+  numero: number
+  sector_id: number
+  minutos_por_estado: TiempoPorEstado
+  porcentaje_ocupacion: number
+}
+
+export interface OcupacionDiariaResponse {
+  fecha: string
+  inicio: string
+  fin: string
+  total_mesas: number
+  porcentaje_ocupacion: number
+  minutos_por_estado: TiempoPorEstado
+  mesas: OcupacionDiariaMesa[]
+}
+
 // Fila de GET/PATCH /usuarios/{id} (T26-175): gestión de usuarios desde la app.
 //
 // es_cuenta_servicio marca la cuenta de vision-module (por email, no por rol: hoy esa

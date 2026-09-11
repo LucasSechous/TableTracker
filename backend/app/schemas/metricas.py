@@ -2,6 +2,8 @@
 # No hay modelo/tabla propia: estos shapes solo describen la salida de una
 # consulta agregada sobre mesas (T26-154).
 
+from datetime import date, datetime
+
 from pydantic import BaseModel
 
 
@@ -30,3 +32,32 @@ class RotacionMesaResponse(BaseModel):
     numero: int
     sector_id: int
     rotaciones: int
+
+
+# Minutos, no un conteo: a diferencia de ConteoPorEstado (una foto instantánea), acá cada
+# mesa contribuye tiempo, reconstruido a partir de historial_estados (T26-185, RF-32).
+class TiempoPorEstado(BaseModel):
+    libre: float = 0
+    ocupada: float = 0
+    pendiente_limpieza: float = 0
+    reservada: float = 0
+
+
+class OcupacionDiariaMesaResponse(BaseModel):
+    mesa_id: int
+    numero: int
+    sector_id: int
+    minutos_por_estado: TiempoPorEstado
+    porcentaje_ocupacion: float
+
+
+class OcupacionDiariaResponse(BaseModel):
+    fecha: date
+    # Bordes reales del día operativo usado para el cálculo (T26-171): el frontend los
+    # muestra tal cual en vez de recalcularlos, para no duplicar la lógica de corte de día.
+    inicio: datetime
+    fin: datetime
+    total_mesas: int
+    porcentaje_ocupacion: float
+    minutos_por_estado: TiempoPorEstado
+    mesas: list[OcupacionDiariaMesaResponse]

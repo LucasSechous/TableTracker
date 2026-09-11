@@ -462,6 +462,49 @@ export function getRotacionSinRotaciones(page: Page): Locator {
   return page.getByTestId("rotacion-sin-rotaciones");
 }
 
+export async function gotoOcupacionDiariaAuthed(page: Page, token: string): Promise<void> {
+  await injectToken(page, token);
+  await page.goto("/ocupacion-diaria");
+  await waitForOcupacionDiariaLoaded(page);
+}
+
+export async function waitForOcupacionDiariaLoaded(page: Page): Promise<void> {
+  await page.getByText("Cargando reporte...").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
+}
+
+export function getOcupacionDiariaFechaInput(page: Page): Locator {
+  return page.getByTestId("ocupacion-diaria-fecha");
+}
+
+export function getOcupacionDiariaSectorSelect(page: Page): Locator {
+  return page.getByTestId("ocupacion-diaria-filtro-sector");
+}
+
+export function getOcupacionDiariaBuscarButton(page: Page): Locator {
+  return page.getByTestId("ocupacion-diaria-buscar");
+}
+
+export function getOcupacionDiariaPorcentaje(page: Page): Locator {
+  return page.getByTestId("ocupacion-diaria-porcentaje");
+}
+
+export function getOcupacionDiariaFila(page: Page, mesaId: number): Locator {
+  return page.getByTestId(`ocupacion-diaria-fila-${mesaId}`);
+}
+
+export function getOcupacionDiariaPorcentajeFila(page: Page, mesaId: number): Locator {
+  return page.getByTestId(`ocupacion-diaria-porcentaje-${mesaId}`);
+}
+
+export function getOcupacionDiariaVacio(page: Page): Locator {
+  return page.getByTestId("ocupacion-diaria-vacio");
+}
+
+/** Todas las filas de mesa de la tabla de ocupación diaria, como Locator. */
+export function getOcupacionDiariaFilas(page: Page): Locator {
+  return page.locator("tbody tr[data-testid^='ocupacion-diaria-fila-']");
+}
+
 /** Todas las filas del cuerpo de la tabla de historial. */
 export function getHistorialRows(page: Page): Locator {
   return page.locator("table tbody tr");

@@ -7,6 +7,7 @@ import DashboardPage from "./pages/DashboardPage";
 import HistorialPage from "./pages/HistorialPage";
 import OcupacionPage from "./pages/OcupacionPage";
 import RotacionPage from "./pages/RotacionPage";
+import OcupacionDiariaPage from "./pages/OcupacionDiariaPage";
 import ConfiguracionPage from "./pages/ConfiguracionPage";
 import CalibracionRoiPage from "./pages/CalibracionRoiPage";
 import CamarasPage from "./pages/CamarasPage";
@@ -59,6 +60,16 @@ export default function App() {
               element={
                 <PrivateRoute>
                   <RotacionPage />
+                </PrivateRoute>
+              }
+            />
+            {/* Sin AdminRoute por el mismo motivo que /ocupacion y /rotacion: GET
+                /metricas/ocupacion-diaria pide sesión pero no rol. */}
+            <Route
+              path="/ocupacion-diaria"
+              element={
+                <PrivateRoute>
+                  <OcupacionDiariaPage />
                 </PrivateRoute>
               }
             />

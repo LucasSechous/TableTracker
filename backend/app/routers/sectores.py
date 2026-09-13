@@ -32,8 +32,20 @@ def crear_sector(
     db: Session = Depends(get_db),
     _: User = Depends(requiere_rol("encargado")),
 ):
-    if db.query(Sector).filter(Sector.nombre == datos.nombre).first():
+    # T26-199: sectores pasó a baja lógica (ver eliminar_sector). El UNIQUE(nombre) sigue
+    # viendo la fila dada de baja, así que sin esto un nombre reutilizado chocaría para
+    # siempre. Mismo criterio que roi_mesa.crear_roi: si la fila inactiva existe, se
+    # reactiva en el lugar en vez de crear otra.
+    existente = db.query(Sector).filter(Sector.nombre == datos.nombre).first()
+    if existente and existente.activo:
         raise HTTPException(status_code=400, detail="Ya existe un sector con ese nombre")
+    if existente:
+        existente.descripcion = datos.descripcion
+        existente.activo = True
+        db.commit()
+        db.refresh(existente)
+        return existente
+
     sector = Sector(**datos.model_dump())
     db.add(sector)
     db.commit()
@@ -64,10 +76,15 @@ def eliminar_sector(
     db: Session = Depends(get_db),
     _: User = Depends(requiere_rol(ROL_ADMIN)),
 ):
+    # T26-199 (B-4 de la auditoría T26-133): baja lógica, no borrado físico — mismo criterio
+    # que mesas, cámaras y ROI. La guarda de abajo ahora mira solo mesas ACTIVAS: un sector
+    # cuyas mesas ya están todas dadas de baja tiene que poder desactivarse él también, en
+    # vez de quedar bloqueado para siempre por filas que ya no cuentan como "asociadas" en
+    # ningún sentido operativo.
     sector = db.query(Sector).filter(Sector.id == sector_id).first()
     if not sector:
         raise HTTPException(status_code=404, detail="Sector no encontrado")
-    if db.query(Mesa).filter(Mesa.sector_id == sector_id).first():
+    if db.query(Mesa).filter(Mesa.sector_id == sector_id, Mesa.activa == True).first():  # noqa: E712
         raise HTTPException(status_code=409, detail="No se puede eliminar un sector con mesas asociadas")
-    db.delete(sector)
+    sector.activo = False
     db.commit()

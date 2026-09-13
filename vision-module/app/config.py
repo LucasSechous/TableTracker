@@ -109,6 +109,14 @@ CONFIRMACION_SEGUNDOS = float(os.getenv("CONFIRMACION_SEGUNDOS", "6"))
 # guardar un cambio en la pantalla de configuración y que la detección lo use.
 CONFIGURACION_REFRESCO_ITERACIONES = int(os.getenv("CONFIGURACION_REFRESCO_ITERACIONES", "15"))
 
+# Cada cuántas iteraciones del bucle principal se releen /mesas y /roi-mesa para
+# recalcular qué ROI siguen vigentes (T26-199). cargar_zonas() se corría una sola vez al
+# arrancar: una mesa o un sector dado de baja mientras el proceso ya estaba corriendo
+# seguía viendo cambios de estado hasta el próximo reinicio, porque su ROI quedaba
+# "vivo" en la lista cacheada. Mismo criterio de cadencia que CONFIGURACION_REFRESCO_ITERACIONES:
+# no es un dato que cambie seguido como para pagar una llamada HTTP por frame.
+ZONAS_REFRESCO_ITERACIONES = int(os.getenv("ZONAS_REFRESCO_ITERACIONES", "15"))
+
 # Reconexión de la cámara: frames nulos seguidos que se toleran antes de cerrar
 # y reabrir el stream, y espera entre intentos de reapertura.
 FRAMES_FALLIDOS_MAXIMOS = int(os.getenv("FRAMES_FALLIDOS_MAXIMOS", "5"))

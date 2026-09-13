@@ -85,6 +85,23 @@ def crear_mesa(
 ):
     if not db.query(Sector).filter(Sector.id == datos.sector_id).first():
         raise HTTPException(status_code=400, detail="El sector indicado no existe")
+
+    # T26-199: mesas pasó a baja lógica (ver eliminar_mesa). El UNIQUE(numero, sector_id)
+    # sigue viendo la fila dada de baja, así que sin esto un número reutilizado en el mismo
+    # sector chocaría para siempre. Mismo criterio que roi_mesa.crear_roi con su par
+    # mesa+cámara: si la fila inactiva existe, se reactiva en el lugar en vez de crear otra.
+    existente = db.query(Mesa).filter(Mesa.numero == datos.numero, Mesa.sector_id == datos.sector_id).first()
+    if existente and existente.activa:
+        raise HTTPException(status_code=409, detail=f"Ya existe la mesa {datos.numero} en ese sector")
+    if existente:
+        existente.estado = datos.estado
+        existente.estado_desde = func.now()
+        existente.activa = True
+        db.commit()
+        db.refresh(existente)
+        db.refresh(existente, attribute_names=["sector"])
+        return existente
+
     mesa = Mesa(**datos.model_dump())
     db.add(mesa)
     try:
@@ -212,12 +229,14 @@ def eliminar_mesa(
     db: Session = Depends(get_db),
     _: User = Depends(requiere_rol(ROL_ADMIN)),
 ):
+    # T26-199 (B-4 de la auditoría T26-133): baja lógica, no borrado físico. Unifica la
+    # semántica de DELETE con cámaras y ROI, y de paso destraba un callejón sin salida: el
+    # borrado físico fallaba con 409 contra cualquier mesa con historial_estados asociado,
+    # que es prácticamente cualquier mesa que haya estado en uso alguna vez. El frontend ya
+    # hacía esto mismo desde antes vía PATCH activa:false (mesasApi.desactivar); esto solo
+    # hace que el verbo DELETE dejara de mentir sobre lo que la aplicación ya hacía.
     mesa = db.query(Mesa).filter(Mesa.id == mesa_id).first()
     if not mesa:
         raise HTTPException(status_code=404, detail="Mesa no encontrada")
-    db.delete(mesa)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=409, detail="No se puede eliminar la mesa: tiene historial de estados asociado")
+    mesa.activa = False
+    db.commit()

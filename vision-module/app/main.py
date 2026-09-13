@@ -220,6 +220,53 @@ class CacheUmbrales:
             self.overlap_minimo = nuevo_overlap
 
 
+class CacheZonas:
+    """Mantiene las zonas vigentes al día contra /mesas y /roi-mesa (T26-199).
+
+    cargar_zonas() se corría una sola vez al arrancar: una mesa o un sector dado de baja
+    mientras el proceso ya estaba corriendo no se enteraba hasta el próximo reinicio,
+    porque su ROI seguía "vivo" en la lista cacheada y aplicar_cambio() no chequea
+    `activa` al escribir un cambio de estado. Mismo criterio de cadencia que
+    CacheUmbrales: se refresca cada `cada_iteraciones`, no en cada una — no es un dato
+    que cambie seguido como para pagar dos llamadas HTTP por frame.
+
+    Si la recarga falla (backend caído) o deja cero zonas vigentes (todas las mesas del
+    sector quedaron inactivas), se sigue con las últimas zonas buenas conocidas: un dato
+    que se quedó sin destino no tiene por qué tumbar un proceso que ya está corriendo,
+    mismo criterio que aplicar_cambio() ya usa para los cambios de estado.
+    """
+
+    def __init__(self, cliente, camara, sector_id, confirmador, zonas_iniciales, cada_iteraciones):
+        self.cliente = cliente
+        self.camara = camara
+        self.sector_id = sector_id
+        self.confirmador = confirmador
+        self.zonas = zonas_iniciales
+        self.cada_iteraciones = cada_iteraciones
+        self._iteracion = 0
+
+    def actualizar(self):
+        """Se llama una vez por iteración del bucle; solo pega contra la API cada N."""
+        self._iteracion += 1
+        if self._iteracion % self.cada_iteraciones != 0:
+            return
+        try:
+            nuevas = cargar_zonas(self.cliente, self.camara, self.sector_id)
+        except ConfiguracionInvalida as error:
+            logger.error("No se pudieron refrescar las zonas, se sigue con las últimas conocidas: %s", error)
+            return
+        except ErrorBackend as error:
+            logger.warning("No se pudo refrescar las zonas, se sigue con las últimas conocidas: %s", error)
+            return
+
+        self.zonas = nuevas
+        # Un ROI que dejó de estar vigente (su mesa se dio de baja) deja de llegar en
+        # `nuevas`; sin esto el Confirmador seguiría sosteniendo la observación vieja de
+        # esa mesa y la resucitaría apenas volviera a estar vigente, con un reloj que
+        # arrancó a contar hace rato en vez de arrancar de cero como una mesa nueva.
+        self.confirmador.olvidar([zona.mesa_id for zona in nuevas])
+
+
 class PublicadorEnSegundoPlano:
     """Manda la detección actual al backend sin bloquear el ciclo.
 
@@ -494,7 +541,16 @@ def reconectar(video):
 
 
 def bucle(
-    video, detector, cliente, zonas, confirmador, camara_id, publicador=None, aplicador=None, umbrales=None
+    video,
+    detector,
+    cliente,
+    zonas,
+    confirmador,
+    camara_id,
+    publicador=None,
+    aplicador=None,
+    umbrales=None,
+    zonas_cache=None,
 ):
     publicador = publicador if publicador is not None else PublicadorEnSegundoPlano()
     # Si lo creamos nosotros, también lo cerramos: al salir por Ctrl+C conviene darle
@@ -503,16 +559,21 @@ def bucle(
     aplicador_propio = aplicador is None
     aplicador = aplicador if aplicador is not None else AplicadorEnSegundoPlano(cliente)
     try:
-        _ciclar(video, detector, cliente, zonas, confirmador, camara_id, publicador, aplicador, umbrales)
+        _ciclar(
+            video, detector, cliente, zonas, confirmador, camara_id, publicador, aplicador, umbrales, zonas_cache
+        )
     finally:
         if aplicador_propio:
             aplicador.cerrar()
 
 
-# umbrales por defecto en None y no obligatorio: sin caché de umbrales el ciclo cae al .env,
-# que es como funcionaba antes de T26-183. Los tests preexistentes de TestBucle llaman a
-# bucle() sin pasarlo, y tienen que seguir andando.
-def _ciclar(video, detector, cliente, zonas, confirmador, camara_id, publicador, aplicador, umbrales=None):
+# umbrales y zonas_cache por defecto en None y no obligatorios: sin ellos el ciclo cae al
+# valor fijo que recibió al construirse, que es como funcionaba antes de T26-183 (umbrales)
+# y T26-199 (zonas). Los tests preexistentes de TestBucle llaman a bucle() sin pasarlos, y
+# tienen que seguir andando.
+def _ciclar(
+    video, detector, cliente, zonas, confirmador, camara_id, publicador, aplicador, umbrales=None, zonas_cache=None
+):
     fallidos = 0
     primer_frame = True
     while True:
@@ -523,6 +584,13 @@ def _ciclar(video, detector, cliente, zonas, confirmador, camara_id, publicador,
         if umbrales is not None:
             umbrales.actualizar()
             confirmador.segundos = umbrales.confirmacion_segundos
+
+        # Zonas vigentes (T26-199): se refrescan antes de procesar el frame por el mismo
+        # motivo que los umbrales, y para que una mesa/sector dado de baja recién se caiga
+        # de la ocupación resuelta más abajo, no de una lista ya vieja.
+        if zonas_cache is not None:
+            zonas_cache.actualizar()
+            zonas = zonas_cache.zonas
 
         frame = video.read_frame()
 
@@ -660,15 +728,21 @@ def run():
         umbrales.confirmacion_segundos,
     )
 
+    confirmador = Confirmador(umbrales.confirmacion_segundos)
+    zonas_cache = CacheZonas(
+        cliente, camara, config.SECTOR_ID, confirmador, zonas, config.ZONAS_REFRESCO_ITERACIONES
+    )
+
     try:
         bucle(
             video,
             detector,
             cliente,
             zonas,
-            Confirmador(umbrales.confirmacion_segundos),
+            confirmador,
             camara["id"],
             umbrales=umbrales,
+            zonas_cache=zonas_cache,
         )
     except KeyboardInterrupt:
         logger.info("Módulo de visión detenido")

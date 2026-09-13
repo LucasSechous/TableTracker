@@ -270,7 +270,7 @@ Hoy los dos coinciden. Nada garantiza que sigan coincidiendo: agregar un estado 
 | F-12 | `SalonCanvas` recibe el rol por prop y por contexto | Frontend | Inconsistencia | Bajo |
 | F-2 | `horario.ts` espeja `horario.py` con otro huso | Frontend | Duplicación | Medio |
 | F-4 | Ciclo de arrastre reimplementado tres veces | Frontend | Duplicación | Alto |
-| B-4 | `DELETE` con dos semánticas según el recurso | Backend | Inconsistencia | Alto (cambio de contrato) |
+| ~~B-4~~ | ~~`DELETE` con dos semánticas según el recurso~~ · **RESUELTO** (T26-199) | Backend | Inconsistencia | — |
 
 **Lo que está limpio y conviene no volver a revisar:** los 33 schemas del backend (ninguno huérfano), la centralización del HTTP en `api.ts` (cero llamadas sueltas), y la ausencia de llamadas a endpoints inexistentes.
 
@@ -282,7 +282,7 @@ Tres puntos de este informe no se pueden cerrar sin mirar `vision-module`, que q
 
 1. **`GET /mesas/{id}` y `POST /camaras/{id}/deteccion-actual`** figuran sin consumidor en el frontend y **no se marcaron como muertos** porque los usa `vision-module/app/client/backend_client.py` (líneas 142 y 156). Si ese cliente cambia en T26-197, hay que revalidar que sigan teniendo consumidor.
 
-2. **B-4 (semántica de `DELETE`) toca a vision-module indirectamente.** El módulo lee mesas con `GET /mesas/` y filtra por estado; pasar mesas y sectores a baja lógica cambiaría qué filas devuelve ese listado. La decisión no debería tomarse sin verificar cómo el módulo trata las mesas inactivas.
+2. ~~**B-4 (semántica de `DELETE`) toca a vision-module indirectamente.**~~ **Verificado y resuelto en T26-199.** `GET /mesas/` ya filtraba `activa=true` por default antes de este ticket, y `listar_mesas()` del backend_client nunca pidió `incluir_inactivos`, así que pasar el `DELETE` a baja lógica no cambió qué filas devuelve ese listado. El riesgo real estaba en otro lado: `cargar_zonas()` se leía una sola vez al arrancar, así que una mesa dada de baja en pleno funcionamiento seguía recibiendo cambios de estado hasta el próximo reinicio. T26-199 agregó `CacheZonas` (`vision-module/app/main.py`), que refresca zonas cada `ZONAS_REFRESCO_ITERACIONES` y limpia el rastro de `Confirmador` (`olvidar()`, que existía sin usarse desde antes) para las mesas que dejaron de estar vigentes.
 
 3. **F-2 (la regla de horario duplicada) gana un tercer lado si vision-module llega a consumirla.** Hoy no la usa —lee `confirmacion_segundos` y `overlap_minimo` de `/configuracion`, no las horas—, pero es el mismo endpoint, así que conviene confirmarlo cuando el módulo se estabilice.
 
@@ -302,7 +302,8 @@ acá se anota qué se fue cerrando para no tener que releerlo entero.
 | F-1 · `UsuariosPage` duplicaba `authApi.me()` | **Resuelto** | ahora consume `useAuth()` |
 | F-7 · `esEncargado` exportado sin consumidor | **Resuelto** | eliminado; su única llamada quedó inline en `puedeEditarLayout` |
 | F-7 · `TAMANO_MINIMO_SALON`, `formatearNumeroCsv` | Pendiente | pasar a privados del módulo |
-| B-1, B-2, B-3, B-4, B-5 | Pendientes | — |
+| B-4 · `DELETE` con dos semánticas según el recurso | **Resuelto** (T26-199) | `eliminar_mesa`/`eliminar_sector` pasaron a baja lógica; `crear_mesa`/`crear_sector` reactivan la fila dada de baja (mismo criterio que `roi_mesa`); `docs/roles-permisos.md` actualizado. F-11, que dependía de esto, queda desbloqueado pero sin decidir |
+| B-1, B-2, B-3, B-5 | Pendientes | — |
 | F-2 a F-6, F-8 a F-12 | Pendientes | — |
 | I-2, I-3 | Pendientes | — |
 

@@ -57,14 +57,17 @@ confirmado con el reporter del ticket ante la falta de acceso al Capítulo 1 (an
 
 - **Alta/edición/borrado de sectores y mesas, y reposicionamiento en el layout**: se trata como
   "configuración" del salón → `admin` + `encargado` (el encargado gestiona el salón día a día;
-  el borrado físico, al ser destructivo y sin soft-delete real hacia atrás en historial con
-  vínculos, queda reservado a `admin`).
+  el borrado —hoy baja lógica, ver más abajo— queda reservado a `admin` por ser la operación
+  más drástica de cada recurso, aunque sea reversible).
 - **`/mesas/{id}/limpieza`**: rol `limpieza` (el motivo de ser del rol) + `encargado`.
 - **`/mesas/{id}/reserva`**: rol `recepcion` (el motivo de ser del rol) + `encargado`.
 - **`GET /historial/`**: no es gestión de usuarios ni configuración (los dos ejemplos que da el
   criterio de aceptación para exigir 403), así que queda abierto a cualquier rol autenticado.
-- **Borrados (`DELETE`)**: solo `admin` en todos los casos, por ser la operación más destructiva
-  de cada recurso.
+- **Borrados (`DELETE`)**: solo `admin` en todos los casos. Desde T26-199, `DELETE` es **baja
+  lógica en los cuatro recursos** (sectores, mesas, cámaras y ROI) — antes `DELETE /sectores/{id}`
+  y `DELETE /mesas/{id}` borraban físico, la única inconsistencia de contrato que quedaba entre
+  recursos "papelera". Ver [camaras-roi.md](camaras-roi.md#endpoints) para el detalle de baja
+  lógica + reactivación, que ahora aplica igual a los cuatro.
 - **Cámaras y ROI**: `admin` en **todos** los verbos, incluidos los `GET`. El criterio de
   aceptación de T26-116 nombra "configuración de cámaras" como ejemplo explícito de acceso
   exclusivo de admin, y a diferencia de mesas y sectores acá el listado tampoco es inocuo: expone
@@ -130,6 +133,14 @@ Dos piezas, las dos nuevas respecto de la primera versión de este documento:
 | **Borrar mesa (papelera)** | `DELETE /mesas/{id}` | `puedeBorrar` | ✓ | — | — |
 | Redimensionar el salón | `PATCH /configuracion` | `esAdmin` | ✓ | — | — |
 | "Salir de edición" | — | *sin gate* | ✓ | ✓ | ✓ |
+
+"Papelera" es literal desde T26-199: borrar un sector o una mesa es baja lógica (`activo`/`activa`
+en `false`), no destrucción de la fila — igual que ya era para cámaras y ROI. Recrear un sector o
+una mesa con el mismo nombre/número reactiva la fila dada de baja en vez de chocar contra su
+UNIQUE, mismo criterio que `roi_mesa` (ver [camaras-roi.md](camaras-roi.md)). La columna "Endpoint
+que dispara" es la del contrato (lo que `puedeBorrar` gatea); los dos controles de esta tabla en
+realidad ejecutan la baja a través del `PATCH` genérico del recurso — ver F-11 en
+[auditoria-codigo.md](auditoria-codigo.md), que sigue sin resolver.
 
 ### Qué ve cada rol en el panel de mesa
 

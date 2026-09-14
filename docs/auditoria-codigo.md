@@ -292,10 +292,10 @@ El riesgo que este hallazgo señalaba —agregar un estado en el backend deja el
 | ~~F-4~~ | ~~Ciclo de arrastre reimplementado~~ (eran **cuatro** instancias, no tres) · **RESUELTO** | Frontend | Duplicación | — |
 | ~~F-8~~ | ~~Cuatro métodos muertos en `api.ts`~~ · **CORREGIDO**: solo uno lo estaba | Frontend | Código muerto | — |
 | ~~I-3~~ | ~~Etiquetas de estado con dos fuentes de verdad~~ · **RESUELTO** como convivencia documentada | Integración | Duplicación | — |
-| F-11 | `permisos.ts` contradice su propio invariante declarado | Frontend | Inconsistencia | Bajo (decisión en B-4/B-5) — **T26-199** |
-| B-4 | `DELETE` con dos semánticas según el recurso | Backend | Inconsistencia | Alto (cambio de contrato) — **T26-199** |
+| ~~B-4~~ | ~~`DELETE` con dos semánticas según el recurso~~ · **RESUELTO** (T26-199) | Backend | Inconsistencia | — |
+| F-11 | `permisos.ts` contradice su propio invariante declarado | Frontend | Inconsistencia | Bajo — B-4 ya resuelto, queda pendiente de B-5 |
 | B-5 | El rol exigido cambia entre `PATCH` y `DELETE` | Backend | Inconsistencia | Gating — **T26-199** |
-| B-3 | Dos endpoints de test de conexión, uno sin consumidor | Backend | Duplicación | Bajo (depende de B-4) |
+| B-3 | Dos endpoints de test de conexión, uno sin consumidor | Backend | Duplicación | Bajo — desbloqueado por B-4 |
 | I-2 | Cuatro endpoints sin consumidor | Integración | Código muerto | Decisión de alcance |
 
 **Lo que está limpio y conviene no volver a revisar:** los 33 schemas del backend (ninguno huérfano), la centralización del HTTP en `api.ts` (cero llamadas sueltas), y la ausencia de llamadas a endpoints inexistentes.
@@ -317,7 +317,7 @@ Tres puntos de este informe no se pueden cerrar sin mirar `vision-module`, que q
 
 1. **`GET /mesas/{id}` y `POST /camaras/{id}/deteccion-actual`** figuran sin consumidor en el frontend y **no se marcaron como muertos** porque los usa `vision-module/app/client/backend_client.py` (líneas 142 y 156). Si ese cliente cambia en T26-197, hay que revalidar que sigan teniendo consumidor.
 
-2. ~~**B-4 (semántica de `DELETE`) toca a vision-module indirectamente.**~~ · **VERIFICADO, ver N-4.** El módulo lee mesas con `GET /mesas/` sin pasar `incluir_inactivos`, así que depende del filtro por defecto del endpoint — que T26-199 no cambia: ese ticket es sobre el verbo `DELETE`, no sobre el listado. Además cruza los ROI contra las mesas activas y descarta los huérfanos. **Conclusión: pasar mesas a baja lógica no rompe al módulo.** Lo que sí apareció al mirarlo es otra cosa, independiente de B-4 y anterior a él: la validación corre solo al arrancar. Está en N-4.
+2. ~~**B-4 (semántica de `DELETE`) toca a vision-module indirectamente.**~~ **Verificado y resuelto en T26-199.** `GET /mesas/` ya filtraba `activa=true` por default antes de este ticket, y `listar_mesas()` del backend_client nunca pidió `incluir_inactivos`, así que pasar el `DELETE` a baja lógica no cambió qué filas devuelve ese listado. El riesgo real estaba en otro lado: `cargar_zonas()` se leía una sola vez al arrancar, así que una mesa dada de baja en pleno funcionamiento seguía recibiendo cambios de estado hasta el próximo reinicio. T26-199 agregó `CacheZonas` (`vision-module/app/main.py`), que refresca zonas cada `ZONAS_REFRESCO_ITERACIONES` y limpia el rastro de `Confirmador` (`olvidar()`, que existía sin usarse desde antes) para las mesas que dejaron de estar vigentes. Lo que ese cambio **no** cubre es el lado del backend: `cambiar_estado_mesa` sigue sin mirar `activa`, así que el agujero queda acotado a la ventana de refresco en vez de cerrado. Ver N-4.
 
 3. **F-2 (la regla de horario duplicada) gana un tercer lado si vision-module llega a consumirla.** Hoy no la usa —lee `confirmacion_segundos` y `overlap_minimo` de `/configuracion`, no las horas—, pero es el mismo endpoint, así que conviene confirmarlo cuando el módulo se estabilice.
 
@@ -352,7 +352,7 @@ propio (T26-199) o depende de una decisión de contrato.
 | F-2 · `horario.ts` espejaba `horario.py` | **Resuelto** (T26-200, tanda 3) | El backend responde "¿está abierto ahora?" en `GET /metricas/ocupacion` (`local_abierto`); `enHorarioDeServicio` dado de baja |
 | I-3 · etiquetas con dos fuentes de verdad | **Resuelto como convivencia documentada** (T26-200, tanda 3) | Ver I-3: los dos se quedan, con el porqué anotado en `routers/estados.py` |
 | B-3 · dos endpoints de test de conexión | Pendiente | Depende de B-4/B-5 (el segundo no tiene consumidor) |
-| B-4 · `DELETE` con dos semánticas | **Pendiente — T26-199** | Cambio de contrato |
+| B-4 · `DELETE` con dos semánticas según el recurso | **Resuelto** (T26-199) | `eliminar_mesa`/`eliminar_sector` pasaron a baja lógica; `crear_mesa`/`crear_sector` reactivan la fila dada de baja (mismo criterio que `roi_mesa`); `docs/roles-permisos.md` actualizado. F-11, que dependía de esto, queda desbloqueado pero sin decidir |
 | B-5 · rol distinto entre PATCH y DELETE | **Pendiente — T26-199** | Gating |
 | F-11 · `permisos.ts` contradice su invariante | **Pendiente — T26-199** | Depende de B-4/B-5 |
 | I-2 · endpoints sin consumidor | Pendiente | `POST /camaras/test-conexion`, `POST /auth/register`, `GET /sectores/{id}`, `GET /roi-mesa/{id}`. Cada uno es una decisión de alcance, no un fix |

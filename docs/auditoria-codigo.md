@@ -386,7 +386,13 @@ por `e2e/tests/23-usuarios.spec.ts` (8 casos). Para que fuera testeable hubo que
 `16-filtro-estado` y `16-ocupacion-diaria` colisionaban. El segundo pasó a `22-`, respetando
 que el número identifica la sección y que el 16 ya estaba tomado.
 
-### N-4 · Una mesa dada de baja en caliente sigue recibiendo estados de vision-module · **NO SE ARREGLA (decisión de alcance)**
+### N-4 · Una mesa dada de baja en caliente sigue recibiendo estados de vision-module · **RESUELTO EN PARTE (T26-199)**
+
+> **Corregido al día siguiente de escribirlo.** La versión original de este hallazgo daba la
+> recarga periódica de zonas por "fuera de alcance para el MVP". Estaba equivocada: la rama de
+> T26-199 ya la tenía implementada cuando esto se escribió (`CacheZonas`), y resuelve
+> exactamente las tres dudas que se listaban como abiertas. Lo que sigue pendiente es solo la
+> mitad backend. Ver "Estado real" al final.
 
 Detectado al evaluar qué le hace T26-199 (baja lógica en `DELETE /mesas/{id}`) al módulo de
 visión. **No lo introduce T26-199: ya pasa hoy**, porque el frontend viene dando de baja mesas
@@ -424,18 +430,28 @@ automático y fecha posterior a la baja. Para que eso moleste tienen que darse c
 fila: el módulo corriendo, borrar justo una mesa con ROI en la cámara activa, abrir Historial
 después, y que alguien mire la fecha.
 
-**Por qué no se arregla ahora.** El chequeo de `activa` en `cambiar_estado_mesa` es una línea,
-pero va en `mesas.py`, que es exactamente el archivo que T26-199 reescribe: meterlo hoy es un
-conflicto de merge seguro a cambio de cubrir un escenario que exige borrar una mesa en pleno
-uso. Y lo otro —recargar las zonas dentro del loop— no es un fix sino un cambio de diseño del
-pipeline: hay que decidir cada cuánto recargar, qué hacer si la cámara desaparece a mitad de
-corrida y si el confirmador se resetea. Fuera de alcance para el MVP.
+**Estado real, por mitades.**
 
-**Recomendación.** El chequeo de `activa` en `PATCH /estado` entra naturalmente en T26-199,
-que ya toca ese archivo y ya está discutiendo la semántica de la baja: ahí cierra el agujero de
-raíz y alinea el endpoint con su hermano de posición. La recarga periódica de zonas queda como
-mejora del módulo, no de este informe. Mientras tanto, regla operativa: **no dar de baja mesas
-con vision-module corriendo**.
+*La recarga de zonas: **hecha** en T26-199.* La rama agregó `CacheZonas` en
+`vision-module/app/main.py`, que rearma las zonas cada `ZONAS_REFRESCO_ITERACIONES` (15 por
+defecto, misma cadencia que `CacheUmbrales`) y llama a `Confirmador.olvidar()` con las mesas
+que siguen vigentes, para que una que vuelve a estar activa no arrastre un reloj viejo. Si la
+recarga falla o deja cero zonas, sigue con las últimas buenas en vez de tumbar el proceso. Eso
+cierra el agujero por el lado del módulo: una mesa dada de baja deja de recibir estados dentro
+de ~15 iteraciones en vez de nunca.
+
+*El chequeo de `activa` en el backend: **sigue abierto**.* En la rama de T26-199,
+`cambiar_estado_mesa` sigue siendo `if not mesa: 404`, sin mirar `activa` — el propio comentario
+de `CacheZonas` lo reconoce ("aplicar_cambio() no chequea `activa` al escribir un cambio de
+estado"). Con la recarga andando el impacto queda acotado a esa ventana de ~15 iteraciones,
+pero la asimetría con `/posicion` sigue en pie y cualquier otro cliente puede seguir
+cambiándole el estado a una mesa dada de baja.
+
+**Recomendación.** Sumar el chequeo de `activa` a `cambiar_estado_mesa` dentro de T26-199, que
+ya toca ese archivo y ya está definiendo la semántica de la baja: cierra el agujero de raíz en
+vez de acotarlo, y alinea el endpoint con su hermano de posición. Es una línea. Mientras no
+esté, la regla operativa sigue valiendo para la ventana de refresco: **conviene no dar de baja
+mesas con vision-module corriendo**.
 
 **Detalle menor, de paso.** La FK `roi_mesa.mesa_id` no declara `ondelete`, así que un borrado
 físico de una mesa con ROI falla por integridad y el handler lo reporta como *"tiene historial

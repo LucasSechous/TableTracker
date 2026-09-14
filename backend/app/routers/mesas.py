@@ -4,6 +4,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.exc import IntegrityError
 from typing import Optional
 from app.database import get_db
+from app.routers._comun import validar_sector
 from app.models.mesa import Mesa, EstadoMesa
 from app.models.sector import Sector
 from app.models.historial import HistorialEstado, OrigenCambio
@@ -13,6 +14,18 @@ from app.routers.auth import get_usuario_actual, requiere_rol, ROL_ADMIN, ROL_VI
 from app.services.estado_dudoso import marcar_estados_dudosos
 
 router = APIRouter(dependencies=[Depends(get_usuario_actual)])
+
+
+def _obtener(db: Session, mesa_id: int) -> Mesa:
+    """La mesa o 404. Mismo patrón que camaras.py, roi.py y configuracion.py (T26-200/B-1).
+
+    Trae el sector con joinedload porque MesaResponse lo serializa: sin esto, cada handler
+    que devuelve una mesa dispararía una consulta extra al acceder a mesa.sector.
+    """
+    mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
+    if not mesa:
+        raise HTTPException(status_code=404, detail="Mesa no encontrada")
+    return mesa
 
 
 def origen_de(usuario: User) -> OrigenCambio:
@@ -67,9 +80,7 @@ def listar_mesas(
 
 @router.get("/{mesa_id}", response_model=MesaResponse)
 def obtener_mesa(mesa_id: int, db: Session = Depends(get_db)):
-    mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
-    if not mesa:
-        raise HTTPException(status_code=404, detail="Mesa no encontrada")
+    mesa = _obtener(db, mesa_id)
     # También acá: es el endpoint que consulta vision-module antes de aplicar un cambio, y
     # dejar el campo en su default sin evaluarlo haría que la misma mesa se viera dudosa por
     # la lista y no dudosa por su detalle.
@@ -83,8 +94,7 @@ def crear_mesa(
     db: Session = Depends(get_db),
     _: User = Depends(requiere_rol("encargado")),
 ):
-    if not db.query(Sector).filter(Sector.id == datos.sector_id).first():
-        raise HTTPException(status_code=400, detail="El sector indicado no existe")
+    validar_sector(db, datos.sector_id)
     mesa = Mesa(**datos.model_dump())
     db.add(mesa)
     try:
@@ -104,11 +114,8 @@ def actualizar_mesa(
     db: Session = Depends(get_db),
     _: User = Depends(requiere_rol("encargado")),
 ):
-    mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
-    if not mesa:
-        raise HTTPException(status_code=404, detail="Mesa no encontrada")
-    if datos.sector_id is not None and not db.query(Sector).filter(Sector.id == datos.sector_id).first():
-        raise HTTPException(status_code=400, detail="El sector indicado no existe")
+    mesa = _obtener(db, mesa_id)
+    validar_sector(db, datos.sector_id)
 
     # Este PATCH genérico también acepta `estado` (MesaUpdate.estado) y, a diferencia de
     # PATCH /{id}/estado, NUNCA escribió historial. Es una inconsistencia previa a este
@@ -141,9 +148,7 @@ def cambiar_estado_mesa(
     # llama sobre mesas.
     usuario: User = Depends(requiere_rol("encargado", "mozo", ROL_VISION_MODULE)),
 ):
-    mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
-    if not mesa:
-        raise HTTPException(status_code=404, detail="Mesa no encontrada")
+    mesa = _obtener(db, mesa_id)
     mesa.estado = datos.estado
     registrar_historial(db, mesa, origen_de(usuario))
     db.commit()
@@ -158,9 +163,7 @@ def limpiar_mesa(
     db: Session = Depends(get_db),
     usuario: User = Depends(requiere_rol("encargado", "limpieza")),
 ):
-    mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
-    if not mesa:
-        raise HTTPException(status_code=404, detail="Mesa no encontrada")
+    mesa = _obtener(db, mesa_id)
     if mesa.estado != EstadoMesa.pendiente_limpieza:
         raise HTTPException(status_code=409, detail="La mesa no está pendiente de limpieza")
     mesa.estado = EstadoMesa.libre
@@ -177,9 +180,7 @@ def reservar_mesa(
     db: Session = Depends(get_db),
     usuario: User = Depends(requiere_rol("encargado", "recepcion")),
 ):
-    mesa = db.query(Mesa).options(joinedload(Mesa.sector)).filter(Mesa.id == mesa_id).first()
-    if not mesa:
-        raise HTTPException(status_code=404, detail="Mesa no encontrada")
+    mesa = _obtener(db, mesa_id)
     mesa.estado = EstadoMesa.reservada
     registrar_historial(db, mesa, origen_de(usuario))
     db.commit()
@@ -212,9 +213,7 @@ def eliminar_mesa(
     db: Session = Depends(get_db),
     _: User = Depends(requiere_rol(ROL_ADMIN)),
 ):
-    mesa = db.query(Mesa).filter(Mesa.id == mesa_id).first()
-    if not mesa:
-        raise HTTPException(status_code=404, detail="Mesa no encontrada")
+    mesa = _obtener(db, mesa_id)
     db.delete(mesa)
     try:
         db.commit()

@@ -20,7 +20,7 @@ export default function LoginPage() {
       localStorage.setItem("token", data.access_token);
       navigate("/");
     } catch (err) {
-      setError(extraerDetalle(err, "Error al iniciar sesión"));
+      setError(await extraerDetalle(err, "Error al iniciar sesión"));
     } finally {
       setLoading(false);
     }

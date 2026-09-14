@@ -11,6 +11,7 @@ import ModalAltaSector from "../components/ModalAltaSector"
 import ModalAltaMesa from "../components/ModalAltaMesa"
 import MenuLateral from "../components/MenuLateral"
 import { useAuth } from "../hooks/useAuth"
+import { AvisoErrorProvider } from "../hooks/useAvisoError"
 import { esAdmin, puedeEditarLayout } from "../permisos"
 import { labelStyle } from "../components/RangoFechas"
 import { COLOR_OCUPACION_ALTA, ETIQUETA_POR_ESTADO } from "../constants"
@@ -47,6 +48,11 @@ export default function DashboardPage() {
   const [configuracion, setConfiguracion] = useState<Configuracion | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Aparte de `error` a propósito (T26-200/F-9): aquel es un fallo de CARGA y deja la
+  // pantalla sin salón, este es el fallo de una acción puntual sobre un salón que sigue
+  // dibujado y usable. Meterlos en el mismo estado haría que un error al mover una mesa
+  // desmontara el canvas entero, porque el render del canvas está condicionado a `!error`.
+  const [errorAccion, setErrorAccion] = useState<string | null>(null)
   const [modo, setModo] = useState<Modo>("monitoreo")
   const [modalAbierto, setModalAbierto] = useState<"sector" | "mesa" | null>(null)
   const [menuAbierto, setMenuAbierto] = useState(false)
@@ -93,8 +99,8 @@ export default function DashboardPage() {
         )
         setConfiguracion(configuracionRes.data)
       })
-      .catch((err: unknown) => {
-        setError(extraerDetalle(err, "Error al cargar el salón"))
+      .catch(async (err: unknown) => {
+        setError(await extraerDetalle(err, "Error al cargar el salón"))
       })
       .finally(() => {
         yaCargoUnaVez.current = true
@@ -184,14 +190,14 @@ export default function DashboardPage() {
       }))
     )
 
-    mesasApi.cambiarEstado(mesaId, nuevoEstado).catch((err) => {
+    mesasApi.cambiarEstado(mesaId, nuevoEstado).catch(async (err) => {
       setSectores((prev) =>
         prev.map((s) => ({
           ...s,
           mesas: s.mesas?.map((m) => (m.id === mesaId && estadoAnterior !== undefined ? { ...m, estado: estadoAnterior } : m)),
         }))
       )
-      alert(extraerDetalle(err, "Error al cambiar el estado de la mesa"))
+      setErrorAccion(await extraerDetalle(err, "Error al cambiar el estado de la mesa"))
     })
   }
 
@@ -205,7 +211,7 @@ export default function DashboardPage() {
       }))
     )
 
-    mesasApi.cambiarPosicion(mesaId, pos_x, pos_y).catch((err) => {
+    mesasApi.cambiarPosicion(mesaId, pos_x, pos_y).catch(async (err) => {
       setSectores((prev) =>
         prev.map((s) => ({
           ...s,
@@ -214,7 +220,7 @@ export default function DashboardPage() {
           ),
         }))
       )
-      alert(extraerDetalle(err, "Error al mover la mesa"))
+      setErrorAccion(await extraerDetalle(err, "Error al mover la mesa"))
     })
   }
 
@@ -223,13 +229,13 @@ export default function DashboardPage() {
 
     setSectores((prev) => prev.map((s) => (s.id === sectorId ? { ...s, pos_x, pos_y } : s)))
 
-    sectoresApi.actualizar(sectorId, { pos_x, pos_y }).catch((err) => {
+    sectoresApi.actualizar(sectorId, { pos_x, pos_y }).catch(async (err) => {
       setSectores((prev) =>
         prev.map((s) =>
           s.id === sectorId && posAnterior ? { ...s, pos_x: posAnterior.pos_x, pos_y: posAnterior.pos_y } : s
         )
       )
-      alert(extraerDetalle(err, "Error al mover el sector"))
+      setErrorAccion(await extraerDetalle(err, "Error al mover el sector"))
     })
   }
 
@@ -238,13 +244,13 @@ export default function DashboardPage() {
 
     setSectores((prev) => prev.map((s) => (s.id === sectorId ? { ...s, ancho, alto } : s)))
 
-    sectoresApi.actualizar(sectorId, { ancho, alto }).catch((err) => {
+    sectoresApi.actualizar(sectorId, { ancho, alto }).catch(async (err) => {
       setSectores((prev) =>
         prev.map((s) =>
           s.id === sectorId && sizeAnterior ? { ...s, ancho: sizeAnterior.ancho, alto: sizeAnterior.alto } : s
         )
       )
-      alert(extraerDetalle(err, "Error al redimensionar el sector"))
+      setErrorAccion(await extraerDetalle(err, "Error al redimensionar el sector"))
     })
   }
 
@@ -253,9 +259,9 @@ export default function DashboardPage() {
 
     setConfiguracion((prev) => (prev ? { ...prev, ancho_salon, alto_salon } : prev))
 
-    configuracionApi.actualizar({ ancho_salon, alto_salon }).catch((err) => {
+    configuracionApi.actualizar({ ancho_salon, alto_salon }).catch(async (err) => {
       setConfiguracion(anterior)
-      alert(extraerDetalle(err, "Error al redimensionar el salón"))
+      setErrorAccion(await extraerDetalle(err, "Error al redimensionar el salón"))
     })
   }
 
@@ -490,6 +496,51 @@ export default function DashboardPage() {
           </p>
         )}
 
+        {/* Errores de una acción puntual: mover una mesa, cambiarle el estado, borrar un
+            sector (T26-200/F-9). Antes salían por alert(), un diálogo del navegador justo
+            en el flujo de uso continuo donde más interrumpe y que además obligaba a los
+            tests a interceptar el diálogo nativo en vez de leer el DOM.
+            Va aparte del banner de arriba —y no reusa `error`— porque el salón sigue
+            dibujado: ver el comentario de errorAccion. Se cierra a mano y lo pisa el
+            siguiente error; no se limpia solo, para que uno que aparezca mientras el
+            usuario mira otra parte del salón no se pierda antes de que lo lea. */}
+        {errorAccion && (
+          <p
+            data-testid="dashboard-error-accion"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              fontSize: 14,
+              color: "#c62828",
+              backgroundColor: "#ffebee",
+              border: "1px solid #ef9a9a",
+              borderRadius: 6,
+              padding: "10px 16px",
+            }}
+          >
+            {errorAccion}
+            <button
+              data-testid="dashboard-error-accion-cerrar"
+              onClick={() => setErrorAccion(null)}
+              title="Cerrar aviso"
+              style={{
+                border: "none",
+                background: "none",
+                color: "#c62828",
+                fontSize: 18,
+                lineHeight: 1,
+                cursor: "pointer",
+                padding: "0 4px",
+                flexShrink: 0,
+              }}
+            >
+              ×
+            </button>
+          </p>
+        )}
+
         {/* Alerta de alta ocupación (T26-187, RF-26).
             Banner de ancho completo y no un badge sobre el canvas, a diferencia de la
             alerta de limpieza demorada (T26-173): aquella señala UNA mesa y por eso se
@@ -532,26 +583,30 @@ export default function DashboardPage() {
         )}
 
         {!loading && !error && configuracion && (
-          <SalonCanvas
-            sectores={sectores}
-            modo={modo}
-            anchoSalon={configuracion.ancho_salon}
-            altoSalon={configuracion.alto_salon}
-            esAdmin={esAdmin(rol)}
-            // Sale de la configuración que esta pantalla ya carga para el tamaño del
-            // salón: no agrega ninguna request al ciclo de refresco (T26-173).
-            umbralLimpiezaMinutos={configuracion.minutos_limpieza_demorada}
-            filtroEstado={filtroEstado}
-            onMesaEstadoChange={handleMesaEstadoChange}
-            onMesaPosicionChange={handleMesaPosicionChange}
-            onSectorPosicionChange={handleSectorPosicionChange}
-            onSectorResize={handleSectorResize}
-            onSectorActualizado={handleSectorActualizado}
-            onSectorEliminado={handleSectorEliminado}
-            onMesaActualizada={handleMesaActualizada}
-            onMesaEliminada={handleMesaEliminada}
-            onSalonResize={handleSalonResize}
-          />
+          // El provider envuelve solo al canvas porque sus tres consumidores —MesaVisual,
+          // SectorBloque y PanelMesa— cuelgan de acá para abajo. Envolver el árbol entero
+          // obligaría a re-indentar 250 líneas de JSX sin que nada más lo use.
+          <AvisoErrorProvider avisar={setErrorAccion}>
+            <SalonCanvas
+              sectores={sectores}
+              modo={modo}
+              anchoSalon={configuracion.ancho_salon}
+              altoSalon={configuracion.alto_salon}
+              // Sale de la configuración que esta pantalla ya carga para el tamaño del
+              // salón: no agrega ninguna request al ciclo de refresco (T26-173).
+              umbralLimpiezaMinutos={configuracion.minutos_limpieza_demorada}
+              filtroEstado={filtroEstado}
+              onMesaEstadoChange={handleMesaEstadoChange}
+              onMesaPosicionChange={handleMesaPosicionChange}
+              onSectorPosicionChange={handleSectorPosicionChange}
+              onSectorResize={handleSectorResize}
+              onSectorActualizado={handleSectorActualizado}
+              onSectorEliminado={handleSectorEliminado}
+              onMesaActualizada={handleMesaActualizada}
+              onMesaEliminada={handleMesaEliminada}
+              onSalonResize={handleSalonResize}
+            />
+          </AvisoErrorProvider>
         )}
       </main>
 

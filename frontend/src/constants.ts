@@ -14,7 +14,8 @@ export const COLOR_POR_ESTADO: Record<string, string> = {
 }
 
 // Piso del tamaño del salón cuando todavía no hay ningún sector que lo condicione.
-export const TAMANO_MINIMO_SALON = 200
+// Privado del módulo (T26-200/F-7): su único consumidor es calcularMinimoSalon, acá abajo.
+const TAMANO_MINIMO_SALON = 200
 
 // El salón no puede achicarse más allá de lo que ocupan sus sectores activos: hacerlo los
 // dejaría dibujados fuera del canvas. Lo usan las dos formas de cambiar el tamaño —el drag

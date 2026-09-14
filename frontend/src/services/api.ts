@@ -230,7 +230,6 @@ export const camarasApi = {
   listar: (params?: { sector_id?: number; incluir_inactivas?: boolean }) =>
     api.get<Camara[]>("/camaras/", { params }),
 
-  obtener: (id: number) => api.get<Camara>(`/camaras/${id}`),
 
   // La barra final apunta al path exacto del router y evita el 307 de FastAPI (ver mesasApi.crear).
   crear: (datos: { nombre: string; rtsp_url: string; sector_id: number; activa?: boolean }) =>
@@ -295,6 +294,12 @@ export const estadosApi = {
   // RF-29). Pide sesión pero no rol admin, aunque hoy el único consumidor sea una pantalla
   // admin-only. La barra final apunta al path exacto del router y evita el 307 de FastAPI
   // (ver mesasApi.crear).
+  //
+  // Ese único consumidor —ConfiguracionPage— es deliberado y NO una duplicación olvidada de
+  // ETIQUETA_POR_ESTADO (constants.ts): aquel mapa es con qué se pinta un estado que ya se
+  // tiene y tiene que ser síncrono para el render del canvas; esto es qué estados existen,
+  // que solo sabe el backend. El razonamiento completo está en backend/app/routers/estados.py
+  // (T26-200/I-3).
   listar: () => api.get<EstadoOpcion[]>("/estados/"),
 }
 
@@ -374,19 +379,22 @@ function detalleDesdeCuerpo(data: unknown, fallback: string): string {
 }
 
 /**
- * Versión sincrónica, para el caso normal (respuesta JSON). Devuelve siempre un string,
- * así que es seguro meter el resultado directo en un estado que se renderiza.
+ * El detalle de un error de la API, siempre como string listo para renderizar.
+ *
+ * Es la ÚNICA forma de leerlo (T26-200/F-6). Antes eran dos —esta y una versión sincrónica
+ * llamada `extraerDetalle`— con 35 llamadas repartidas casi mitad y mitad y sin ningún
+ * criterio que dijera cuándo tocaba cada una. El nombre tampoco ayudaba: la sincrónica
+ * sonaba a la general siendo la especializada.
+ *
+ * Es asíncrona por un solo motivo: con responseType "blob" (ver camarasApi.snapshot) un
+ * error HTTP no trae el detail como JSON, porque axios ya devolvió el cuerpo como Blob antes
+ * de que se supiera que el status no era 2xx, y hay que leerlo como texto y parsearlo a
+ * mano. Para el resto de los endpoints el detail ya viene parseado en response.data.
+ *
+ * Quedó una sola justamente para que el que llama no tenga que distinguir en cuál de los dos
+ * casos está: usar la sincrónica contra un Blob no fallaba, devolvía el fallback en silencio.
  */
-export function extraerDetalle(err: unknown, fallback: string): string {
-  return detalleDesdeCuerpo((err as AxiosError).response?.data, fallback);
-}
-
-// Con responseType "blob" (ver camarasApi.snapshot), un error HTTP no trae el detail como
-// JSON directo: axios ya devolvió el cuerpo como Blob antes de que se supiera que el status
-// no era 2xx. Hay que leerlo como texto y parsearlo a mano. Para el resto de los endpoints
-// (JSON normal) el detail ya viene parseado en response.data, así que esta misma función
-// sirve para cualquier error de la API sin que el que llama tenga que distinguir el caso.
-export async function extraerDetalleApi(err: unknown, fallback: string): Promise<string> {
+export async function extraerDetalle(err: unknown, fallback: string): Promise<string> {
   const axiosErr = err as AxiosError;
   const data = axiosErr.response?.data;
 

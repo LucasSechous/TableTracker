@@ -4,19 +4,21 @@
 // El click en una mesa (modo monitoreo) abre PanelMesa con el detalle y la corrección manual
 // de estado (RF-17), en vez del selector inline que había antes directamente sobre el canvas.
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useEffect } from "react"
 import type { CSSProperties, ReactNode } from "react"
 import type { Sector, Mesa, Modo } from "../types"
 import SectorBloque from "./SectorBloque"
 import PanelMesa from "./PanelMesa"
 import { COLOR_POR_ESTADO, ETIQUETA_POR_ESTADO, calcularMinimoSalon } from "../constants"
+import { useAuth } from "../hooks/useAuth"
+import { useArrastre } from "../hooks/useArrastre"
+import { esAdmin } from "../permisos"
 
 interface Props {
   sectores: Sector[]
   modo: Modo
   anchoSalon: number
   altoSalon: number
-  esAdmin: boolean
   /** Umbral de limpieza demorada, de paso hacia MesaVisual (T26-173). */
   umbralLimpiezaMinutos?: number | null
   /**
@@ -42,7 +44,6 @@ export default function SalonCanvas({
   modo,
   anchoSalon,
   altoSalon,
-  esAdmin,
   umbralLimpiezaMinutos,
   filtroEstado,
   onMesaEstadoChange,
@@ -55,66 +56,49 @@ export default function SalonCanvas({
   onMesaEliminada,
   onSalonResize,
 }: Props) {
-  const puedeRedimensionar = modo === "edicion" && esAdmin
+  // El rol sale del contexto, igual que en MesaVisual, SectorBloque y PanelMesa (T26-200/F-12).
+  // Antes llegaba como prop `esAdmin` desde DashboardPage, así que el mismo dato entraba al
+  // canvas por dos caminos —prop y contexto— y la prop podía quedar desfasada de aquel del
+  // que se derivó.
+  const { rol } = useAuth()
+  const puedeRedimensionar = modo === "edicion" && esAdmin(rol)
 
   const [localSize, setLocalSize] = useState({ ancho: anchoSalon, alto: altoSalon })
-  const isResizing = useRef(false)
-  const resizeStart = useRef<{ mouseX: number; mouseY: number; ancho: number; alto: number } | null>(null)
 
   const [sectorFiltrado, setSectorFiltrado] = useState<number | null>(null)
   const [mesaSeleccionadaId, setMesaSeleccionadaId] = useState<number | null>(null)
 
-  useEffect(() => {
-    if (!isResizing.current) {
-      setLocalSize({ ancho: anchoSalon, alto: altoSalon })
-    }
-  }, [anchoSalon, altoSalon])
-
-  useEffect(() => {
+  const resize = useArrastre({
     // El mínimo es el espacio que ocupan los sectores activos (para no dejarlos fuera del
     // salón al achicar), igual que el mínimo de un sector se calcula a partir de sus mesas.
     // No hay techo: a diferencia de un sector, el salón no vive contenido en nada más.
     // El cálculo se comparte con la pantalla de configuración (ver constants.ts).
-    const minimo = calcularMinimoSalon(sectores)
+    //
+    // Se recalcula acá adentro y no en el cuerpo del componente porque solo hace falta
+    // mientras se arrastra: fuera de un resize, recorrer todos los sectores en cada render
+    // sería trabajo para nadie.
+    ajustar: (inicial, dx, dy) => {
+      const minimo = calcularMinimoSalon(sectores)
+      return {
+        x: Math.max(minimo.ancho, inicial.x + dx),
+        y: Math.max(minimo.alto, inicial.y + dy),
+      }
+    },
+    onMover: ({ x, y }) => setLocalSize({ ancho: x, alto: y }),
+    onSoltar: ({ x, y }) => onSalonResize(x, y),
+  })
 
-    const clampAncho = (valor: number) => Math.max(minimo.ancho, valor)
-    const clampAlto = (valor: number) => Math.max(minimo.alto, valor)
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing.current || !resizeStart.current) return
-      const dx = e.clientX - resizeStart.current.mouseX
-      const dy = e.clientY - resizeStart.current.mouseY
-      setLocalSize({
-        ancho: clampAncho(resizeStart.current.ancho + dx),
-        alto: clampAlto(resizeStart.current.alto + dy),
-      })
+  useEffect(() => {
+    if (!resize.enCurso()) {
+      setLocalSize({ ancho: anchoSalon, alto: altoSalon })
     }
-
-    const handleMouseUp = (e: MouseEvent) => {
-      if (!isResizing.current || !resizeStart.current) return
-      isResizing.current = false
-      const dx = e.clientX - resizeStart.current.mouseX
-      const dy = e.clientY - resizeStart.current.mouseY
-      const nuevoAncho = clampAncho(resizeStart.current.ancho + dx)
-      const nuevoAlto = clampAlto(resizeStart.current.alto + dy)
-      resizeStart.current = null
-      onSalonResize(Math.round(nuevoAncho), Math.round(nuevoAlto))
-    }
-
-    window.addEventListener("mousemove", handleMouseMove)
-    window.addEventListener("mouseup", handleMouseUp)
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-      window.removeEventListener("mouseup", handleMouseUp)
-    }
-  }, [sectores, onSalonResize])
+  }, [anchoSalon, altoSalon, resize])
 
   const handleResizeMouseDown = (e: React.MouseEvent) => {
     if (!puedeRedimensionar) return
     e.preventDefault()
     e.stopPropagation()
-    isResizing.current = true
-    resizeStart.current = { mouseX: e.clientX, mouseY: e.clientY, ancho: localSize.ancho, alto: localSize.alto }
+    resize.iniciar(e, { x: localSize.ancho, y: localSize.alto })
   }
 
   const sectoresActivos = sectores.filter((s) => s.activo)

@@ -1,6 +1,6 @@
 // Pantalla de administración de usuarios (T26-175): listado, cambio de rol y baja
 // lógica. Estructura calcada de CamarasPage.tsx (header, banners de error/éxito,
-// extraerDetalleApi). Acceso restringido a admin, igual que /usuarios en el backend
+// extraerDetalle). Acceso restringido a admin, igual que /usuarios en el backend
 // (requiere_rol("admin")) — ver AdminRoute en App.tsx.
 //
 // Las salvaguardas (no admin auto-desactivarse, no dejar el sistema sin admin activo,
@@ -13,9 +13,10 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ShieldAlert } from "lucide-react"
-import { usuariosApi, extraerDetalleApi } from "../services/api"
+import { usuariosApi, extraerDetalle } from "../services/api"
 import type { UsuarioAdmin } from "../types"
 import { useAuth } from "../hooks/useAuth"
+import ModalConfirmacion from "../components/ModalConfirmacion"
 
 // Valores de rol usados en el resto del sistema (docs/roles-permisos.md). No hay
 // enum ni CHECK del lado del backend —sigue siendo un String libre, a propósito
@@ -72,6 +73,8 @@ export default function UsuariosPage() {
   const [errorInicial, setErrorInicial] = useState<string | null>(null)
   const [errorFila, setErrorFila] = useState<Record<number, string | null>>({})
   const [guardando, setGuardando] = useState<Record<number, boolean>>({})
+  // El usuario que está esperando confirmación para activarse o desactivarse (T26-200/F-10).
+  const [usuarioAConfirmar, setUsuarioAConfirmar] = useState<UsuarioAdmin | null>(null)
 
   useEffect(() => {
     cargar(incluirInactivos, true)
@@ -85,7 +88,7 @@ export default function UsuariosPage() {
       setUsuarios(data)
       setErrorInicial(null)
     } catch (err) {
-      setErrorInicial(await extraerDetalleApi(err, "No se pudieron cargar los usuarios"))
+      setErrorInicial(await extraerDetalle(err, "No se pudieron cargar los usuarios"))
     } finally {
       if (esInicial) setCargandoInicial(false)
     }
@@ -101,7 +104,7 @@ export default function UsuariosPage() {
       // la marca "inactivo" puesta pero visible pese al filtro.
       await cargar(incluirInactivos)
     } catch (err) {
-      const mensaje = await extraerDetalleApi(err, "No se pudo actualizar el usuario")
+      const mensaje = await extraerDetalle(err, "No se pudo actualizar el usuario")
       setErrorFila((prev) => ({ ...prev, [usuario.id]: mensaje }))
     } finally {
       setGuardando((prev) => ({ ...prev, [usuario.id]: false }))
@@ -114,8 +117,13 @@ export default function UsuariosPage() {
   }
 
   function handleToggleActivo(usuario: UsuarioAdmin) {
-    const accion = usuario.activo ? "desactivar" : "reactivar"
-    if (!window.confirm(`¿${accion === "desactivar" ? "Desactivar" : "Reactivar"} a "${usuario.nombre}"?`)) return
+    setUsuarioAConfirmar(usuario)
+  }
+
+  function confirmarToggleActivo(usuario: UsuarioAdmin) {
+    // Se cierra antes de disparar: el resultado —éxito o el 409 de alguna salvaguarda— se
+    // muestra en la fila del usuario, y el modal encima la taparía justo cuando aparece.
+    setUsuarioAConfirmar(null)
     aplicarCambio(usuario, { activo: !usuario.activo })
   }
 
@@ -258,6 +266,18 @@ export default function UsuariosPage() {
           </>
         )}
       </main>
+
+      {usuarioAConfirmar && (
+        <ModalConfirmacion
+          titulo={usuarioAConfirmar.activo ? "Desactivar usuario" : "Reactivar usuario"}
+          mensaje={`¿${usuarioAConfirmar.activo ? "Desactivar" : "Reactivar"} a "${usuarioAConfirmar.nombre}"?`}
+          etiquetaConfirmar={usuarioAConfirmar.activo ? "Desactivar" : "Reactivar"}
+          // Reactivar no destruye nada: el rojo se reserva para el sentido que sí.
+          peligroso={usuarioAConfirmar.activo}
+          onConfirmar={() => confirmarToggleActivo(usuarioAConfirmar)}
+          onCancelar={() => setUsuarioAConfirmar(null)}
+        />
+      )}
     </div>
   )
 }

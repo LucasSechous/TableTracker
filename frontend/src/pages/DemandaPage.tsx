@@ -19,7 +19,7 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { BarChart3, Download, RefreshCw } from "lucide-react"
-import { metricasApi, sectoresApi, extraerDetalleApi } from "../services/api"
+import { metricasApi, sectoresApi, extraerDetalle } from "../services/api"
 import type { DemandaResponse, Sector } from "../types"
 import RangoFechas, { labelStyle } from "../components/RangoFechas"
 import { descargarCsv, generarCsv, nombreArchivoCsv } from "../csv"
@@ -112,7 +112,7 @@ export default function DemandaPage() {
       setDatos(data)
       setError(null)
     } catch (err) {
-      setError(await extraerDetalleApi(err, "No se pudo cargar el reporte de demanda"))
+      setError(await extraerDetalle(err, "No se pudo cargar el reporte de demanda"))
     } finally {
       setCargando(false)
     }

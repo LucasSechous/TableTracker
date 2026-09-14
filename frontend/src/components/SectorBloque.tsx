@@ -2,7 +2,7 @@
 // En modo edición el bloque completo es arrastrable y redimensionable desde su esquina
 // inferior derecha; contiene sus mesas activas como MesaVisual.
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { Pencil, Trash2 } from "lucide-react"
 import type { Sector, Mesa, Modo } from "../types"
 import MesaVisual from "./MesaVisual"
@@ -10,7 +10,10 @@ import ModalEditarSector from "./ModalEditarSector"
 import { sectoresApi, extraerDetalle } from "../services/api"
 import { DIAMETRO_MESA } from "../constants"
 import { useAuth } from "../hooks/useAuth"
+import { useAvisoError } from "../hooks/useAvisoError"
+import { useArrastre, acotar } from "../hooks/useArrastre"
 import { puedeBorrar, puedeEditarLayout } from "../permisos"
+import ModalConfirmacion from "./ModalConfirmacion"
 
 // Tamaño mínimo de un sector sin mesas, para evitar que el resize lo colapse a 0.
 const TAMANO_MINIMO_SECTOR = 80
@@ -53,112 +56,61 @@ export default function SectorBloque({
   // puede escribirlo. Son cosas distintas: un mozo no llega al modo edición por la UI,
   // pero si llegara igual no tiene que poder arrastrar nada.
   const puedeEditar = puedeEditarLayout(rol)
+  // El error de borrado sube al banner del Dashboard en vez de salir por alert() (T26-200/F-9).
+  const avisarError = useAvisoError()
 
   const [modalEditarAbierto, setModalEditarAbierto] = useState(false)
   const [eliminando, setEliminando] = useState(false)
+  const [confirmandoBorrado, setConfirmandoBorrado] = useState(false)
 
   const [localPos, setLocalPos] = useState({ x: sector.pos_x, y: sector.pos_y })
-  const isDragging = useRef(false)
-  const dragStart = useRef<{ mouseX: number; mouseY: number; sectorX: number; sectorY: number } | null>(null)
-
   const [localSize, setLocalSize] = useState({ ancho: sector.ancho, alto: sector.alto })
-  const isResizing = useRef(false)
-  const resizeStart = useRef<{ mouseX: number; mouseY: number; ancho: number; alto: number } | null>(null)
 
-  useEffect(() => {
-    if (!isDragging.current) {
-      setLocalPos({ x: sector.pos_x, y: sector.pos_y })
-    }
-  }, [sector.pos_x, sector.pos_y])
-
-  useEffect(() => {
-    if (!isResizing.current) {
-      setLocalSize({ ancho: sector.ancho, alto: sector.alto })
-    }
-  }, [sector.ancho, sector.alto])
-
-  useEffect(() => {
+  const arrastrePos = useArrastre({
     // Piso en 0 y techo en (dimensión del canvas - dimensión del sector), para que el
     // bloque no pueda arrastrarse fuera de ninguno de los 4 bordes del canvas. El
-    // Math.max(0, ...) externo cubre el caso límite de un sector más grande que el canvas.
-    const clampX = (valor: number) => Math.min(Math.max(0, valor), Math.max(0, anchoSalon - sector.ancho))
-    const clampY = (valor: number) => Math.min(Math.max(0, valor), Math.max(0, altoSalon - sector.alto))
+    // Math.max(0, ...) del techo cubre el caso límite de un sector más grande que el canvas.
+    ajustar: (inicial, dx, dy) => ({
+      x: acotar(inicial.x + dx, 0, Math.max(0, anchoSalon - sector.ancho)),
+      y: acotar(inicial.y + dy, 0, Math.max(0, altoSalon - sector.alto)),
+    }),
+    onMover: setLocalPos,
+    onSoltar: ({ x, y }) => onSectorDrag(sector.id, x, y),
+  })
 
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current || !dragStart.current) return
-      const dx = e.clientX - dragStart.current.mouseX
-      const dy = e.clientY - dragStart.current.mouseY
-      setLocalPos({
-        x: clampX(dragStart.current.sectorX + dx),
-        y: clampY(dragStart.current.sectorY + dy),
-      })
-    }
-
-    const handleMouseUp = (e: MouseEvent) => {
-      if (!isDragging.current || !dragStart.current) return
-      isDragging.current = false
-      const dx = e.clientX - dragStart.current.mouseX
-      const dy = e.clientY - dragStart.current.mouseY
-      const nuevaX = clampX(dragStart.current.sectorX + dx)
-      const nuevaY = clampY(dragStart.current.sectorY + dy)
-      dragStart.current = null
-      onSectorDrag(sector.id, Math.round(nuevaX), Math.round(nuevaY))
-    }
-
-    window.addEventListener("mousemove", handleMouseMove)
-    window.addEventListener("mouseup", handleMouseUp)
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-      window.removeEventListener("mouseup", handleMouseUp)
-    }
-  }, [sector.id, sector.ancho, sector.alto, anchoSalon, altoSalon, onSectorDrag])
-
-  useEffect(() => {
+  const arrastreTamano = useArrastre({
     // El mínimo es el espacio que ocupan las mesas activas (para no dejarlas fuera del
     // sector al achicar); el máximo es lo que queda de canvas desde la posición actual
     // del sector (para no sacarlo del canvas al agrandar), igual que el clamp de arriba
     // pero aplicado a tamaño en vez de posición.
-    const mesasActivas = sector.mesas?.filter((m) => m.activa) ?? []
-    const minAncho = mesasActivas.length
-      ? Math.max(...mesasActivas.map((m) => m.pos_x + DIAMETRO_MESA))
-      : TAMANO_MINIMO_SECTOR
-    const minAlto = mesasActivas.length
-      ? Math.max(...mesasActivas.map((m) => m.pos_y + DIAMETRO_MESA))
-      : TAMANO_MINIMO_SECTOR
-    const maxAncho = Math.max(minAncho, anchoSalon - sector.pos_x)
-    const maxAlto = Math.max(minAlto, altoSalon - sector.pos_y)
+    ajustar: (inicial, dx, dy) => {
+      const mesasActivas = sector.mesas?.filter((m) => m.activa) ?? []
+      const minAncho = mesasActivas.length
+        ? Math.max(...mesasActivas.map((m) => m.pos_x + DIAMETRO_MESA))
+        : TAMANO_MINIMO_SECTOR
+      const minAlto = mesasActivas.length
+        ? Math.max(...mesasActivas.map((m) => m.pos_y + DIAMETRO_MESA))
+        : TAMANO_MINIMO_SECTOR
+      return {
+        x: acotar(inicial.x + dx, minAncho, Math.max(minAncho, anchoSalon - sector.pos_x)),
+        y: acotar(inicial.y + dy, minAlto, Math.max(minAlto, altoSalon - sector.pos_y)),
+      }
+    },
+    onMover: ({ x, y }) => setLocalSize({ ancho: x, alto: y }),
+    onSoltar: ({ x, y }) => onSectorResize(sector.id, x, y),
+  })
 
-    const clampAncho = (valor: number) => Math.min(Math.max(minAncho, valor), maxAncho)
-    const clampAlto = (valor: number) => Math.min(Math.max(minAlto, valor), maxAlto)
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing.current || !resizeStart.current) return
-      const dx = e.clientX - resizeStart.current.mouseX
-      const dy = e.clientY - resizeStart.current.mouseY
-      setLocalSize({
-        ancho: clampAncho(resizeStart.current.ancho + dx),
-        alto: clampAlto(resizeStart.current.alto + dy),
-      })
+  useEffect(() => {
+    if (!arrastrePos.enCurso()) {
+      setLocalPos({ x: sector.pos_x, y: sector.pos_y })
     }
+  }, [sector.pos_x, sector.pos_y, arrastrePos])
 
-    const handleMouseUp = (e: MouseEvent) => {
-      if (!isResizing.current || !resizeStart.current) return
-      isResizing.current = false
-      const dx = e.clientX - resizeStart.current.mouseX
-      const dy = e.clientY - resizeStart.current.mouseY
-      const nuevoAncho = clampAncho(resizeStart.current.ancho + dx)
-      const nuevoAlto = clampAlto(resizeStart.current.alto + dy)
-      resizeStart.current = null
-      onSectorResize(sector.id, Math.round(nuevoAncho), Math.round(nuevoAlto))
+  useEffect(() => {
+    if (!arrastreTamano.enCurso()) {
+      setLocalSize({ ancho: sector.ancho, alto: sector.alto })
     }
-
-    window.addEventListener("mousemove", handleMouseMove)
-    window.addEventListener("mouseup", handleMouseUp)
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-      window.removeEventListener("mouseup", handleMouseUp)
-    }
-  }, [sector.id, sector.pos_x, sector.pos_y, sector.mesas, anchoSalon, altoSalon, onSectorResize])
+  }, [sector.ancho, sector.alto, arrastreTamano])
 
   const handleMouseDown = (e: React.MouseEvent) => {
     // El permiso se chequea en el handler y no solo en el cursor: el arrastre se dispara
@@ -166,27 +118,30 @@ export default function SectorBloque({
     // Sin esto, un rol sin permiso arrastraría el sector y recién al soltar se comería el
     // 403 del PATCH, con la posición ya movida en pantalla.
     if (modo !== "edicion" || !puedeEditar) return
-    isDragging.current = true
-    dragStart.current = { mouseX: e.clientX, mouseY: e.clientY, sectorX: sector.pos_x, sectorY: sector.pos_y }
+    arrastrePos.iniciar(e, { x: sector.pos_x, y: sector.pos_y })
   }
 
   const handleResizeMouseDown = (e: React.MouseEvent) => {
     if (modo !== "edicion" || !puedeEditar) return
     e.preventDefault()
     e.stopPropagation()
-    isResizing.current = true
-    resizeStart.current = { mouseX: e.clientX, mouseY: e.clientY, ancho: localSize.ancho, alto: localSize.alto }
+    arrastreTamano.iniciar(e, { x: localSize.ancho, y: localSize.alto })
   }
 
-  async function handleEliminarClick(e: React.MouseEvent) {
+  function handleEliminarClick(e: React.MouseEvent) {
     e.stopPropagation()
-    if (!window.confirm(`¿Eliminar el sector "${sector.nombre}"?`)) return
+    setConfirmandoBorrado(true)
+  }
+
+  async function eliminar() {
     setEliminando(true)
     try {
       await sectoresApi.actualizar(sector.id, { activo: false })
+      setConfirmandoBorrado(false)
       onSectorEliminado(sector.id)
     } catch (err) {
-      alert(extraerDetalle(err, "No se pudo eliminar el sector"))
+      setConfirmandoBorrado(false)
+      avisarError(await extraerDetalle(err, "No se pudo eliminar el sector"))
     } finally {
       setEliminando(false)
     }
@@ -318,6 +273,19 @@ export default function SectorBloque({
             onSectorActualizado(sectorActualizado)
             setModalEditarAbierto(false)
           }}
+        />
+      )}
+
+      {/* Reemplaza al window.confirm (T26-200/F-10), en el mismo modal que el de edición
+          de acá arriba: borrar era la única acción del sector con estética de navegador. */}
+      {confirmandoBorrado && (
+        <ModalConfirmacion
+          titulo="Eliminar sector"
+          mensaje={`¿Eliminar el sector "${sector.nombre}"?`}
+          etiquetaConfirmar={eliminando ? "Eliminando..." : "Eliminar"}
+          ocupado={eliminando}
+          onConfirmar={eliminar}
+          onCancelar={() => setConfirmandoBorrado(false)}
         />
       )}
     </>

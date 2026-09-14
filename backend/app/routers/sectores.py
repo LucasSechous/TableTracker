@@ -10,6 +10,14 @@ from app.routers.auth import get_usuario_actual, requiere_rol, ROL_ADMIN
 router = APIRouter(dependencies=[Depends(get_usuario_actual)])
 
 
+def _obtener(db: Session, sector_id: int) -> Sector:
+    """El sector o 404. Mismo patrón que camaras.py, roi.py y configuracion.py (T26-200/B-1)."""
+    sector = db.query(Sector).filter(Sector.id == sector_id).first()
+    if not sector:
+        raise HTTPException(status_code=404, detail="Sector no encontrado")
+    return sector
+
+
 @router.get("/", response_model=list[SectorResponse])
 def listar_sectores(incluir_inactivos: bool = Query(False), db: Session = Depends(get_db)):
     query = db.query(Sector)
@@ -20,9 +28,7 @@ def listar_sectores(incluir_inactivos: bool = Query(False), db: Session = Depend
 
 @router.get("/{sector_id}", response_model=SectorResponse)
 def obtener_sector(sector_id: int, db: Session = Depends(get_db)):
-    sector = db.query(Sector).filter(Sector.id == sector_id).first()
-    if not sector:
-        raise HTTPException(status_code=404, detail="Sector no encontrado")
+    sector = _obtener(db, sector_id)
     return sector
 
 
@@ -48,9 +54,7 @@ def actualizar_sector(
     db: Session = Depends(get_db),
     _: User = Depends(requiere_rol("encargado")),
 ):
-    sector = db.query(Sector).filter(Sector.id == sector_id).first()
-    if not sector:
-        raise HTTPException(status_code=404, detail="Sector no encontrado")
+    sector = _obtener(db, sector_id)
     for campo, valor in datos.model_dump(exclude_none=True).items():
         setattr(sector, campo, valor)
     db.commit()
@@ -64,9 +68,7 @@ def eliminar_sector(
     db: Session = Depends(get_db),
     _: User = Depends(requiere_rol(ROL_ADMIN)),
 ):
-    sector = db.query(Sector).filter(Sector.id == sector_id).first()
-    if not sector:
-        raise HTTPException(status_code=404, detail="Sector no encontrado")
+    sector = _obtener(db, sector_id)
     if db.query(Mesa).filter(Mesa.sector_id == sector_id).first():
         raise HTTPException(status_code=409, detail="No se puede eliminar un sector con mesas asociadas")
     db.delete(sector)

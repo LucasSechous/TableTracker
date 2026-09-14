@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Calendar, Clock, Download, PieChart, RefreshCw } from "lucide-react"
-import { metricasApi, sectoresApi, extraerDetalleApi } from "../services/api"
+import { metricasApi, sectoresApi, extraerDetalle } from "../services/api"
 import type { OcupacionDiariaResponse, Sector } from "../types"
 import { labelStyle, inputStyle } from "../components/RangoFechas"
 import { descargarCsv, generarCsv, nombreArchivoCsv } from "../csv"
@@ -96,7 +96,7 @@ export default function OcupacionDiariaPage() {
       // Se descarta el reporte anterior: dejarlo junto a un error lo haría pasar por el
       // resultado de la fecha que se acaba de pedir.
       setReporte(null)
-      setError(await extraerDetalleApi(err, "Error al cargar el reporte de ocupación diaria"))
+      setError(await extraerDetalle(err, "Error al cargar el reporte de ocupación diaria"))
     } finally {
       if (idPeticion === ultimaPeticion.current) setLoading(false)
     }

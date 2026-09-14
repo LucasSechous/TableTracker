@@ -13,6 +13,7 @@ import type { Mesa } from "../types"
 import { historialApi, mesasApi, extraerDetalle } from "../services/api"
 import { COLOR_POR_ESTADO, ETIQUETA_POR_ESTADO } from "../constants"
 import { useAuth } from "../hooks/useAuth"
+import { useAvisoError } from "../hooks/useAvisoError"
 import { puedeCambiarEstado, puedeConfirmarLimpieza, puedeReservar } from "../permisos"
 
 interface Props {
@@ -34,6 +35,9 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
   // Mismo patrón que SectorBloque y MesaVisual (T26-194): el rol se lee del contexto en vez
   // de bajarlo por props desde DashboardPage a través de SalonCanvas, que no lo usa.
   const { rol } = useAuth()
+  // Los fallos de una acción salen por el banner del salón y no por alert() (T26-200/F-9):
+  // este panel es el flujo de uso continuo donde un diálogo del navegador más interrumpe.
+  const avisarError = useAvisoError()
 
   const [desde, setDesde] = useState<Date | null>(null)
   const [expandido, setExpandido] = useState(false)
@@ -76,7 +80,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
       onMesaActualizada(data)
       setExpandido(false)
     } catch (err) {
-      alert(extraerDetalle(err, "No se pudo cambiar el estado de la mesa"))
+      avisarError(await extraerDetalle(err, "No se pudo cambiar el estado de la mesa"))
     } finally {
       setAccionando(false)
     }

@@ -19,7 +19,7 @@ import {
   mesasApi,
   camarasApi,
   roiMesaApi,
-  extraerDetalleApi,
+  extraerDetalle,
 } from "../services/api"
 import type { Configuracion, ConfiguracionActualizada, Sector, EstadoOpcion, Mesa, Camara, RoiMesa } from "../types"
 import { calcularMinimoSalon, COLOR_POR_ESTADO } from "../constants"
@@ -136,7 +136,7 @@ export default function ConfiguracionPage() {
       // Se guardan para el resumen del setup, que los necesita y así no los vuelve a pedir.
       setSectores(sectoresCargados)
     } catch (err) {
-      setError(await extraerDetalleApi(err, "Error al cargar la configuración"))
+      setError(await extraerDetalle(err, "Error al cargar la configuración"))
     } finally {
       setLoading(false)
     }
@@ -156,7 +156,7 @@ export default function ConfiguracionPage() {
         if (!cancelado) setEstados(data)
       })
       .catch(async (err) => {
-        if (!cancelado) setErrorEstados(await extraerDetalleApi(err, "No se pudieron cargar los estados."))
+        if (!cancelado) setErrorEstados(await extraerDetalle(err, "No se pudieron cargar los estados."))
       })
     return () => {
       cancelado = true
@@ -174,7 +174,7 @@ export default function ConfiguracionPage() {
         setResumen(calcularResumen(sectores, mesasRes.data, camarasRes.data, roisRes.data))
       })
       .catch(async (err) => {
-        if (!cancelado) setErrorResumen(await extraerDetalleApi(err, "No se pudo cargar el resumen del setup."))
+        if (!cancelado) setErrorResumen(await extraerDetalle(err, "No se pudo cargar el resumen del setup."))
       })
     return () => {
       cancelado = true
@@ -326,7 +326,7 @@ export default function ConfiguracionPage() {
       }
       if (avisos.length > 0) setAviso(avisos.join(" "))
     } catch (err) {
-      setError(await extraerDetalleApi(err, "Error al guardar la configuración"))
+      setError(await extraerDetalle(err, "Error al guardar la configuración"))
     } finally {
       setGuardando(false)
     }

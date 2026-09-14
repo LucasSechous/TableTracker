@@ -17,6 +17,7 @@ import {
   getEliminarSectorButton,
   getToggleModoButton,
   entrarEnModoEdicion,
+  confirmarEnModal,
 } from "../fixtures/ui-helpers";
 
 // Sección 7 — Edición y eliminación de sectores (T26-120/T26-121)
@@ -70,8 +71,8 @@ test.describe("con un sector vacío (sin mesas)", () => {
     const sectorBlock = getSectorBlock(page, sector.nombre);
     await expect(sectorBlock).toBeVisible();
 
-    page.once("dialog", (dialog) => dialog.accept());
     await getEliminarSectorButton(sectorBlock).click();
+    await confirmarEnModal(page);
 
     await expect(getSectorBlock(page, sector.nombre)).toHaveCount(0);
 
@@ -105,8 +106,8 @@ test.describe("con un sector y una mesa", () => {
 
     const sectorBlock = getSectorBlock(page, sector.nombre);
 
-    page.once("dialog", (dialog) => dialog.accept());
     await getEliminarSectorButton(sectorBlock).click();
+    await confirmarEnModal(page);
 
     // El botón desactiva (PATCH activo=false) en vez de un DELETE físico, así que ya no hay
     // restricción por mesas asociadas: el sector desaparece del canvas sin recargar.

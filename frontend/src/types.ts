@@ -186,6 +186,14 @@ export interface OcupacionResponse {
   // /configuracion por separado.
   umbral_ocupacion_alta: number
   ocupacion_alta: boolean
+  // Horario de servicio (T26-200/F-2). Igual que el par de arriba, la pregunta llega
+  // resuelta del backend en vez de recalcularse acá: la regla incluye el cruce de medianoche
+  // y se evalúa contra TZ_LOCAL, que el navegador no conoce. Las horas vienen en el mismo
+  // payload para poder rotular el aviso sin pedir /configuracion aparte; son null cuando no
+  // hay horario cargado, caso en el que local_abierto es true.
+  local_abierto: boolean
+  hora_apertura: string | null
+  hora_cierre: string | null
 }
 
 // Una fila de GET /metricas/rotacion (RF-23): cuántas veces rotó cada mesa activa en el

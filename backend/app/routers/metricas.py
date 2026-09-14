@@ -16,6 +16,7 @@ from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.routers._comun import validar_sector
 from app.models.configuracion import UMBRAL_OCUPACION_ALTA_DEFECTO, ConfiguracionGeneral
 from app.models.historial import HistorialEstado
 from app.models.mesa import EstadoMesa, Mesa
@@ -51,8 +52,7 @@ DIAS_DEMANDA_POR_DEFECTO = 7
 
 @router.get("/ocupacion", response_model=OcupacionResponse)
 def obtener_ocupacion(sector_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
-    if sector_id is not None and not db.query(Sector).filter(Sector.id == sector_id).first():
-        raise HTTPException(status_code=400, detail="El sector indicado no existe")
+    validar_sector(db, sector_id)
 
     query = db.query(Mesa.estado, func.count(Mesa.id)).filter(Mesa.activa == True)  # noqa: E712
     if sector_id is not None:
@@ -87,12 +87,27 @@ def obtener_ocupacion(sector_id: Optional[int] = Query(None), db: Session = Depe
     # reportar, así que se corta antes y no se depende de esa coincidencia.
     ocupacion_alta = total_mesas > 0 and porcentaje_ocupacion >= umbral
 
+    # Horario de servicio (T26-200/F-2). Va en este endpoint y no en uno nuevo porque el
+    # consumidor —el panel de ocupación— ya lo pide, y porque este número es justamente el
+    # que el aviso califica: "esta foto se sacó con el local cerrado". Tampoco va en
+    # /configuracion, que el panel pide una sola vez al montar: un booleano de "abierto
+    # ahora" servido ahí quedaría congelado y seguiría diciendo "abierto" después de la hora
+    # de cierre. Acá viaja con cada refresco, que es la cadencia a la que la respuesta cambia.
+    #
+    # No agrega ninguna consulta: `config` ya está cargada arriba para el umbral.
+    hora_apertura = config.hora_apertura if config else None
+    hora_cierre = config.hora_cierre if config else None
+    local_abierto = en_horario_de_servicio(datetime.now(timezone.utc), hora_apertura, hora_cierre)
+
     return OcupacionResponse(
         total_mesas=total_mesas,
         porcentaje_ocupacion=porcentaje_ocupacion,
         conteo_por_estado=conteo,
         umbral_ocupacion_alta=umbral,
         ocupacion_alta=ocupacion_alta,
+        local_abierto=local_abierto,
+        hora_apertura=hora_apertura,
+        hora_cierre=hora_cierre,
     )
 
 
@@ -119,8 +134,7 @@ def obtener_rotacion(
 ):
     if fecha_inicio is not None and fecha_fin is not None and fecha_inicio > fecha_fin:
         raise HTTPException(status_code=400, detail="fecha_inicio no puede ser posterior a fecha_fin")
-    if sector_id is not None and not db.query(Sector).filter(Sector.id == sector_id).first():
-        raise HTTPException(status_code=400, detail="El sector indicado no existe")
+    validar_sector(db, sector_id)
 
     mesas_query = db.query(Mesa).filter(Mesa.activa == True)  # noqa: E712
     if sector_id is not None:
@@ -197,8 +211,7 @@ def obtener_rotacion(
 def obtener_ocupacion_diaria(
     fecha: Optional[date] = Query(None), sector_id: Optional[int] = Query(None), db: Session = Depends(get_db)
 ):
-    if sector_id is not None and not db.query(Sector).filter(Sector.id == sector_id).first():
-        raise HTTPException(status_code=400, detail="El sector indicado no existe")
+    validar_sector(db, sector_id)
 
     if fecha is None:
         fecha = hoy_local()
@@ -276,8 +289,7 @@ def obtener_demanda(
     sector_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    if sector_id is not None and not db.query(Sector).filter(Sector.id == sector_id).first():
-        raise HTTPException(status_code=400, detail="El sector indicado no existe")
+    validar_sector(db, sector_id)
 
     # Por defecto, la última semana operativa terminada en hoy. Un rango por defecto acotado
     # y no "todo el historial" a propósito: el patrón horario de hace tres meses no describe

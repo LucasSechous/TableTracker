@@ -2,7 +2,8 @@
 # No hay modelo/tabla propia: estos shapes solo describen la salida de una
 # consulta agregada sobre mesas (T26-154).
 
-from datetime import date, datetime
+from datetime import date, datetime, time
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -25,6 +26,22 @@ class OcupacionResponse(BaseModel):
     # límite.
     umbral_ocupacion_alta: float
     ocupacion_alta: bool
+    # Horario de servicio (T26-200/F-2). Mismo criterio que el par de arriba: la pregunta
+    # "¿está abierto AHORA?" la responde el backend y llega resuelta, en vez de que cada
+    # cliente reimplemente la regla. Importa más que en el caso del umbral, porque acá la
+    # regla no es un `>=`: incluye el cruce de medianoche (un local que abre 20:00 y cierra
+    # 02:00 tiene por franja el COMPLEMENTO del intervalo) y, sobre todo, se evalúa contra
+    # TZ_LOCAL. El frontend solo tiene el reloj del navegador, así que su copia daba una
+    # respuesta distinta a la del backend para el mismo instante si el navegador estaba en
+    # otro huso.
+    #
+    # Las dos horas viajan por la misma razón que viaja `umbral_ocupacion_alta`: para poder
+    # rotular el aviso ("servicio de 07:00 a 01:00") sin pedir /configuracion por separado.
+    # Son None cuando no hay horario cargado, caso en el que `local_abierto` es True — el
+    # default es "siempre en horario", ver en_horario_de_servicio.
+    local_abierto: bool
+    hora_apertura: Optional[time]
+    hora_cierre: Optional[time]
 
 
 class RotacionMesaResponse(BaseModel):

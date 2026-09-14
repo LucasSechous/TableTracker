@@ -31,6 +31,24 @@ export function esAdmin(rol?: string): boolean {
 }
 
 /**
+ * ¿El rol está entre los permitidos? Réplica exacta de `requiere_rol(*roles_permitidos)`
+ * (`auth.py:116`), incluido el bypass de admin, que allá tampoco se nombra en la lista.
+ *
+ * Existe para que el bypass de admin viva en UN solo lugar, igual que del otro lado
+ * (T26-200/F-5). Antes cada permiso repetía el cuerpo `esAdmin(rol) || rol === X || ...`
+ * con distintos literales: sumar un rol al bypass obligaba a editar cuatro cuerpos y un
+ * typo en uno de ellos era invisible, porque el permiso seguía compilando y solo dejaba de
+ * coincidir con su endpoint.
+ *
+ * Privada a propósito: desde afuera se pregunta "¿puede X?" y no "¿es tal rol?" — ver el
+ * encabezado del módulo. Un `tieneRol(rol, "encargado")` suelto en un call site sería la
+ * misma trampa que tenía `esEncargado`, que dejaba a admin afuera.
+ */
+function tieneRol(rol: string | undefined, ...permitidos: string[]): boolean {
+  return esAdmin(rol) || (rol !== undefined && permitidos.includes(rol))
+}
+
+/**
  * Mover, redimensionar, crear y editar mesas y sectores.
  *
  * Corresponde a `requiere_rol("encargado")` en POST/PATCH `/mesas/`, `PATCH
@@ -40,7 +58,7 @@ export function esAdmin(rol?: string): boolean {
  * propia tarea.
  */
 export function puedeEditarLayout(rol?: string): boolean {
-  return esAdmin(rol) || rol === ENCARGADO
+  return tieneRol(rol, ENCARGADO)
 }
 
 /**
@@ -50,6 +68,9 @@ export function puedeEditarLayout(rol?: string): boolean {
  * `/sectores/{id}`. Más restrictivo que puedeEditarLayout aunque los dos controles vivan
  * juntos en el modo edición: el borrado es la operación destructiva de cada recurso y el
  * backend la reserva a admin.
+ *
+ * Único permiso que no pasa por tieneRol: allá el bypass de admin es implícito y acá admin
+ * ES la lista, así que `tieneRol(rol, ADMIN)` solo agregaría una indirección.
  */
 export function puedeBorrar(rol?: string): boolean {
   return esAdmin(rol)
@@ -68,7 +89,7 @@ export function puedeBorrar(rol?: string): boolean {
  * Corresponde a `requiere_rol("encargado", "limpieza")` en `PATCH /mesas/{id}/limpieza`.
  */
 export function puedeConfirmarLimpieza(rol?: string): boolean {
-  return esAdmin(rol) || rol === ENCARGADO || rol === LIMPIEZA
+  return tieneRol(rol, ENCARGADO, LIMPIEZA)
 }
 
 /**
@@ -77,7 +98,7 @@ export function puedeConfirmarLimpieza(rol?: string): boolean {
  * Corresponde a `requiere_rol("encargado", "recepcion")` en `PATCH /mesas/{id}/reserva`.
  */
 export function puedeReservar(rol?: string): boolean {
-  return esAdmin(rol) || rol === ENCARGADO || rol === RECEPCION
+  return tieneRol(rol, ENCARGADO, RECEPCION)
 }
 
 /**
@@ -88,5 +109,5 @@ export function puedeReservar(rol?: string): boolean {
  * técnico del módulo de visión, no alguien que abra esta pantalla.
  */
 export function puedeCambiarEstado(rol?: string): boolean {
-  return esAdmin(rol) || rol === ENCARGADO || rol === MOZO
+  return tieneRol(rol, ENCARGADO, MOZO)
 }

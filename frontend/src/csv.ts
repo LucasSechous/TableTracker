@@ -30,7 +30,8 @@ export type CeldaCsv = string | number | null | undefined
  * Los enteros se dejan tal cual: no llevan separador de miles a propósito, porque el punto
  * de miles convertiría el número en texto para Excel.
  */
-export function formatearNumeroCsv(valor: number): string {
+// Privado del módulo (T26-200/F-7): lo usa generarCsv, nadie de afuera.
+function formatearNumeroCsv(valor: number): string {
   if (!Number.isFinite(valor)) return ""
   return Number.isInteger(valor) ? String(valor) : String(valor).replace(".", ",")
 }

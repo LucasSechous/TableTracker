@@ -120,9 +120,42 @@ export function getEliminarSectorButton(sectorBlock: Locator): Locator {
   return sectorBlock.locator('button[title="Eliminar sector"]');
 }
 
-/** Locator del botón de eliminar de una mesa, en modo edición. Solo lo ve un admin. */
+/**
+ * Locator del botón de eliminar de una mesa, en modo edición. Solo lo ve un admin.
+ *
+ * Ojo: matchea TODOS los botones de borrar del sector. Sirve para contar o para afirmar
+ * visibilidad —que es para lo que lo usa el spec 17—, pero no para clickear uno cuando el
+ * sector tiene más de una mesa. Para eso está getEliminarMesaButtonDe.
+ */
 export function getEliminarMesaButton(sectorBlock: Locator): Locator {
   return sectorBlock.locator('button[title="Eliminar mesa"]');
+}
+
+/** El botón de eliminar de UNA mesa concreta, por su número. */
+export function getEliminarMesaButtonDe(page: Page, numero: number): Locator {
+  return page.getByTestId(`mesa-${numero}-eliminar`);
+}
+
+/** El modal de confirmación de una acción destructiva. Su ausencia es que está cerrado. */
+export function getModalConfirmacion(page: Page): Locator {
+  return page.getByTestId("modal");
+}
+
+/** Cancela el ModalConfirmacion sin ejecutar la acción. */
+export async function cancelarEnModal(page: Page): Promise<void> {
+  await page.getByTestId("modal-cancelar").click();
+}
+
+/**
+ * Acepta el ModalConfirmacion que aparece ante una acción destructiva.
+ *
+ * Reemplaza al `page.once("dialog", (d) => d.accept())` que hacía falta mientras esas
+ * confirmaciones eran window.confirm (T26-200/F-10). Con el modal propio ya no hay diálogo
+ * nativo que interceptar: es un botón como cualquier otro, y el test puede además afirmar
+ * sobre lo que dice antes de confirmar.
+ */
+export async function confirmarEnModal(page: Page): Promise<void> {
+  await page.getByTestId("modal-confirmar").click();
 }
 
 /**

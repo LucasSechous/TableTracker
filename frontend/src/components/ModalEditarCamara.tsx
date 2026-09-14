@@ -1,9 +1,10 @@
 // Modal de edición de una cámara existente.
-// Overlay + card centrada con CSS plano inline, calcado de ModalEditarSector.tsx.
+// El overlay, la caja y los botones los pone <Modal> (T26-200/F-3); acá queda solo el formulario.
 
 import { useState } from "react"
 import type { Camara, Sector } from "../types"
 import { camarasApi, extraerDetalle } from "../services/api"
+import Modal from "./Modal"
 
 interface ModalEditarCamaraProps {
   camara: Camara
@@ -73,159 +74,92 @@ export default function ModalEditarCamara({
       })
       onCamaraActualizada(data)
     } catch (err) {
-      setError(extraerDetalle(err, "No se pudo actualizar la cámara"))
+      setError(await extraerDetalle(err, "No se pudo actualizar la cámara"))
     } finally {
       setGuardando(false)
     }
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0,0,0,0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
+    <Modal
+      titulo="Editar cámara"
+      // Más ancha que el default por la URL RTSP, que es larga y en monoespaciada.
+      ancho={380}
+      error={error}
+      ocupado={guardando}
+      etiquetaConfirmar={guardando ? "Guardando..." : "Guardar cambios"}
+      onConfirmar={handleConfirmar}
+      onCancelar={onClose}
     >
-      <div
-        style={{
-          backgroundColor: "#fff",
-          borderRadius: 8,
-          padding: 24,
-          width: 380,
-          boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
-        }}
-      >
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1a1a1a", margin: "0 0 16px" }}>
-          Editar cámara
-        </h2>
+      <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 12 }}>
+        Nombre
+        <input
+          type="text"
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          autoFocus
+          style={{
+            display: "block",
+            width: "100%",
+            boxSizing: "border-box",
+            marginTop: 4,
+            padding: 8,
+            fontSize: 14,
+            border: "1px solid #ccc",
+            borderRadius: 6,
+          }}
+        />
+      </label>
 
-        {error && (
-          <p
-            style={{
-              fontSize: 13,
-              color: "#c62828",
-              backgroundColor: "#ffebee",
-              border: "1px solid #ef9a9a",
-              borderRadius: 6,
-              padding: "8px 12px",
-              margin: "0 0 12px",
-            }}
-          >
-            {error}
-          </p>
-        )}
+      <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 4 }}>
+        URL RTSP
+        <input
+          type="text"
+          value={rtspUrl}
+          onChange={(e) => setRtspUrl(e.target.value)}
+          style={{
+            display: "block",
+            width: "100%",
+            boxSizing: "border-box",
+            marginTop: 4,
+            padding: 8,
+            fontSize: 14,
+            border: "1px solid #ccc",
+            borderRadius: 6,
+            fontFamily: "monospace",
+          }}
+        />
+      </label>
+      <p style={{ fontSize: 12, color: "#888", margin: "0 0 16px" }}>
+        {rtspUrlModificada
+          ? "Se va a guardar la URL nueva."
+          : "La contraseña está oculta (***). Dejá el campo así para no tocar la URL, o escribí la URL completa con la contraseña real para cambiarla."}
+      </p>
 
-        <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 12 }}>
-          Nombre
-          <input
-            type="text"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            autoFocus
-            style={{
-              display: "block",
-              width: "100%",
-              boxSizing: "border-box",
-              marginTop: 4,
-              padding: 8,
-              fontSize: 14,
-              border: "1px solid #ccc",
-              borderRadius: 6,
-            }}
-          />
-        </label>
-
-        <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 4 }}>
-          URL RTSP
-          <input
-            type="text"
-            value={rtspUrl}
-            onChange={(e) => setRtspUrl(e.target.value)}
-            style={{
-              display: "block",
-              width: "100%",
-              boxSizing: "border-box",
-              marginTop: 4,
-              padding: 8,
-              fontSize: 14,
-              border: "1px solid #ccc",
-              borderRadius: 6,
-              fontFamily: "monospace",
-            }}
-          />
-        </label>
-        <p style={{ fontSize: 12, color: "#888", margin: "0 0 16px" }}>
-          {rtspUrlModificada
-            ? "Se va a guardar la URL nueva."
-            : "La contraseña está oculta (***). Dejá el campo así para no tocar la URL, o escribí la URL completa con la contraseña real para cambiarla."}
-        </p>
-
-        <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 20 }}>
-          Sector
-          <select
-            value={sectorId}
-            onChange={(e) => setSectorId(e.target.value === "" ? "" : Number(e.target.value))}
-            style={{
-              display: "block",
-              width: "100%",
-              boxSizing: "border-box",
-              marginTop: 4,
-              padding: 8,
-              fontSize: 14,
-              border: "1px solid #ccc",
-              borderRadius: 6,
-              backgroundColor: "#fff",
-            }}
-          >
-            {sectores.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nombre}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button
-            onClick={onClose}
-            disabled={guardando}
-            style={{
-              padding: "6px 14px",
-              borderRadius: 6,
-              border: "1px solid #ccc",
-              fontSize: 13,
-              cursor: guardando ? "default" : "pointer",
-              backgroundColor: "#fff",
-              color: "#555",
-              fontWeight: 500,
-            }}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleConfirmar}
-            disabled={guardando}
-            style={{
-              padding: "6px 14px",
-              borderRadius: 6,
-              border: "none",
-              fontSize: 13,
-              cursor: guardando ? "default" : "pointer",
-              backgroundColor: "#1976d2",
-              color: "#fff",
-              fontWeight: 500,
-              opacity: guardando ? 0.6 : 1,
-            }}
-          >
-            {guardando ? "Guardando..." : "Guardar cambios"}
-          </button>
-        </div>
-      </div>
-    </div>
+      <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 20 }}>
+        Sector
+        <select
+          value={sectorId}
+          onChange={(e) => setSectorId(e.target.value === "" ? "" : Number(e.target.value))}
+          style={{
+            display: "block",
+            width: "100%",
+            boxSizing: "border-box",
+            marginTop: 4,
+            padding: 8,
+            fontSize: 14,
+            border: "1px solid #ccc",
+            borderRadius: 6,
+            backgroundColor: "#fff",
+          }}
+        >
+          {sectores.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.nombre}
+            </option>
+          ))}
+        </select>
+      </label>
+    </Modal>
   )
 }

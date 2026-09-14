@@ -21,7 +21,57 @@ def test_ocupacion_sin_mesas(client, como):
         # mesas nunca alerta: 0% no es una ocupación medida, es que no hay nada que medir.
         "umbral_ocupacion_alta": 85.0,
         "ocupacion_alta": False,
+        # Horario de servicio (T26-200/F-2). Sin fila de configuración no hay franja, y el
+        # default documentado de en_horario_de_servicio es "siempre en horario": el aviso de
+        # local cerrado no tiene que aparecerle a quien no configuró ningún horario.
+        "local_abierto": True,
+        "hora_apertura": None,
+        "hora_cierre": None,
     }
+
+
+# --- Horario de servicio en la respuesta de ocupación (T26-200/F-2) ----------
+#
+# La regla dejó de estar duplicada en el frontend (que la evaluaba con el reloj del navegador)
+# y ahora viaja resuelta en este endpoint. Lo que se prueba acá es ese cableado —que el
+# booleano salga de la configuración y que las horas se devuelvan para poder rotular el
+# aviso—; la regla en sí, con su cruce de medianoche, ya está cubierta en test_horario.py.
+
+
+def _hora_local_actual():
+    """La hora del reloj del local ahora mismo, que es contra la que evalúa el endpoint."""
+    from datetime import datetime, timezone
+
+    from app.services.horario import hora_local
+
+    return hora_local(datetime.now(timezone.utc)).hour
+
+
+def test_ocupacion_dice_que_el_local_esta_abierto_dentro_de_la_franja(client, como, db):
+    # Franja de ±1 hora alrededor de ahora. Se calcula en vez de fijarse para que el test no
+    # dependa de a qué hora se corra la suite; el margen de una hora para cada lado lo deja
+    # lejos de cualquier borde. Si la franja cruza medianoche, es justamente el caso que
+    # en_horario_de_servicio resuelve por complemento.
+    hora = _hora_local_actual()
+    _configurar_horario(db, (hora - 1) % 24, (hora + 1) % 24)
+    como("admin")
+
+    cuerpo = client.get("/metricas/ocupacion").json()
+    assert cuerpo["local_abierto"] is True
+    # Las horas viajan en el mismo payload para que el panel pueda escribir "servicio de X a
+    # Y" sin pedir /configuracion aparte.
+    assert cuerpo["hora_apertura"] == f"{(hora - 1) % 24:02d}:00:00"
+    assert cuerpo["hora_cierre"] == f"{(hora + 1) % 24:02d}:00:00"
+
+
+def test_ocupacion_dice_que_el_local_esta_cerrado_fuera_de_la_franja(client, como, db):
+    # Franja que arranca dentro de 2 horas y cerró hace 2: deja el momento actual afuera
+    # cualquiera sea la hora a la que corra la suite.
+    hora = _hora_local_actual()
+    _configurar_horario(db, (hora + 2) % 24, (hora - 2) % 24)
+    como("admin")
+
+    assert client.get("/metricas/ocupacion").json()["local_abierto"] is False
 
 
 def test_ocupacion_cuenta_por_estado(client, como, crear_mesa):

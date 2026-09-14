@@ -49,13 +49,13 @@ if not mesa:
 
 ## 1.2 Código muerto / no usado
 
-Los cuatro endpoints siguientes existen y funcionan, pero **ningún cliente los llama** — ni el frontend ni vision-module:
+Los endpoints siguientes existen y funcionan, pero **ningún cliente los llama** — ni el frontend ni vision-module. (Uno de ellos, `GET /estados/`, quedó en esta lista por error: ver la corrección más abajo.)
 
 | Endpoint | Situación | Recomendación |
 |---|---|---|
 | `POST /camaras/test-conexion` | `camaras.py:237`. Probar una URL antes de guardarla; ni `ModalAltaCamara` ni `ModalEditarCamara` lo usan. | Cablearlo en el modal (es la UX que justifica su existencia) o darlo de baja. |
 | `POST /auth/register` | El alta de usuarios no existe en la UI: `UsuariosPage` solo lista y modifica. | Confirmar si el alta es alcance pendiente; si no, el endpoint queda sin puerta de entrada. |
-| `GET /estados/` | `estados.py`. Duplicado en la práctica por `ETIQUETA_POR_ESTADO` — ver I-3. | Ver I-3; la decisión es de qué lado vive la fuente de verdad. |
+| ~~`GET /estados/`~~ | **Listado por error**: sí tiene consumidor, `ConfiguracionPage.tsx:153` (ver la corrección en F-8 e I-3). | Se queda. Convivencia documentada en I-3. |
 | `GET /sectores/{id}` · `GET /roi-mesa/{id}` | El frontend siempre trae la colección completa y filtra en memoria. | Dejarlos (son CRUD de contrato) pero anotar que no están ejercitados por ningún consumidor. |
 
 `GET /mesas/{id}` y `POST /camaras/{id}/deteccion-actual` **no** son huérfanos: los consume vision-module.
@@ -161,15 +161,26 @@ El problema es el nombre: `extraerDetalleApi` suena más general que `extraerDet
 
 **Recomendación:** los tres pasan a privados del módulo (quitar `export`). Ninguno se borra: los tres se usan internamente.
 
-### F-8 · Métodos de `api.ts` que nadie llama
+### F-8 · Métodos de `api.ts` que nadie llama · **CORREGIDO — dos de los cuatro estaban mal**
 
-`historialApi.listar`, `sectoresApi.eliminar`, `camarasApi.obtener`, `estadosApi.listar`.
+> **Error de este informe, detectado al aplicarlo (T26-200).** La lista original decía
+> `historialApi.listar`, `sectoresApi.eliminar`, `camarasApi.obtener` y `estadosApi.listar`.
+> **Dos de esos cuatro sí tienen consumidor.** La causa fue de método: el barrido buscaba
+> `objeto\.metodo\(` en una sola línea, y el código llama encadenando en dos —
+> `historialApi\n  .listar({ ... })` —, así que el grep no los encontró y los contó como
+> muertos. Re-verificado con un patrón tolerante al salto de línea (`\bobj\s*\.\s*met\s*\(`).
 
-- `sectoresApi.eliminar` está muerto **porque el frontend eligió el otro camino**: `SectorBloque.tsx:186` borra con `sectoresApi.actualizar(id, { activo: false })`. Ver B-4.
-- `historialApi.listar` quedó desplazado por `listarTodo`, que es el que usa `HistorialPage`.
-- `estadosApi.listar` es el cliente del endpoint huérfano `GET /estados/` (ver I-3).
+Estado real:
 
-**Recomendación:** eliminar los que no tengan un plan (`historialApi.listar`, `camarasApi.obtener`); los otros dos dependen de decisiones de B-4 e I-3.
+| Método | Consumidor | Situación |
+|---|---|---|
+| `camarasApi.obtener` | ninguno | Muerto de verdad. **Eliminado** en T26-200. |
+| `sectoresApi.eliminar` | ninguno | Muerto **porque el frontend eligió el otro camino**: `SectorBloque` borra con `sectoresApi.actualizar(id, { activo: false })`. Su baja depende de B-4; sigue en pie. |
+| `historialApi.listar` | `PanelMesa.tsx:50` | **NO está muerto.** Trae la última transición de UNA mesa para calcular hace cuánto está en su estado. `listarTodo` no lo desplazó: resuelve otra cosa (el listado paginado de `HistorialPage`). |
+| `estadosApi.listar` | `ConfiguracionPage.tsx:153` | **NO está muerto.** Ver I-3. |
+
+**Recomendación (actualizada):** solo `camarasApi.obtener` era eliminable sin decidir nada, y
+ya se eliminó. `sectoresApi.eliminar` espera a B-4. Los otros dos se quedan.
 
 ## 2.3 Inconsistencias de patrón
 
@@ -236,19 +247,30 @@ Verificado contra el backend en ejecución: `/mesas`, `/sectores`, `/historial`,
 
 ### I-2 · Endpoints sin consumidor
 
-Detallados en 1.2. Resumen: `POST /camaras/test-conexion`, `POST /auth/register`, `GET /estados/`, `GET /sectores/{id}`, `GET /roi-mesa/{id}`. Más `GET /` (raíz), que es un health check y no necesita consumidor.
+Detallados en 1.2. Resumen: `POST /camaras/test-conexion`, `POST /auth/register`, `GET /sectores/{id}`, `GET /roi-mesa/{id}`. Más `GET /` (raíz), que es un health check y no necesita consumidor.
+
+`GET /estados/` figuraba acá y **se saca**: sí tiene consumidor (`ConfiguracionPage`), ver I-3.
 
 Caso aparte, ya cubierto en B-4: `DELETE /mesas/{id}` y `DELETE /sectores/{id}` existen y el frontend los esquiva usando `PATCH`.
 
-### I-3 · Las etiquetas de estado tienen dos fuentes de verdad
+### I-3 · Las etiquetas de estado tienen dos fuentes de verdad · **RESUELTO como convivencia documentada**
 
-`GET /estados/` (`routers/estados.py`, T26-157 / RF-29) devuelve el enum `EstadoMesa` resuelto a `{valor, etiqueta}`. Su cliente `estadosApi.listar` existe en `api.ts:288`. **Nadie lo llama.**
+`GET /estados/` (`routers/estados.py`, T26-157 / RF-29) devuelve el enum `EstadoMesa` resuelto a `{valor, etiqueta}`. Su cliente es `estadosApi.listar`.
 
-Las etiquetas que el usuario ve salen del mapa hardcodeado `ETIQUETA_POR_ESTADO` (`constants.ts`), consumido por `PanelMesa`, `SalonCanvas`, `DashboardPage` e `HistorialPage`. El propio `constants.ts` documenta la convivencia —*"el endpoint es la fuente para pantallas que listan los estados como dato"*— pero no hay ninguna pantalla que lo haga.
+> **Corrección.** La versión original de este hallazgo afirmaba que **nadie** llamaba a
+> `estadosApi.listar`, y sobre esa base recomendaba dar de baja el endpoint. Es falso, por el
+> mismo error de grep descrito en F-8: **`ConfiguracionPage.tsx:153` lo consume**, para el
+> bloque informativo de solo lectura que le muestra al admin los estados que maneja el
+> sistema. Ese bloque tiene su propio estado de error (`errorEstados`) y un comentario que
+> explica que es informativo y no debe romper la pantalla si falla.
 
-Hoy los dos coinciden. Nada garantiza que sigan coincidiendo: agregar un estado en el backend no rompe nada en el frontend, solo hace que el mapa quede incompleto en silencio.
+Las etiquetas que el usuario ve en el canvas salen del mapa `ETIQUETA_POR_ESTADO` (`constants.ts`), consumido por `PanelMesa`, `SalonCanvas`, `DashboardPage` e `HistorialPage`. El comentario de `constants.ts` —*"el endpoint es la fuente para pantallas que listan los estados como dato"*— resulta ser **exacto**: esa pantalla existe, es `ConfiguracionPage`.
 
-**Recomendación:** decidir de qué lado vive la fuente de verdad. Si es el backend, `ETIQUETA_POR_ESTADO` pasa a ser un fallback y las pantallas consumen el endpoint; si es el frontend, `GET /estados/` y su cliente se dan de baja. Mantener los dos sin un consumidor que los cruce es el peor de los tres escenarios.
+**Decisión (T26-200):** se quedan los dos, y se documenta por qué.
+
+No es una duplicación por descuido sino dos usos distintos del mismo dato: `ETIQUETA_POR_ESTADO` es el mapa con el que se PINTA un estado que ya se tiene (necesita ser síncrono: se usa en pleno render del canvas, que refresca cada 3s), y `GET /estados/` es la introspección de qué estados EXISTEN, que solo el backend sabe. Migrar `ConfiguracionPage` al mapa hardcodeado le sacaría el sentido a la sección: dejaría de reflejar el enum real del backend para volverse un eco estático del mismo mapa que ya se ve en todo el resto de la app.
+
+El riesgo que este hallazgo señalaba —agregar un estado en el backend deja el mapa incompleto en silencio— sigue existiendo, pero es el precio de tener un mapa síncrono para el render, no algo que se arregle dando de baja el endpoint.
 
 ---
 
@@ -258,21 +280,34 @@ Hoy los dos coinciden. Nada garantiza que sigan coincidiendo: agregar un estado 
 |---|---|---|---|---|
 | ~~I-1~~ | ~~Dos `GET` sin barra final → 307 en la ruta más caliente~~ · **RESUELTO** | Integración | Inconsistencia | — |
 | ~~F-1~~ | ~~`UsuariosPage` duplica `authApi.me()` teniendo `useAuth`~~ · **RESUELTO** | Frontend | Duplicación | — |
-| F-7 | Dos exports sin consumidor externo · **PARCIAL**: `esEncargado` eliminado; quedan `TAMANO_MINIMO_SALON` y `formatearNumeroCsv` | Frontend | Código muerto | Trivial |
-| B-1 | "Buscar o 404" inline en 10 handlers de dos routers | Backend | Duplicación | Bajo |
-| B-2 | Validación de sector repetida en tres routers | Backend | Duplicación | Bajo |
-| F-11 | `permisos.ts` contradice su propio invariante declarado | Frontend | Inconsistencia | Bajo (decisión en B-4/B-5) |
-| F-5 | Tres permisos con el cuerpo copiado | Frontend | Duplicación | Bajo |
-| F-6 | Dos helpers de error con nombres que no distinguen | Frontend | Inconsistencia | Bajo |
-| I-3 | Etiquetas de estado con dos fuentes de verdad | Integración | Duplicación | Medio (decisión) |
-| F-9 / F-10 | `alert()` y `window.confirm` conviviendo con banners y modales | Frontend | Inconsistencia | Medio |
-| F-3 | Overlay repetido en cinco modales | Frontend | Duplicación | Medio |
-| F-12 | `SalonCanvas` recibe el rol por prop y por contexto | Frontend | Inconsistencia | Bajo |
-| F-2 | `horario.ts` espeja `horario.py` con otro huso | Frontend | Duplicación | Medio |
-| F-4 | Ciclo de arrastre reimplementado tres veces | Frontend | Duplicación | Alto |
-| B-4 | `DELETE` con dos semánticas según el recurso | Backend | Inconsistencia | Alto (cambio de contrato) |
+| ~~F-7~~ | ~~Tres exports sin consumidor externo~~ · **RESUELTO** | Frontend | Código muerto | — |
+| ~~B-1~~ | ~~"Buscar o 404" inline en 10 handlers de dos routers~~ · **RESUELTO** | Backend | Duplicación | — |
+| ~~B-2~~ | ~~Validación de sector repetida~~ (eran **siete** copias, no cinco) · **RESUELTO** | Backend | Duplicación | — |
+| ~~F-5~~ | ~~Permisos con el cuerpo copiado~~ · **RESUELTO** | Frontend | Duplicación | — |
+| ~~F-6~~ | ~~Dos helpers de error con nombres que no distinguen~~ · **RESUELTO** | Frontend | Inconsistencia | — |
+| ~~F-9 / F-10~~ | ~~`alert()` y `window.confirm` conviviendo con banners y modales~~ · **RESUELTO** | Frontend | Inconsistencia | — |
+| ~~F-3~~ | ~~Overlay repetido en cinco modales~~ · **RESUELTO** | Frontend | Duplicación | — |
+| ~~F-12~~ | ~~`SalonCanvas` recibe el rol por prop y por contexto~~ · **RESUELTO** | Frontend | Inconsistencia | — |
+| ~~F-2~~ | ~~`horario.ts` espeja `horario.py` con otro huso~~ · **RESUELTO** | Frontend | Duplicación | — |
+| ~~F-4~~ | ~~Ciclo de arrastre reimplementado~~ (eran **cuatro** instancias, no tres) · **RESUELTO** | Frontend | Duplicación | — |
+| ~~F-8~~ | ~~Cuatro métodos muertos en `api.ts`~~ · **CORREGIDO**: solo uno lo estaba | Frontend | Código muerto | — |
+| ~~I-3~~ | ~~Etiquetas de estado con dos fuentes de verdad~~ · **RESUELTO** como convivencia documentada | Integración | Duplicación | — |
+| F-11 | `permisos.ts` contradice su propio invariante declarado | Frontend | Inconsistencia | Bajo (decisión en B-4/B-5) — **T26-199** |
+| B-4 | `DELETE` con dos semánticas según el recurso | Backend | Inconsistencia | Alto (cambio de contrato) — **T26-199** |
+| B-5 | El rol exigido cambia entre `PATCH` y `DELETE` | Backend | Inconsistencia | Gating — **T26-199** |
+| B-3 | Dos endpoints de test de conexión, uno sin consumidor | Backend | Duplicación | Bajo (depende de B-4) |
+| I-2 | Cuatro endpoints sin consumidor | Integración | Código muerto | Decisión de alcance |
 
 **Lo que está limpio y conviene no volver a revisar:** los 33 schemas del backend (ninguno huérfano), la centralización del HTTP en `api.ts` (cero llamadas sueltas), y la ausencia de llamadas a endpoints inexistentes.
+
+**Sobre el método de este informe.** Dos de los recuentos salieron mal y los dos por el mismo
+motivo: buscar una llamada con un patrón de una sola línea. F-8 marcó muertos dos métodos que
+se invocan encadenados en dos líneas, y sobre uno de esos falsos positivos se apoyaba la
+recomendación de I-3 (dar de baja `GET /estados/`), que habría roto `ConfiguracionPage`. B-2
+contó cinco copias donde había siete, ahí por una razón distinta: dos tickets posteriores
+agregaron una cada uno. El primero es un error de herramienta; el segundo, la vida útil de un
+relevamiento. Vale para la próxima auditoría: ningún "cero consumidores" debería darse por
+bueno sin abrir el archivo.
 
 ---
 
@@ -293,18 +328,34 @@ Además, y fuera del alcance de este informe pero relevante para planificar: la 
 
 # 6. Estado de los hallazgos
 
-Actualizado al 2026-09-11. Esta sección se mantiene a mano: el informe es el relevamiento, y
+Actualizado al 2026-09-13. Esta sección se mantiene a mano: el informe es el relevamiento, y
 acá se anota qué se fue cerrando para no tener que releerlo entero.
+
+T26-200 aplicó el grueso de lo pendiente en tres tandas. Lo que quedó abierto tiene ticket
+propio (T26-199) o depende de una decisión de contrato.
 
 | Hallazgo | Estado | Dónde se resolvió |
 |---|---|---|
 | I-1 · barras finales que provocaban 307 | **Resuelto** | `services/api.ts:91` y `:172` |
 | F-1 · `UsuariosPage` duplicaba `authApi.me()` | **Resuelto** | ahora consume `useAuth()` |
-| F-7 · `esEncargado` exportado sin consumidor | **Resuelto** | eliminado; su única llamada quedó inline en `puedeEditarLayout` |
-| F-7 · `TAMANO_MINIMO_SALON`, `formatearNumeroCsv` | Pendiente | pasar a privados del módulo |
-| B-1, B-2, B-3, B-4, B-5 | Pendientes | — |
-| F-2 a F-6, F-8 a F-12 | Pendientes | — |
-| I-2, I-3 | Pendientes | — |
+| F-7 · los tres exports sin consumidor | **Resuelto** | `esEncargado` eliminado; `TAMANO_MINIMO_SALON` y `formatearNumeroCsv` pasaron a privados |
+| B-1 · "buscar o 404" inline | **Resuelto** (T26-200, tanda 1) | `_obtener()` en `mesas.py` (7 sitios) y `sectores.py` (3) |
+| B-2 · validación de sector repetida | **Resuelto** (T26-200, tanda 1) | `routers/_comun.py` nuevo; **7** sitios, no 5 — T26-185 y T26-186 habían sumado una copia cada uno después del relevamiento |
+| F-8 · métodos muertos de `api.ts` | **Resuelto parcial + corregido** (T26-200, tanda 1) | Solo `camarasApi.obtener` estaba muerto: eliminado. Dos de los cuatro del informe tenían consumidor — ver la corrección en F-8. `sectoresApi.eliminar` espera a B-4 |
+| F-3 · overlay repetido en cinco modales | **Resuelto** (T26-200, tanda 2) | `components/Modal.tsx` |
+| F-5 · permisos con el cuerpo copiado | **Resuelto** (T26-200, tanda 2) | `tieneRol(rol, ...permitidos)` privado en `permisos.ts` |
+| F-6 · dos helpers de error | **Resuelto** (T26-200, tanda 2) | Quedó uno solo, el asíncrono, con el nombre `extraerDetalle`. 35 call sites |
+| F-9 · `alert()` conviviendo con banners | **Resuelto** (T26-200, tanda 2) | Los 9 fuera. `hooks/useAvisoError.tsx` para los tres del canvas; banner propio en `DashboardPage` |
+| F-10 · `window.confirm` | **Resuelto** (T26-200, tanda 2) | `components/ModalConfirmacion.tsx`, los 5 sitios |
+| F-12 · `SalonCanvas` recibía el rol por prop | **Resuelto** (T26-200, tanda 2) | lee `useAuth()`; la prop `esAdmin` no existe más |
+| F-4 · arrastre reimplementado | **Resuelto** (T26-200, tanda 3) | `hooks/useArrastre.ts`; eran **cuatro** instancias, no tres (el resize del sector es otra) |
+| F-2 · `horario.ts` espejaba `horario.py` | **Resuelto** (T26-200, tanda 3) | El backend responde "¿está abierto ahora?" en `GET /metricas/ocupacion` (`local_abierto`); `enHorarioDeServicio` dado de baja |
+| I-3 · etiquetas con dos fuentes de verdad | **Resuelto como convivencia documentada** (T26-200, tanda 3) | Ver I-3: los dos se quedan, con el porqué anotado en `routers/estados.py` |
+| B-3 · dos endpoints de test de conexión | Pendiente | Depende de B-4/B-5 (el segundo no tiene consumidor) |
+| B-4 · `DELETE` con dos semánticas | **Pendiente — T26-199** | Cambio de contrato |
+| B-5 · rol distinto entre PATCH y DELETE | **Pendiente — T26-199** | Gating |
+| F-11 · `permisos.ts` contradice su invariante | **Pendiente — T26-199** | Depende de B-4/B-5 |
+| I-2 · endpoints sin consumidor | Pendiente | `POST /camaras/test-conexion`, `POST /auth/register`, `GET /sectores/{id}`, `GET /roi-mesa/{id}`. Cada uno es una decisión de alcance, no un fix |
 
 ## Hallazgos nuevos, posteriores al relevamiento
 

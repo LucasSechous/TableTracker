@@ -35,6 +35,13 @@ logger = get_logger(__name__)
 
 MUESTRAS_DIR = Path(__file__).resolve().parents[1] / "data" / "samples"
 
+# Cuánto se espera entre dos read_frame() vacíos, y cuánto se tolera sin recibir nada
+# antes de dar la fuente por caída. Veinte segundos cubren de sobra el arranque de un
+# stream RTSP —el hilo de Camera suele traer el primer frame en dos o tres— sin colgar
+# la captura para siempre si la cámara no está.
+ESPERA_ENTRE_INTENTOS = 0.2
+SEGUNDOS_SIN_FRAME_TOLERADOS = 20.0
+
 
 def _parse_args():
     parser = argparse.ArgumentParser(
@@ -84,8 +91,9 @@ def main():
     logger.info("Capturando %d frames de %s", args.cantidad, rtsp_url.enmascarar(fuente))
 
     guardados = 0
-    descartados = 0
     resolucion = None
+    # Momento en que la fuente dejó de entregar, o None si viene entregando.
+    sin_frame_desde = None
     inicio = datetime.now(timezone.utc)
 
     try:
@@ -95,11 +103,26 @@ def main():
                 # Con RTSP los primeros read_frame() pueden venir vacíos mientras el hilo
                 # de drenaje todavía no recibió nada. Se tolera un margen y después se corta:
                 # seguir esperando indefinidamente esconde una cámara caída.
-                descartados += 1
-                if descartados > args.cantidad + 20:
-                    logger.error("La fuente no entrega frames, se corta con %d guardados", guardados)
+                #
+                # El margen se mide en SEGUNDOS y no en intentos. read_frame() no bloquea
+                # —devuelve el último frame del hilo lector, o None si todavía no hay—, así
+                # que un tope por cantidad de intentos se agota en milisegundos: contra una
+                # cámara que tarda sus buenos dos segundos en entregar el primer frame, el
+                # lote salía vacío y parecía una cámara caída.
+                ahora = time.monotonic()
+                if sin_frame_desde is None:
+                    sin_frame_desde = ahora
+                elif ahora - sin_frame_desde > SEGUNDOS_SIN_FRAME_TOLERADOS:
+                    logger.error(
+                        "La fuente no entrega frames hace %.0fs, se corta con %d guardados",
+                        ahora - sin_frame_desde,
+                        guardados,
+                    )
                     break
+                time.sleep(ESPERA_ENTRE_INTENTOS)
                 continue
+
+            sin_frame_desde = None
 
             if resolucion is None:
                 alto, ancho = frame.shape[:2]

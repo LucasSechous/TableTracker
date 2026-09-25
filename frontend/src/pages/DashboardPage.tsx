@@ -2,7 +2,7 @@
 // Carga mesas y sectores, los agrupa, y orquesta los cambios de estado y posición.
 
 import { useEffect, useRef, useState } from "react"
-import { Pencil, Plus, TriangleAlert } from "lucide-react"
+import { Pencil, TriangleAlert } from "lucide-react"
 import { mesasApi, sectoresApi, configuracionApi, metricasApi, extraerDetalle } from "../services/api"
 import type { Mesa, Sector, Modo, Configuracion, OcupacionResponse } from "../types"
 import SalonCanvas from "../components/SalonCanvas"
@@ -585,12 +585,12 @@ export default function DashboardPage() {
         >
           {puedeEditarLayout(rol) && (
             <>
-              <Boton icono={Plus} onClick={() => setModalAbierto("sector")}>
-                Nuevo sector
-              </Boton>
-              <Boton icono={Plus} onClick={() => setModalAbierto("mesa")}>
-                Nueva mesa
-              </Boton>
+              {/* El "+" va en el texto y no como icono, aunque el icono se vea mejor: el
+                  rótulo tiene que quedar idéntico al de antes de T26-205. Cambiarlo movía
+                  el nombre accesible del botón de "+ Nuevo sector" a "Nuevo sector", que
+                  es lo que ve un lector de pantalla y lo que usa la suite para ubicarlo. */}
+              <Boton onClick={() => setModalAbierto("sector")}>+ Nuevo sector</Boton>
+              <Boton onClick={() => setModalAbierto("mesa")}>+ Nueva mesa</Boton>
             </>
           )}
           {/* Sin gate: es la única salida del modo edición. Esconderla ante un rol sin

@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import Layout from "../components/Layout"
+import PestanasMetricas from "../components/PestanasMetricas"
 import Boton from "../components/ui/Boton"
 import { Calendar, Clock, Download, PieChart, RefreshCw } from "lucide-react"
 import { metricasApi, sectoresApi, extraerDetalle } from "../services/api"
@@ -148,6 +149,8 @@ export default function OcupacionDiariaPage() {
       }
     >
       <main style={{ padding: 24 }}>
+        <PestanasMetricas />
+
         <div
           style={{
             display: "flex",

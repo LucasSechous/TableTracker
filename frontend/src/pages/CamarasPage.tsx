@@ -4,7 +4,6 @@
 // el backend (requiere_rol("admin")). El encabezado y la navegación los pone Layout.
 
 import { useEffect, useState } from "react"
-import { Plus } from "lucide-react"
 import { camarasApi, sectoresApi, extraerDetalle } from "../services/api"
 import type { Camara, Sector, CamaraTestResponse } from "../types"
 import ModalAltaCamara from "../components/ModalAltaCamara"
@@ -167,8 +166,8 @@ export default function CamarasPage() {
     <Layout
       acciones={
         !cargandoInicial && !errorInicial ? (
-          <Boton variante="primario" icono={Plus} onClick={() => setModalAbierto("alta")}>
-            Nueva cámara
+          <Boton variante="primario" onClick={() => setModalAbierto("alta")}>
+            + Nueva cámara
           </Boton>
         ) : undefined
       }

@@ -1,6 +1,8 @@
 import cv2
+import time
 from contextlib import contextmanager
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
@@ -311,6 +313,140 @@ def capturar_snapshot(
         )
 
     return Response(content=buffer.tobytes(), media_type="image/jpeg")
+
+
+# Cadencia del stream en vivo. No se copia la de la cámara: a 25-30 fps el costo de
+# recomprimir cada frame a JPEG se vuelve el cuello de botella del backend, y para mirar
+# un salón no aporta nada sobre 10. Es el parámetro a bajar si el CPU sufre.
+STREAM_FPS = 10
+
+# Calidad JPEG de cada frame. 70 es el punto donde la imagen sigue siendo clara y el
+# tamaño cae a menos de la mitad que con el default de OpenCV (95). En MJPEG cada frame
+# viaja entero, sin compresión entre frames, así que este número manda el ancho de banda.
+STREAM_CALIDAD_JPEG = 70
+
+# Cuántas lecturas fallidas seguidas se toleran antes de dar el stream por cortado. Un
+# frame suelto puede fallar sin que la cámara se haya caído; una racha, no.
+STREAM_FALLOS_TOLERADOS = 15
+
+# Ancho al que se reduce cada frame antes de comprimirlo. La cámara entrega 1920x1080 y
+# la vista del navegador es una miniatura: mandar el frame entero medido daba 288 KB por
+# frame y 17 Mbps, casi todo desperdiciado en píxeles que el <img> descarta al escalar.
+# A 640 la imagen sigue viéndose nítida en pantallas HiDPI y el costo cae un orden de
+# magnitud, tanto en ancho de banda como en tiempo de compresión. Nunca se agranda un
+# frame que ya venga más chico.
+STREAM_ANCHO_MAXIMO = 640
+
+_FRONTERA_MJPEG = "frame"
+
+
+@router.get("/{camara_id}/stream", dependencies=SOLO_ADMIN)
+def transmitir_camara(
+    camara_id: int,
+    timeout_segundos: float = Query(rtsp.TIMEOUT_DEFECTO, ge=1, le=15),
+    ancho_maximo: int = Query(STREAM_ANCHO_MAXIMO, ge=160, le=1920),
+    db: Session = Depends(get_db),
+):
+    """Vista en vivo de la cámara como MJPEG (T26-203, RF-31).
+
+    Por qué MJPEG y no el RTSP directo: ningún navegador reproduce RTSP. Alguien tiene
+    que reempaquetar el stream, y `multipart/x-mixed-replace` es la forma que no agrega
+    dependencias — OpenCV ya está acá por el snapshot, y del otro lado lo entiende
+    cualquier navegador sin librería de por medio.
+
+    Diferencia con `/snapshot`, que es la que justifica este endpoint: snapshot abre una
+    conexión RTSP, lee un frame y la cierra. Pedirlo en loop para simular video abriría
+    una conexión por frame, que es lo caro. Acá la conexión se abre UNA vez y se mantiene
+    mientras el cliente esté escuchando.
+
+    El costo de esto no es gratis y conviene tenerlo presente: mientras haya un navegador
+    con la vista abierta, el backend sostiene una conexión RTSP, decodifica y recomprime a
+    STREAM_FPS. Se corta solo cuando el cliente se va —el generador recibe GeneratorExit y
+    libera la captura en el `finally`—, así que cerrar la pestaña alcanza.
+
+    Igual que el resto del router, esto asume un solo worker (ver docs/vision-loop.md).
+    """
+    camara = _obtener(db, camara_id)
+    if not camara.activa:
+        raise HTTPException(status_code=404, detail="Cámara no encontrada")
+
+    timeout_ms = int(timeout_segundos * 1000)
+    parametros = [
+        cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, timeout_ms,
+        cv2.CAP_PROP_READ_TIMEOUT_MSEC, timeout_ms,
+    ]
+    with _errores_de_cifrado():
+        url_completa = camara.rtsp_url_completa
+
+    # La captura se abre ACÁ y no dentro del generador para poder contestar con un error
+    # HTTP si la cámara no responde. Una vez que el generador empezó a emitir, la respuesta
+    # ya salió con 200 y no hay forma de cambiarle el código: un fallo posterior solo puede
+    # cortar el stream.
+    captura = cv2.VideoCapture(url_completa, cv2.CAP_FFMPEG, parametros)
+    if not captura.isOpened():
+        captura.release()
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=f"La cámara «{camara.nombre}» no respondió en {timeout_segundos:g} segundos",
+        )
+
+    def generar():
+        intervalo = 1 / STREAM_FPS
+        fallos = 0
+        try:
+            while True:
+                inicio = time.monotonic()
+                capturado, frame = captura.read()
+                if not capturado or frame is None:
+                    fallos += 1
+                    if fallos >= STREAM_FALLOS_TOLERADOS:
+                        break
+                    continue
+                fallos = 0
+
+                # Escalar ANTES de comprimir, no después: comprimir a resolución completa
+                # para luego achicar pagaría el costo caro (el JPEG del frame grande) sin
+                # ningún beneficio.
+                alto, ancho = frame.shape[:2]
+                if ancho > ancho_maximo:
+                    escala = ancho_maximo / ancho
+                    frame = cv2.resize(
+                        frame,
+                        (ancho_maximo, max(1, int(round(alto * escala)))),
+                        interpolation=cv2.INTER_AREA,
+                    )
+
+                codificado, buffer = cv2.imencode(
+                    ".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), STREAM_CALIDAD_JPEG]
+                )
+                if not codificado:
+                    continue
+
+                datos = buffer.tobytes()
+                yield (
+                    f"--{_FRONTERA_MJPEG}\r\n"
+                    f"Content-Type: image/jpeg\r\n"
+                    f"Content-Length: {len(datos)}\r\n\r\n"
+                ).encode() + datos + b"\r\n"
+
+                # El sobrante del ciclo, no el intervalo entero: si decodificar y comprimir
+                # ya se comió el presupuesto, no se duerme y se sigue de largo.
+                resto = intervalo - (time.monotonic() - inicio)
+                if resto > 0:
+                    time.sleep(resto)
+        finally:
+            # Corre también cuando el cliente cierra la pestaña: el servidor cierra el
+            # generador y esto suelta la conexión RTSP. Sin esto, cada vista abierta dejaría
+            # una conexión colgada contra la cámara para siempre.
+            captura.release()
+
+    return StreamingResponse(
+        generar(),
+        media_type=f"multipart/x-mixed-replace; boundary={_FRONTERA_MJPEG}",
+        # Un proxy o el navegador cacheando esto no tendría ningún sentido y además
+        # rompería la vista en vivo.
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
 
 
 @router.post("/{camara_id}/deteccion-actual", status_code=status.HTTP_204_NO_CONTENT, dependencies=ADMIN_O_VISION)

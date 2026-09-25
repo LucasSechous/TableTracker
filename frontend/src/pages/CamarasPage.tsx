@@ -10,11 +10,16 @@ import type { Camara, Sector, CamaraTestResponse } from "../types"
 import ModalAltaCamara from "../components/ModalAltaCamara"
 import ModalEditarCamara from "../components/ModalEditarCamara"
 import ModalConfirmacion from "../components/ModalConfirmacion"
+import CamaraEnVivo from "../components/CamaraEnVivo"
 
 interface EstadoTest {
   probando: boolean
   resultado: CamaraTestResponse | null
   error: string | null
+  // Cuenta de pruebas de esta cámara. Sube en cada una y se usa como key de CamaraEnVivo,
+  // para que volver a probar abra un stream nuevo en vez de reusar el anterior, que puede
+  // haber quedado cortado.
+  intento: number
 }
 
 const estiloBoton: React.CSSProperties = {
@@ -157,15 +162,25 @@ export default function CamarasPage() {
   }
 
   async function handleProbarConexion(camaraId: number) {
-    setTestsPorCamara((prev) => ({ ...prev, [camaraId]: { probando: true, resultado: null, error: null } }))
+    const intento = (testsPorCamara[camaraId]?.intento ?? 0) + 1
+    setTestsPorCamara((prev) => ({
+      ...prev,
+      [camaraId]: { probando: true, resultado: null, error: null, intento },
+    }))
     try {
       const { data } = await camarasApi.testConexion(camaraId)
       // Siempre 200: que la cámara no responda (ok=false) no es un error de red, es el
       // resultado de la prueba. El mensaje ya viene redactado en español, se muestra tal cual.
-      setTestsPorCamara((prev) => ({ ...prev, [camaraId]: { probando: false, resultado: data, error: null } }))
+      setTestsPorCamara((prev) => ({
+        ...prev,
+        [camaraId]: { probando: false, resultado: data, error: null, intento },
+      }))
     } catch (err) {
       const mensaje = await extraerDetalle(err, "No se pudo probar la conexión")
-      setTestsPorCamara((prev) => ({ ...prev, [camaraId]: { probando: false, resultado: null, error: mensaje } }))
+      setTestsPorCamara((prev) => ({
+        ...prev,
+        [camaraId]: { probando: false, resultado: null, error: mensaje, intento },
+      }))
     }
   }
 
@@ -274,8 +289,19 @@ export default function CamarasPage() {
                       </div>
                     </div>
 
+                    {/* La vista en vivo va al lado del mensaje y solo cuando la conexión
+                        dio bien: si la cámara no respondió no hay stream que abrir. Se monta
+                        con key={intento} para que volver a probar reinicie la conexión en vez
+                        de reusar la anterior, que puede haber quedado cortada. */}
                     {test?.resultado && (
-                      <p style={test.resultado.ok ? estiloExito : estiloError}>{test.resultado.mensaje}</p>
+                      <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                        <p style={{ ...(test.resultado.ok ? estiloExito : estiloError), flex: 1, minWidth: 240 }}>
+                          {test.resultado.mensaje}
+                        </p>
+                        {test.resultado.ok && (
+                          <CamaraEnVivo key={test.intento} camaraId={camara.id} nombre={camara.nombre} />
+                        )}
+                      </div>
                     )}
                     {test?.error && <p style={estiloError}>{test.error}</p>}
                   </div>

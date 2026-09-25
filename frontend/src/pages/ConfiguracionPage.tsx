@@ -11,6 +11,8 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
+import Layout from "../components/Layout"
+import Boton from "../components/ui/Boton"
 import { Save, RotateCcw, AlertTriangle, CheckCircle2 } from "lucide-react"
 import {
   configuracionApi,
@@ -344,24 +346,7 @@ export default function ConfiguracionPage() {
     form !== null && original !== null && JSON.stringify(form) !== JSON.stringify(aFormState(original))
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
-      <header
-        style={{
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-          padding: "12px 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>Configuración</h1>
-        <button onClick={() => navigate("/")} style={estiloBoton}>
-          Volver al salón
-        </button>
-      </header>
-
+    <Layout>
       <main style={{ padding: 24, maxWidth: 640 }}>
         {loading && <p style={{ fontSize: 14, color: "#888" }}>Cargando configuración...</p>}
 
@@ -571,33 +556,27 @@ export default function ConfiguracionPage() {
             </p>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button
+              <Boton
+                variante="primario"
                 data-testid="configuracion-guardar"
+                icono={Save}
                 onClick={handleGuardar}
-                disabled={guardando || !hayCambios}
-                style={{
-                  ...estiloBotonPrimario,
-                  opacity: guardando || !hayCambios ? 0.5 : 1,
-                  cursor: guardando || !hayCambios ? "default" : "pointer",
-                }}
+                disabled={!hayCambios}
+                cargando={guardando}
+                textoCargando="Guardando..."
               >
-                <Save size={15} />
-                {guardando ? "Guardando..." : "Guardar cambios"}
-              </button>
+                Guardar cambios
+              </Boton>
 
-              <button
+              <Boton
+                variante="neutro"
                 data-testid="configuracion-deshacer"
+                icono={RotateCcw}
                 onClick={handleDeshacer}
                 disabled={guardando || !hayCambios}
-                style={{
-                  ...estiloBotonSecundario,
-                  opacity: guardando || !hayCambios ? 0.5 : 1,
-                  cursor: guardando || !hayCambios ? "default" : "pointer",
-                }}
               >
-                <RotateCcw size={15} />
                 Deshacer
-              </button>
+              </Boton>
             </div>
           </div>
         )}
@@ -726,7 +705,7 @@ export default function ConfiguracionPage() {
           ))}
         </section>
       </main>
-    </div>
+    </Layout>
   )
 }
 
@@ -771,9 +750,9 @@ function Hueco({
         <AlertTriangle size={16} style={{ flexShrink: 0 }} />
         {texto}
       </span>
-      <button onClick={onAccion} style={{ ...estiloBoton, minHeight: 36 }}>
+      <Boton onClick={onAccion} style={{ minHeight: 36 }}>
         {accion}
-      </button>
+      </Boton>
     </div>
   )
 }
@@ -837,37 +816,8 @@ const estiloInput: React.CSSProperties = {
   boxSizing: "border-box",
 }
 
-const estiloBoton: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 6,
-  minHeight: 44,
-  padding: "0 14px",
-  borderRadius: 6,
-  border: "1px solid #1976d2",
-  fontSize: 13,
-  fontWeight: 500,
-  fontFamily: "inherit",
-  cursor: "pointer",
-  backgroundColor: "#fff",
-  color: "#1976d2",
-  whiteSpace: "nowrap",
-}
 
-const estiloBotonPrimario: React.CSSProperties = {
-  ...estiloBoton,
-  border: "none",
-  backgroundColor: "#1976d2",
-  color: "#fff",
-  fontWeight: 600,
-}
 
-const estiloBotonSecundario: React.CSSProperties = {
-  ...estiloBoton,
-  border: "1px solid #ccc",
-  color: "#444",
-}
 
 const estiloError: React.CSSProperties = {
   fontSize: 14,

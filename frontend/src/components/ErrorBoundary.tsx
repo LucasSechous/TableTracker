@@ -108,6 +108,11 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 }
 
+// Los dos únicos estilos de botón que sobrevivieron a T26-205, y a propósito: esta pantalla
+// es la que se dibuja cuando el árbol de React ya se rompió. Si usara <Boton> y el fallo
+// viniera de ahí —o de cualquier cosa que Boton importe— la pantalla de error se caería
+// junto con la aplicación y el usuario se quedaría mirando una página en blanco. Un
+// boundary vale lo que valen sus dependencias, así que acá no tiene ninguna.
 const estiloBoton: React.CSSProperties = {
   minHeight: 44,
   padding: "0 16px",

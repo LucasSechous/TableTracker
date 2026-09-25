@@ -1,16 +1,18 @@
-// Pantalla de ABM de cámaras (T26-126). Estructura calcada de CalibracionRoiPage.tsx (T26-128):
-// header con "Volver", estados cargandoInicial/errorInicial, banners de error/éxito reutilizando
-// los mismos estilos inline, y extraerDetalle para parsear errores. Acceso restringido a
-// admin (ver AdminRoute en App.tsx), igual que /camaras en el backend (requiere_rol("admin")).
+// Pantalla de ABM de cámaras (T26-126). Estados cargandoInicial/errorInicial, banners de
+// error/éxito y extraerDetalle para parsear errores, igual que CalibracionRoiPage.tsx
+// (T26-128). Acceso restringido a admin (ver AdminRoute en App.tsx), igual que /camaras en
+// el backend (requiere_rol("admin")). El encabezado y la navegación los pone Layout.
 
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { Plus } from "lucide-react"
 import { camarasApi, sectoresApi, extraerDetalle } from "../services/api"
 import type { Camara, Sector, CamaraTestResponse } from "../types"
 import ModalAltaCamara from "../components/ModalAltaCamara"
 import ModalEditarCamara from "../components/ModalEditarCamara"
 import ModalConfirmacion from "../components/ModalConfirmacion"
 import CamaraEnVivo from "../components/CamaraEnVivo"
+import Layout from "../components/Layout"
+import Boton from "../components/ui/Boton"
 
 interface EstadoTest {
   probando: boolean
@@ -20,30 +22,6 @@ interface EstadoTest {
   // para que volver a probar abra un stream nuevo en vez de reusar el anterior, que puede
   // haber quedado cortado.
   intento: number
-}
-
-const estiloBoton: React.CSSProperties = {
-  padding: "6px 14px",
-  borderRadius: 6,
-  border: "1px solid #1976d2",
-  fontSize: 13,
-  cursor: "pointer",
-  backgroundColor: "#fff",
-  color: "#1976d2",
-  fontWeight: 500,
-}
-
-const estiloBotonPrimario: React.CSSProperties = {
-  ...estiloBoton,
-  border: "none",
-  backgroundColor: "#1976d2",
-  color: "#fff",
-}
-
-const estiloBotonPeligro: React.CSSProperties = {
-  ...estiloBoton,
-  border: "1px solid #c62828",
-  color: "#c62828",
 }
 
 const estiloSelect: React.CSSProperties = {
@@ -73,7 +51,6 @@ const estiloExito: React.CSSProperties = {
 }
 
 export default function CamarasPage() {
-  const navigate = useNavigate()
 
   const [sectores, setSectores] = useState<Sector[]>([])
   const [camaras, setCamaras] = useState<Camara[]>([])
@@ -185,23 +162,17 @@ export default function CamarasPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
-      <header
-        style={{
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-          padding: "12px 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>Cámaras</h1>
-        <button onClick={() => navigate("/")} style={estiloBoton}>
-          Volver al salón
-        </button>
-      </header>
-
+    // "+ Nueva cámara" sube al encabezado: es la acción principal de la pantalla y estaba
+    // al final de la fila de filtros, donde se leía como un control de filtrado más.
+    <Layout
+      acciones={
+        !cargandoInicial && !errorInicial ? (
+          <Boton variante="primario" icono={Plus} onClick={() => setModalAbierto("alta")}>
+            Nueva cámara
+          </Boton>
+        ) : undefined
+      }
+    >
       <main style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, maxWidth: 900 }}>
         {cargandoInicial && <p style={{ fontSize: 14, color: "#888" }}>Cargando cámaras...</p>}
         {errorInicial && <p style={estiloError}>{errorInicial}</p>}
@@ -224,10 +195,6 @@ export default function CamarasPage() {
                   ))}
                 </select>
               </label>
-
-              <button onClick={() => setModalAbierto("alta")} style={estiloBotonPrimario}>
-                + Nueva cámara
-              </button>
             </div>
 
             {errorCamaras && <p style={estiloError}>{errorCamaras}</p>}
@@ -269,23 +236,22 @@ export default function CamarasPage() {
                       </div>
 
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button
+                        <Boton
                           onClick={() => handleProbarConexion(camara.id)}
-                          disabled={test?.probando}
-                          style={{ ...estiloBoton, opacity: test?.probando ? 0.6 : 1 }}
+                          cargando={test?.probando}
+                          textoCargando="Probando..."
                         >
-                          {test?.probando ? "Probando..." : "Probar conexión"}
-                        </button>
-                        <button onClick={() => handleEditarClick(camara)} style={estiloBoton}>
-                          Editar
-                        </button>
-                        <button
+                          Probar conexión
+                        </Boton>
+                        <Boton onClick={() => handleEditarClick(camara)}>Editar</Boton>
+                        <Boton
+                          variante="peligro"
                           onClick={() => handleDesactivar(camara)}
-                          disabled={desactivando[camara.id]}
-                          style={{ ...estiloBotonPeligro, opacity: desactivando[camara.id] ? 0.6 : 1 }}
+                          cargando={desactivando[camara.id]}
+                          textoCargando="Desactivando..."
                         >
-                          {desactivando[camara.id] ? "Desactivando..." : "Desactivar"}
-                        </button>
+                          Desactivar
+                        </Boton>
                       </div>
                     </div>
 
@@ -336,6 +302,6 @@ export default function CamarasPage() {
           onCancelar={() => setCamaraADesactivar(null)}
         />
       )}
-    </div>
+    </Layout>
   )
 }

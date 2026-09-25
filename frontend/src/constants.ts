@@ -2,6 +2,9 @@
 // como por los cálculos de posición (alta de mesa, clamp de drag). El tamaño del salón
 // (ancho/alto) ya no es una constante: se lee de GET /configuracion.
 
+import { BookmarkCheck, Brush, Check, Users } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
+
 export const DIAMETRO_MESA = 60
 
 // Color por estado de mesa, compartido entre MesaVisual (relleno del cuadrado) y la
@@ -116,6 +119,27 @@ export function limpiezaDemorada(
   if (estado !== "pendiente_limpieza" || !umbralMinutos) return false
   const minutos = minutosEnEstado(estadoDesde)
   return minutos !== null && minutos >= umbralMinutos
+}
+
+// Icono por estado, para que el estado NO dependa solo del color (T26-205).
+//
+// La paleta de arriba usa verde, rojo y naranja, que son justo los tres tonos que una
+// persona con daltonismo rojo-verde —cerca del 8% de los varones— ve converger. Son tres
+// de los cuatro estados, así que la pantalla principal del producto quedaba ilegible para
+// ese usuario, y el color tampoco sobrevive a una impresión en blanco y negro ni al
+// proyector de una sala.
+//
+// El icono no reemplaza al color: lo duplica. Quien distingue los tonos sigue leyendo el
+// salón de un vistazo como antes, y quien no, tiene un segundo canal que dice lo mismo.
+//
+// Se eligen por lo que la mesa ES, no por la acción pendiente: Users es "hay gente
+// sentada", Brush es "hay que limpiarla". Un icono de acción (una escoba para el mozo)
+// diría algo distinto según quién mire.
+export const ICONO_POR_ESTADO: Record<string, LucideIcon> = {
+  libre: Check,
+  ocupada: Users,
+  pendiente_limpieza: Brush,
+  reservada: BookmarkCheck,
 }
 
 export const ETIQUETA_POR_ESTADO: Record<string, string> = {

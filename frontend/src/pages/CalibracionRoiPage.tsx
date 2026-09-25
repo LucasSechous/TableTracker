@@ -11,7 +11,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { AxiosError } from "axios";
-import { useNavigate } from "react-router-dom";
+import Layout from "../components/Layout";
+import Boton from "../components/ui/Boton";
 import { camarasApi, mesasApi, roiMesaApi, extraerDetalle } from "../services/api";
 import type { Camara, Mesa, RoiMesa, PuntoRoi } from "../types";
 import { useObjectUrl } from "../hooks/useObjectUrl";
@@ -30,23 +31,7 @@ const TIMEOUT_SNAPSHOT_SEGUNDOS = 5;
 // caso normal, y el guard de "en vuelo" cubre el resto.
 const INTERVALO_SNAPSHOT_MS = 4000;
 
-const estiloBoton: React.CSSProperties = {
-  padding: "6px 14px",
-  borderRadius: 6,
-  border: "1px solid #1976d2",
-  fontSize: 13,
-  cursor: "pointer",
-  backgroundColor: "#fff",
-  color: "#1976d2",
-  fontWeight: 500,
-};
 
-const estiloBotonPrimario: React.CSSProperties = {
-  ...estiloBoton,
-  border: "none",
-  backgroundColor: "#1976d2",
-  color: "#fff",
-};
 
 const estiloSelect: React.CSSProperties = {
   padding: "6px 10px",
@@ -75,7 +60,6 @@ const estiloExito: React.CSSProperties = {
 };
 
 export default function CalibracionRoiPage() {
-  const navigate = useNavigate();
 
   const [camaras, setCamaras] = useState<Camara[]>([]);
   const [mesas, setMesas] = useState<Mesa[]>([]);
@@ -305,25 +289,7 @@ export default function CalibracionRoiPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
-      <header
-        style={{
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-          padding: "12px 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>
-          Calibración de ROI
-        </h1>
-        <button onClick={() => navigate("/")} style={estiloBoton}>
-          Volver al salón
-        </button>
-      </header>
-
+    <Layout>
       <main style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, maxWidth: 900 }}>
         {cargandoInicial && <p style={{ fontSize: 14, color: "#888" }}>Cargando cámaras y mesas...</p>}
         {errorInicial && <p style={estiloError}>{errorInicial}</p>}
@@ -367,13 +333,14 @@ export default function CalibracionRoiPage() {
 
               {camaraId !== "" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 2, alignSelf: "flex-end" }}>
-                  <button
+                  <Boton
                     onClick={() => setSnapshotToken((n) => n + 1)}
-                    disabled={snapshotLoading || mostrarDetecciones}
-                    style={{ ...estiloBoton, opacity: snapshotLoading || mostrarDetecciones ? 0.6 : 1 }}
+                    disabled={mostrarDetecciones}
+                    cargando={snapshotLoading}
+                    textoCargando="Cargando frame..."
                   >
-                    {snapshotLoading ? "Cargando frame..." : "Actualizar frame"}
-                  </button>
+                    Actualizar frame
+                  </Boton>
                   {/* Deshabilitado por el toggle, no por estar cargando: sin esto el botón
                       apagado se ve roto en vez de intencional. */}
                   {mostrarDetecciones && (
@@ -466,49 +433,36 @@ export default function CalibracionRoiPage() {
                   </span>
                   {roiEnEdicion ? (
                     <>
-                      <button onClick={handleReiniciar} disabled={guardando} style={estiloBoton}>
+                      <Boton onClick={handleReiniciar} disabled={guardando}>
                         Deshacer cambios
-                      </button>
-                      <button
+                      </Boton>
+                      <Boton
+                        variante="primario"
                         onClick={handleGuardarEdicion}
-                        disabled={draftPoints.length < 3 || guardando}
-                        style={{
-                          ...estiloBotonPrimario,
-                          opacity: draftPoints.length < 3 || guardando ? 0.5 : 1,
-                          cursor: draftPoints.length < 3 || guardando ? "default" : "pointer",
-                        }}
+                        disabled={draftPoints.length < 3}
+                        cargando={guardando}
+                        textoCargando="Guardando..."
                       >
-                        {guardando ? "Guardando..." : "Guardar cambios"}
-                      </button>
-                      <button
-                        onClick={handleEliminarZona}
-                        disabled={guardando}
-                        style={{
-                          ...estiloBoton,
-                          borderColor: "#c62828",
-                          color: "#c62828",
-                          opacity: guardando ? 0.6 : 1,
-                        }}
-                      >
+                        Guardar cambios
+                      </Boton>
+                      <Boton variante="peligro" onClick={handleEliminarZona} disabled={guardando}>
                         Eliminar zona
-                      </button>
+                      </Boton>
                     </>
                   ) : (
                     <>
-                      <button onClick={handleReiniciar} disabled={draftPoints.length === 0 || guardando} style={estiloBoton}>
+                      <Boton onClick={handleReiniciar} disabled={draftPoints.length === 0 || guardando}>
                         Reiniciar
-                      </button>
-                      <button
+                      </Boton>
+                      <Boton
+                        variante="primario"
                         onClick={handleFinalizar}
-                        disabled={draftPoints.length < 3 || guardando}
-                        style={{
-                          ...estiloBotonPrimario,
-                          opacity: draftPoints.length < 3 || guardando ? 0.5 : 1,
-                          cursor: draftPoints.length < 3 || guardando ? "default" : "pointer",
-                        }}
+                        disabled={draftPoints.length < 3}
+                        cargando={guardando}
+                        textoCargando="Guardando..."
                       >
-                        {guardando ? "Guardando..." : "Finalizar zona"}
-                      </button>
+                        Finalizar zona
+                      </Boton>
                     </>
                   )}
                 </div>
@@ -530,6 +484,6 @@ export default function CalibracionRoiPage() {
           onCancelar={() => setConfirmandoBorrado(false)}
         />
       )}
-    </div>
+    </Layout>
   );
 }

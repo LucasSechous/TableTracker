@@ -2,17 +2,17 @@
 // Carga mesas y sectores, los agrupa, y orquesta los cambios de estado y posición.
 
 import { useEffect, useRef, useState } from "react"
-import { useNavigate } from "react-router-dom"
-import { Pencil, Menu, TriangleAlert } from "lucide-react"
+import { Pencil, Plus, TriangleAlert } from "lucide-react"
 import { mesasApi, sectoresApi, configuracionApi, metricasApi, extraerDetalle } from "../services/api"
 import type { Mesa, Sector, Modo, Configuracion, OcupacionResponse } from "../types"
 import SalonCanvas from "../components/SalonCanvas"
 import ModalAltaSector from "../components/ModalAltaSector"
 import ModalAltaMesa from "../components/ModalAltaMesa"
-import MenuLateral from "../components/MenuLateral"
+import Layout from "../components/Layout"
+import Boton from "../components/ui/Boton"
 import { useAuth } from "../hooks/useAuth"
 import { AvisoErrorProvider } from "../hooks/useAvisoError"
-import { esAdmin, puedeEditarLayout } from "../permisos"
+import { puedeEditarLayout } from "../permisos"
 import { labelStyle } from "../components/RangoFechas"
 import { COLOR_OCUPACION_ALTA, ETIQUETA_POR_ESTADO } from "../constants"
 
@@ -35,15 +35,11 @@ const OPCIONES_ESTADO = Object.entries(ETIQUETA_POR_ESTADO)
 // tal cual como value del <option>, igual que hacen los filtros de Historial y Rotación.
 const SIN_FILTRO = ""
 
-// El header pasó a position:fixed para quedar visible al scrollear un salón
-// grande; con altura fija se puede compensar con un spacer del mismo tamaño
-// en vez de medirla en runtime.
-const ALTURA_HEADER = 68
-
 export default function DashboardPage() {
-  // El usuario sale del contexto y no de un authApi.me() propio: es la misma respuesta
-  // que ya resolvió AuthProvider una vez para todo el árbol.
-  const { user, rol } = useAuth()
+  // El rol sale del contexto y no de un authApi.me() propio: es la misma respuesta que ya
+  // resolvió AuthProvider una vez para todo el árbol. El nombre del usuario ya no se lee
+  // acá: lo muestra el menú lateral, que desde T26-205 lo toma del contexto por su cuenta.
+  const { rol } = useAuth()
   const [sectores, setSectores] = useState<Sector[]>([])
   const [configuracion, setConfiguracion] = useState<Configuracion | null>(null)
   const [loading, setLoading] = useState(true)
@@ -55,7 +51,6 @@ export default function DashboardPage() {
   const [errorAccion, setErrorAccion] = useState<string | null>(null)
   const [modo, setModo] = useState<Modo>("monitoreo")
   const [modalAbierto, setModalAbierto] = useState<"sector" | "mesa" | null>(null)
-  const [menuAbierto, setMenuAbierto] = useState(false)
   // Filtro por estado (RF-15). Se resuelve contra el backend (GET /mesas?estado=...), no
   // recortando el array en el cliente: el endpoint ya lo soporta y así el canvas no
   // recibe mesas que no va a dibujar.
@@ -75,7 +70,6 @@ export default function DashboardPage() {
   // filtro el canvas ya está dibujado, y desmontarlo por unos milisegundos se ve como un
   // parpadeo del salón entero.
   const yaCargoUnaVez = useRef(false)
-  const navigate = useNavigate()
 
   useEffect(() => {
     if (!yaCargoUnaVez.current) setLoading(true)
@@ -303,11 +297,6 @@ export default function DashboardPage() {
     setModalAbierto(null)
   }
 
-  function handleLogout() {
-    localStorage.removeItem("token")
-    navigate("/login")
-  }
-
   // El estado del filtro vive acá (es esta pantalla la que refiltra pidiendo /mesas), pero el
   // control se dibuja dentro de SalonCanvas, a la derecha de los tabs de sector, para que los
   // dos filtros del salón queden juntos en la misma fila.
@@ -366,84 +355,29 @@ export default function DashboardPage() {
     ) : undefined
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
-      <header
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 150,
-          height: ALTURA_HEADER,
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-          padding: "12px 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>
-          TableTracker
-        </h1>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* Solo quien puede escribir el layout ve la puerta de entrada al modo edición.
-              El criterio es puedeEditarLayout (admin + encargado) y no esAdmin: mover y
-              crear mesas/sectores pide `encargado` en el backend, así que gatearlo con
-              "solo admin" dejaría al encargado sin su tarea (docs/roles-permisos.md). */}
-          {modo === "monitoreo" && puedeEditarLayout(rol) && (
-            <button
-              onClick={() => {
-                // Se limpia el filtro al entrar en edición: acomodar el salón con mesas
-                // escondidas es peligroso —se puede soltar una encima de otra que no se
-                // ve— y además el filtro es una herramienta de monitoreo, no de armado.
-                setEstadoFiltro(SIN_FILTRO)
-                setModo("edicion")
-              }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                minHeight: 44,
-                padding: "0 16px",
-                borderRadius: 8,
-                border: "none",
-                backgroundColor: "#1976d2",
-                color: "#fff",
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              <Pencil size={16} />
-              Editar disposición
-            </button>
-          )}
-          <button
-            onClick={() => setMenuAbierto(true)}
-            aria-label="Abrir menú"
-            style={{
-              width: 44,
-              height: 44,
-              flexShrink: 0,
-              border: "none",
-              borderRadius: 10,
-              backgroundColor: "#f1f5f9",
-              color: "#1a1a1a",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+    <Layout
+      acciones={
+        /* Solo quien puede escribir el layout ve la puerta de entrada al modo edición.
+           El criterio es puedeEditarLayout (admin + encargado) y no esAdmin: mover y
+           crear mesas/sectores pide `encargado` en el backend, así que gatearlo con
+           "solo admin" dejaría al encargado sin su tarea (docs/roles-permisos.md). */
+        modo === "monitoreo" && puedeEditarLayout(rol) ? (
+          <Boton
+            variante="primario"
+            icono={Pencil}
+            onClick={() => {
+              // Se limpia el filtro al entrar en edición: acomodar el salón con mesas
+              // escondidas es peligroso —se puede soltar una encima de otra que no se
+              // ve— y además el filtro es una herramienta de monitoreo, no de armado.
+              setEstadoFiltro(SIN_FILTRO)
+              setModo("edicion")
             }}
           >
-            <Menu size={20} />
-          </button>
-        </div>
-      </header>
-
-      {/* Compensa el header fijo: sin esto el contenido de abajo arrancaría tapado. */}
-      <div style={{ height: ALTURA_HEADER }} />
+            Editar disposición
+          </Boton>
+        ) : undefined
+      }
+    >
 
       {modo === "edicion" && (
         <div
@@ -630,39 +564,21 @@ export default function DashboardPage() {
         >
           {puedeEditarLayout(rol) && (
             <>
-              <button onClick={() => setModalAbierto("sector")} style={editActionBtnStyle}>
-                + Nuevo sector
-              </button>
-              <button onClick={() => setModalAbierto("mesa")} style={editActionBtnStyle}>
-                + Nueva mesa
-              </button>
+              <Boton icono={Plus} onClick={() => setModalAbierto("sector")}>
+                Nuevo sector
+              </Boton>
+              <Boton icono={Plus} onClick={() => setModalAbierto("mesa")}>
+                Nueva mesa
+              </Boton>
             </>
           )}
           {/* Sin gate: es la única salida del modo edición. Esconderla ante un rol sin
               permiso lo dejaría encerrado en una pantalla que no puede usar. */}
-          <button onClick={() => setModo("monitoreo")} style={editExitBtnStyle}>
+          <Boton onClick={() => setModo("monitoreo")} style={editExitBtnStyle}>
             Salir de edición
-          </button>
+          </Boton>
         </div>
       )}
-
-      <MenuLateral
-        abierto={menuAbierto}
-        onClose={() => setMenuAbierto(false)}
-        nombre={user?.nombre ?? ""}
-        rol={rol ?? ""}
-        esAdmin={esAdmin(rol)}
-        onVerHistorial={() => navigate("/historial")}
-        onVerOcupacion={() => navigate("/ocupacion")}
-        onVerRotacion={() => navigate("/rotacion")}
-        onVerOcupacionDiaria={() => navigate("/ocupacion-diaria")}
-        onVerDemanda={() => navigate("/demanda")}
-        onCamaras={() => navigate("/camaras")}
-        onCalibrarRoi={() => navigate("/calibracion-roi")}
-        onConfiguracion={() => navigate("/configuracion")}
-        onUsuarios={() => navigate("/usuarios")}
-        onLogout={handleLogout}
-      />
 
       {modalAbierto === "sector" && (
         <ModalAltaSector onClose={() => setModalAbierto(null)} onSectorCreado={handleSectorCreado} />
@@ -670,24 +586,14 @@ export default function DashboardPage() {
       {modalAbierto === "mesa" && (
         <ModalAltaMesa sectores={sectores} onClose={() => setModalAbierto(null)} onMesaCreada={handleMesaCreada} />
       )}
-    </div>
+    </Layout>
   )
 }
 
-const editActionBtnStyle: React.CSSProperties = {
-  minHeight: 44,
-  padding: "0 18px",
-  borderRadius: 8,
-  border: "2px solid #1976d2",
-  backgroundColor: "#fff",
-  color: "#1976d2",
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: "pointer",
-}
-
+// Salir de edición no es ninguna de las variantes de Boton: es la única salida de un
+// modo, y el negro la separa de las dos acciones azules que tiene al lado para que no
+// se lea como una tercera cosa que crear.
 const editExitBtnStyle: React.CSSProperties = {
-  minHeight: 44,
   padding: "0 18px",
   borderRadius: 8,
   border: "none",
@@ -695,5 +601,4 @@ const editExitBtnStyle: React.CSSProperties = {
   color: "#fff",
   fontSize: 14,
   fontWeight: 600,
-  cursor: "pointer",
 }

@@ -200,6 +200,22 @@ export function getLogoutButton(page: Page): Locator {
   return page.getByRole("button", { name: "Cerrar sesión" });
 }
 
+/**
+ * Señal de que el cascaron autenticado se dibujo: el boton que abre el menu, presente en
+ * todas las pantallas con sesion desde que Layout las envuelve (T26-205).
+ *
+ * Antes varios tests usaban getLogoutButton() para esto, y funcionaba por un defecto: el
+ * drawer cerrado no se desmonta, solo se desplaza fuera de pantalla, asi que sus botones
+ * seguian contando como visibles aunque nadie pudiera verlos ni alcanzarlos. Al marcarlo
+ * inert —lo correcto: un menu cerrado no deberia ser navegable ni anunciable— ese locator
+ * dejo de encontrarlo, que es exactamente lo que tiene que pasar.
+ *
+ * Para PROBAR el logout hay que abrir el menu primero, como ya hacia 2.5.
+ */
+export function getMenuButton(page: Page): Locator {
+  return page.getByRole("button", { name: "Abrir menú" });
+}
+
 export function getEmailInput(page: Page): Locator {
   return page.locator('input[type="email"]');
 }

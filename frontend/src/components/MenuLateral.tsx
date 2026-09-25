@@ -70,9 +70,16 @@ export default function MenuLateral({ abierto, onClose }: Props) {
       />
       <nav
         aria-label="Navegación principal"
-        // aria-hidden mientras está cerrado: el drawer sigue montado y desplazado fuera de
-        // pantalla, así que sin esto un lector de pantalla leería diez destinos invisibles.
-        aria-hidden={!abierto}
+        // inert mientras está cerrado. El drawer no se desmonta —se desplaza fuera de
+        // pantalla con un transform, que es lo que permite animarlo—, así que sin esto
+        // queda un menú entero operable que nadie ve: un lector de pantalla lee diez
+        // destinos invisibles y el tabulador mete el foco adentro, donde el usuario no
+        // puede ver dónde está parado.
+        //
+        // inert y no aria-hidden: aria-hidden lo saca del árbol de accesibilidad pero deja
+        // los botones enfocables, que es la peor de las dos mitades —el foco entra en algo
+        // que ya no se anuncia—. inert hace las dos cosas a la vez.
+        inert={!abierto}
         style={{
           position: "fixed",
           top: 0,

@@ -9,6 +9,7 @@ import SalonCanvas from "../components/SalonCanvas"
 import ModalAltaSector from "../components/ModalAltaSector"
 import ModalAltaMesa from "../components/ModalAltaMesa"
 import Layout from "../components/Layout"
+import IndicadorFrescura from "../components/IndicadorFrescura"
 import Boton from "../components/ui/Boton"
 import { useAuth } from "../hooks/useAuth"
 import { AvisoErrorProvider } from "../hooks/useAvisoError"
@@ -66,6 +67,10 @@ export default function DashboardPage() {
   // esa: aquella depende de datos que el canvas ya tiene (estado y reloj de cada mesa),
   // esta depende del total del salón, que el canvas filtrado no conoce.
   const [ocupacion, setOcupacion] = useState<OcupacionResponse | null>(null)
+  // Momento del último refresco que SÍ trajo datos, para poder decir en pantalla qué tan
+  // viejo es lo que se está mirando. Se guarda el éxito y no el intento: un intento que
+  // falló no rejuvenece el dato, y contarlo sería justo lo contrario de lo que esto mide.
+  const [ultimoRefrescoOk, setUltimoRefrescoOk] = useState<number | null>(null)
   // El spinner de "Cargando salón..." solo tiene sentido la primera vez. Al cambiar el
   // filtro el canvas ya está dibujado, y desmontarlo por unos milisegundos se ve como un
   // parpadeo del salón entero.
@@ -92,6 +97,7 @@ export default function DashboardPage() {
           rawSectores.map((s) => ({ ...s, mesas: mesasBySector.get(s.id) ?? [] }))
         )
         setConfiguracion(configuracionRes.data)
+        setUltimoRefrescoOk(Date.now())
       })
       .catch(async (err: unknown) => {
         setError(await extraerDetalle(err, "Error al cargar el salón"))
@@ -123,9 +129,14 @@ export default function DashboardPage() {
         setSectores((prev) =>
           prev.map((s) => ({ ...s, mesas: mesasBySector.get(s.id) ?? [] }))
         )
+        setUltimoRefrescoOk(Date.now())
       } catch {
         // Fallo de red puntual: se reintenta solo en el próximo tick, sin mostrar
         // un error intrusivo por algo que se resuelve solo la mayoría de las veces.
+        //
+        // Callar acá es correcto, pero no puede ser lo único que pase: si los fallos se
+        // encadenan, el salón se queda congelado sin avisar. Por eso `ultimoRefrescoOk`
+        // no se toca, y el indicador del encabezado se encarga de que eso se vea.
       }
     }
 
@@ -357,25 +368,35 @@ export default function DashboardPage() {
   return (
     <Layout
       acciones={
-        /* Solo quien puede escribir el layout ve la puerta de entrada al modo edición.
-           El criterio es puedeEditarLayout (admin + encargado) y no esAdmin: mover y
-           crear mesas/sectores pide `encargado` en el backend, así que gatearlo con
-           "solo admin" dejaría al encargado sin su tarea (docs/roles-permisos.md). */
-        modo === "monitoreo" && puedeEditarLayout(rol) ? (
-          <Boton
-            variante="primario"
-            icono={Pencil}
-            onClick={() => {
-              // Se limpia el filtro al entrar en edición: acomodar el salón con mesas
-              // escondidas es peligroso —se puede soltar una encima de otra que no se
-              // ve— y además el filtro es una herramienta de monitoreo, no de armado.
-              setEstadoFiltro(SIN_FILTRO)
-              setModo("edicion")
-            }}
-          >
-            Editar disposición
-          </Boton>
-        ) : undefined
+        <>
+          {/* Qué tan fresco es lo que se ve. Va en el encabezado y no dentro del salón
+              porque tiene que seguir visible con el canvas scrolleado, que es justo
+              cuando se está mirando una mesa puntual y se decide algo con ella. */}
+          <IndicadorFrescura
+            ultimoExito={ultimoRefrescoOk}
+            intervaloMs={INTERVALO_REFRESCO_MESAS_MS}
+            pausado={modo === "edicion"}
+          />
+          {/* Solo quien puede escribir el layout ve la puerta de entrada al modo edición.
+              El criterio es puedeEditarLayout (admin + encargado) y no esAdmin: mover y
+              crear mesas/sectores pide `encargado` en el backend, así que gatearlo con
+              "solo admin" dejaría al encargado sin su tarea (docs/roles-permisos.md). */}
+          {modo === "monitoreo" && puedeEditarLayout(rol) ? (
+            <Boton
+              variante="primario"
+              icono={Pencil}
+              onClick={() => {
+                // Se limpia el filtro al entrar en edición: acomodar el salón con mesas
+                // escondidas es peligroso —se puede soltar una encima de otra que no se
+                // ve— y además el filtro es una herramienta de monitoreo, no de armado.
+                setEstadoFiltro(SIN_FILTRO)
+                setModo("edicion")
+              }}
+            >
+              Editar disposición
+            </Boton>
+          ) : null}
+        </>
       }
     >
 

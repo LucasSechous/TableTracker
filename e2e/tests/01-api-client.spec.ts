@@ -1,6 +1,6 @@
 import { test, expect } from "../fixtures/test-fixtures";
 import { BACKEND_URL } from "../playwright.config";
-import { gotoDashboardAuthed } from "../fixtures/ui-helpers";
+import { gotoDashboardAuthed, getMenuButton } from "../fixtures/ui-helpers";
 
 // Sección 1 — Configuración inicial / Cliente API
 
@@ -15,7 +15,10 @@ test("1.1 la app carga sin errores en consola (login y dashboard)", async ({ pag
   await expect(page.getByRole("heading", { name: "TableTracker" })).toBeVisible();
 
   await gotoDashboardAuthed(page, token);
-  await expect(page.getByRole("button", { name: "Cerrar sesión" })).toBeVisible();
+  // El boton de menu y no "Cerrar sesion": ese vive dentro del drawer, que desde T26-205
+  // es inert mientras esta cerrado. Lo que se quiere afirmar aca es que la pantalla con
+  // sesion se dibujo, no que el menu este abierto.
+  await expect(getMenuButton(page)).toBeVisible();
 
   expect(consoleErrors, `Errores de consola detectados: ${consoleErrors.join(" | ")}`).toEqual([]);
 });

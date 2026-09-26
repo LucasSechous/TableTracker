@@ -7,13 +7,16 @@ import type {
   Sector,
   HistorialEstado,
   Configuracion,
+  ConfiguracionActualizada,
   Camara,
   RoiMesa,
   PuntoRoi,
   CamaraTestResponse,
   DetectionFrameResult,
   OcupacionResponse,
+  DemandaResponse,
   RotacionMesa,
+  OcupacionDiariaResponse,
   EstadoOpcion,
   UsuarioAdmin,
 } from "../types";
@@ -23,6 +26,7 @@ export type {
   Sector,
   HistorialEstado,
   Configuracion,
+  ConfiguracionActualizada,
   Camara,
   RoiMesa,
   PuntoRoi,
@@ -30,7 +34,11 @@ export type {
   DetectionFrameResult,
   ConteoPorEstado,
   OcupacionResponse,
+  DemandaResponse,
   RotacionMesa,
+  OcupacionDiariaMesa,
+  OcupacionDiariaResponse,
+  TiempoPorEstado,
   EstadoOpcion,
   UsuarioAdmin,
 } from "../types";
@@ -85,8 +93,11 @@ export const authApi = {
 };
 
 export const mesasApi = {
+  // La barra final importa tanto acá como en el POST de abajo: sin ella FastAPI responde
+  // 307 y el navegador repite la llamada. Es la request que DashboardPage dispara cada 3
+  // segundos en monitoreo, así que el redirect duplicaba la ruta más caliente de la app.
   listar: (params?: { estado?: string; sector_id?: number }) =>
-    api.get<Mesa[]>("/mesas", { params }),
+    api.get<Mesa[]>("/mesas/", { params }),
 
   // La barra final apunta al path exacto del router y evita el 307 de FastAPI,
   // que en un POST obliga a repetir preflight y cuerpo.
@@ -167,7 +178,8 @@ export const historialApi = {
 };
 
 export const sectoresApi = {
-  listar: () => api.get<Sector[]>("/sectores"),
+  // Con barra final por el mismo motivo que mesasApi.listar: sin ella el GET se come un 307.
+  listar: () => api.get<Sector[]>("/sectores/"),
 
   crear: (datos: { nombre: string; descripcion?: string; activo?: boolean }) =>
     api.post<Sector>("/sectores/", datos),
@@ -198,6 +210,9 @@ export const configuracionApi = {
   // Las horas van como "HH:MM" y el backend las parsea a time. Igual que
   // cantidad_mesas_referencia, una vez cargadas NO se pueden vaciar desde la API por el
   // exclude_none: habría que mandar null y el backend lo descarta (T26-171).
+  //
+  // La respuesta es ConfiguracionActualizada (T26-183, no Configuracion): si el PATCH tocó
+  // confirmacion_segundos u overlap_minimo, el backend agrega el valor previo de cada uno.
   actualizar: (datos: {
     ancho_salon?: number
     alto_salon?: number
@@ -205,14 +220,16 @@ export const configuracionApi = {
     cantidad_mesas_referencia?: number
     hora_apertura?: string
     hora_cierre?: string
-  }) => api.patch<Configuracion>("/configuracion", datos),
+    minutos_limpieza_demorada?: number
+    confirmacion_segundos?: number
+    overlap_minimo?: number
+  }) => api.patch<ConfiguracionActualizada>("/configuracion", datos),
 };
 
 export const camarasApi = {
   listar: (params?: { sector_id?: number; incluir_inactivas?: boolean }) =>
     api.get<Camara[]>("/camaras/", { params }),
 
-  obtener: (id: number) => api.get<Camara>(`/camaras/${id}`),
 
   // La barra final apunta al path exacto del router y evita el 307 de FastAPI (ver mesasApi.crear).
   crear: (datos: { nombre: string; rtsp_url: string; sector_id: number; activa?: boolean }) =>
@@ -277,6 +294,12 @@ export const estadosApi = {
   // RF-29). Pide sesión pero no rol admin, aunque hoy el único consumidor sea una pantalla
   // admin-only. La barra final apunta al path exacto del router y evita el 307 de FastAPI
   // (ver mesasApi.crear).
+  //
+  // Ese único consumidor —ConfiguracionPage— es deliberado y NO una duplicación olvidada de
+  // ETIQUETA_POR_ESTADO (constants.ts): aquel mapa es con qué se pinta un estado que ya se
+  // tiene y tiene que ser síncrono para el render del canvas; esto es qué estados existen,
+  // que solo sabe el backend. El razonamiento completo está en backend/app/routers/estados.py
+  // (T26-200/I-3).
   listar: () => api.get<EstadoOpcion[]>("/estados/"),
 }
 
@@ -291,6 +314,20 @@ export const metricasApi = {
   // "hasta" sea inclusivo hay que mandar el fin del día (ver finDelDia en RangoFechas).
   rotacion: (params?: { fecha_inicio?: string; fecha_fin?: string; sector_id?: number }) =>
     api.get<RotacionMesa[]>("/metricas/rotacion", { params }),
+
+  // Horarios de mayor demanda (T26-186, RF-24): ocupación media por franja horaria. Las
+  // fechas son días (YYYY-MM-DD), no datetimes como en rotacion: el corte lo hace el día
+  // operativo del backend, no una hora que el cliente elija. Sin parámetros devuelve la
+  // última semana.
+  demanda: (params?: { fecha_inicio?: string; fecha_fin?: string; sector_id?: number }) =>
+    api.get<DemandaResponse>("/metricas/demanda", { params }),
+
+  // Resumen diario de ocupación (T26-185, RF-32): minutos por estado y % de ocupación,
+  // reconstruidos desde historial_estados para el día operativo de `fecha` (una fecha
+  // suelta, no un datetime — el backend resuelve los bordes reales del día). Sin `fecha`
+  // el backend usa el día de hoy.
+  ocupacionDiaria: (params?: { fecha?: string; sector_id?: number }) =>
+    api.get<OcupacionDiariaResponse>("/metricas/ocupacion-diaria", { params }),
 };
 
 // El `detail` de FastAPI NO siempre es un string. Cuando la validación falla (422) es una
@@ -342,19 +379,22 @@ function detalleDesdeCuerpo(data: unknown, fallback: string): string {
 }
 
 /**
- * Versión sincrónica, para el caso normal (respuesta JSON). Devuelve siempre un string,
- * así que es seguro meter el resultado directo en un estado que se renderiza.
+ * El detalle de un error de la API, siempre como string listo para renderizar.
+ *
+ * Es la ÚNICA forma de leerlo (T26-200/F-6). Antes eran dos —esta y una versión sincrónica
+ * llamada `extraerDetalle`— con 35 llamadas repartidas casi mitad y mitad y sin ningún
+ * criterio que dijera cuándo tocaba cada una. El nombre tampoco ayudaba: la sincrónica
+ * sonaba a la general siendo la especializada.
+ *
+ * Es asíncrona por un solo motivo: con responseType "blob" (ver camarasApi.snapshot) un
+ * error HTTP no trae el detail como JSON, porque axios ya devolvió el cuerpo como Blob antes
+ * de que se supiera que el status no era 2xx, y hay que leerlo como texto y parsearlo a
+ * mano. Para el resto de los endpoints el detail ya viene parseado en response.data.
+ *
+ * Quedó una sola justamente para que el que llama no tenga que distinguir en cuál de los dos
+ * casos está: usar la sincrónica contra un Blob no fallaba, devolvía el fallback en silencio.
  */
-export function extraerDetalle(err: unknown, fallback: string): string {
-  return detalleDesdeCuerpo((err as AxiosError).response?.data, fallback);
-}
-
-// Con responseType "blob" (ver camarasApi.snapshot), un error HTTP no trae el detail como
-// JSON directo: axios ya devolvió el cuerpo como Blob antes de que se supiera que el status
-// no era 2xx. Hay que leerlo como texto y parsearlo a mano. Para el resto de los endpoints
-// (JSON normal) el detail ya viene parseado en response.data, así que esta misma función
-// sirve para cualquier error de la API sin que el que llama tenga que distinguir el caso.
-export async function extraerDetalleApi(err: unknown, fallback: string): Promise<string> {
+export async function extraerDetalle(err: unknown, fallback: string): Promise<string> {
   const axiosErr = err as AxiosError;
   const data = axiosErr.response?.data;
 

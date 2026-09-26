@@ -73,6 +73,143 @@ export async function loginViaApi(
   return body.access_token as string;
 }
 
+/**
+ * Roles no-admin que la suite necesita para probar el gateo de la UI (RF-02).
+ *
+ * Arrancó con `encargado` y `mozo`, los dos que cambian algo en el modo edición (T26-194).
+ * T26-195 sumó `recepcion` y `limpieza`: en el panel de mesa los permisos son cruzados y
+ * cada uno de los cuatro ve una combinación distinta de controles, así que ahí sí aportan
+ * un caso propio.
+ */
+export type RolDePrueba = "encargado" | "mozo" | "recepcion" | "limpieza";
+
+/**
+ * Credenciales derivadas del usuario de e2e, una por rol.
+ *
+ * Se usa el alias `+rol` del email del runner (que EmailStr acepta) en vez de un email
+ * suelto: deja claro de dónde salen y las mantiene deterministas entre corridas. Eso
+ * último importa porque **no hay endpoint para borrar usuarios** (docs/roles-permisos.md),
+ * así que un email aleatorio por corrida iría dejando cuentas muertas en la base para
+ * siempre. Con este esquema son dos, se crean una vez y se reutilizan.
+ */
+export function credencialesDeRol(rol: RolDePrueba) {
+  const [local, dominio] = TEST_USER.email.split("@");
+  return {
+    nombre: `E2E ${rol}`,
+    email: `${local}+${rol}@${dominio}`,
+    password: TEST_USER.password,
+    rol,
+  };
+}
+
+/**
+ * Devuelve un token para un usuario con ese rol, creándolo si es la primera vez.
+ *
+ * Idempotente: POST /auth/register contesta 400 "El email ya está registrado" si ya
+ * existe, y eso no es un fallo sino el camino normal a partir de la segunda corrida.
+ * Necesita un token de admin porque el registro es admin-only desde T26-116.
+ */
+export async function ensureUsuarioDeRol(
+  request: APIRequestContext,
+  tokenAdmin: string,
+  rol: RolDePrueba
+): Promise<string> {
+  const credenciales = credencialesDeRol(rol);
+  const res = await request.post(`${BACKEND_URL}/auth/register`, {
+    headers: authHeaders(tokenAdmin),
+    data: credenciales,
+  });
+  if (!res.ok() && res.status() !== 400) {
+    throw new Error(
+      `No se pudo asegurar el usuario de rol "${rol}" (${res.status()}): ${await res.text()}`
+    );
+  }
+  return loginViaApi(request, credenciales.email, credenciales.password);
+}
+
+/** El usuario dueño del token. Útil para ubicar la propia fila sin adivinarla por email. */
+export async function obtenerUsuarioActual(
+  request: APIRequestContext,
+  token: string
+): Promise<{ id: number; nombre: string; email: string; rol: string }> {
+  const res = await request.get(`${BACKEND_URL}/auth/me`, { headers: authHeaders(token) });
+  if (!res.ok()) throw new Error(`No se pudo obtener /auth/me: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
+export interface UsuarioAdminResponse {
+  id: number;
+  nombre: string;
+  email: string;
+  rol: string;
+  activo: boolean;
+  es_cuenta_servicio: boolean;
+}
+
+export async function listarUsuarios(
+  request: APIRequestContext,
+  token: string,
+  params?: { incluir_inactivos?: boolean }
+): Promise<UsuarioAdminResponse[]> {
+  const res = await request.get(`${BACKEND_URL}/usuarios/`, { headers: authHeaders(token), params });
+  if (!res.ok()) throw new Error(`No se pudieron listar usuarios: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
+export async function actualizarUsuario(
+  request: APIRequestContext,
+  token: string,
+  usuarioId: number,
+  datos: { rol?: string; activo?: boolean }
+): Promise<UsuarioAdminResponse> {
+  const res = await request.patch(`${BACKEND_URL}/usuarios/${usuarioId}`, {
+    headers: authHeaders(token),
+    data: datos,
+  });
+  if (!res.ok()) throw new Error(`No se pudo actualizar el usuario: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
+/**
+ * Usuario descartable para los tests que MUTAN un usuario (rol, baja lógica).
+ *
+ * Separado de credencialesDeRol() a propósito: aquellos cuatro son los sujetos de los specs
+ * de permisos (17 y 18) y dependen de conservar su rol exacto. Si un test de la pantalla de
+ * usuarios les cambiara el rol y fallara antes de restaurarlo, rompería specs ajenos.
+ *
+ * Mismo esquema de alias `+` y por el mismo motivo: no hay endpoint para borrar usuarios, así
+ * que un email aleatorio por corrida dejaría cuentas muertas para siempre.
+ */
+export function credencialesEditable() {
+  const [local, dominio] = TEST_USER.email.split("@");
+  return {
+    nombre: "E2E editable",
+    email: `${local}+editable@${dominio}`,
+    password: TEST_USER.password,
+    rol: "mozo",
+  };
+}
+
+export async function ensureUsuarioEditable(
+  request: APIRequestContext,
+  tokenAdmin: string
+): Promise<UsuarioAdminResponse> {
+  const credenciales = credencialesEditable();
+  const res = await request.post(`${BACKEND_URL}/auth/register`, {
+    headers: authHeaders(tokenAdmin),
+    data: credenciales,
+  });
+  if (!res.ok() && res.status() !== 400) {
+    throw new Error(`No se pudo asegurar el usuario editable (${res.status()}): ${await res.text()}`);
+  }
+  // Se relee del listado en vez de usar la respuesta del register: a partir de la segunda
+  // corrida el register devuelve 400 y no hay cuerpo del cual sacar el id.
+  const usuarios = await listarUsuarios(request, tokenAdmin, { incluir_inactivos: true });
+  const usuario = usuarios.find((u) => u.email === credenciales.email);
+  if (!usuario) throw new Error("El usuario editable no aparece en el listado tras asegurarlo");
+  return usuario;
+}
+
 function authHeaders(token: string) {
   return { Authorization: `Bearer ${token}` };
 }
@@ -246,6 +383,26 @@ export async function listarRois(
 }
 
 /** Soft-delete: desactiva el ROI (activa=false) en vez de borrarlo físicamente. */
+/**
+ * Da de alta un ROI para una mesa en una cámara (T26-188).
+ *
+ * Solo admin. Las coordenadas son un polígono en píxeles del frame; el contenido no importa
+ * para los tests que solo necesitan que la mesa tenga cobertura de detección, pero el
+ * backend exige un polígono válido, así que va un triángulo mínimo.
+ */
+export async function crearRoi(
+  request: APIRequestContext,
+  token: string,
+  datos: { mesa_id: number; camara_id: number; coordenadas?: number[][] }
+): Promise<RoiMesaResponse> {
+  const res = await request.post(`${BACKEND_URL}/roi-mesa/`, {
+    headers: authHeaders(token),
+    data: { coordenadas: [[0, 0], [40, 0], [40, 40]], ...datos },
+  });
+  if (!res.ok()) throw new Error(`No se pudo crear el ROI: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
 export async function desactivarRoi(request: APIRequestContext, token: string, roiId: number): Promise<void> {
   await request.delete(`${BACKEND_URL}/roi-mesa/${roiId}`, { headers: authHeaders(token) });
 }
@@ -268,6 +425,9 @@ export interface OcupacionMetricaResponse {
   total_mesas: number;
   porcentaje_ocupacion: number;
   conteo_por_estado: ConteoPorEstadoResponse;
+  // Alerta de alta ocupación (T26-187, RF-26). La comparación la resuelve el backend.
+  umbral_ocupacion_alta: number;
+  ocupacion_alta: boolean;
 }
 
 export async function obtenerOcupacion(
@@ -289,6 +449,14 @@ export interface ConfiguracionResponse {
   hora_apertura: string | null;
   hora_cierre: string | null;
   minutos_limpieza_demorada: number | null;
+  // Umbrales de detección de vision-module (T26-183). Nunca null: NOT NULL con default.
+  confirmacion_segundos: number;
+  overlap_minimo: number;
+  // Umbral de alta ocupación en % (T26-187). Tampoco es null nunca: NOT NULL con default 85.
+  umbral_ocupacion_alta: number;
+  // Solo presentes cuando el PATCH cambió el umbral correspondiente.
+  confirmacion_segundos_anterior?: number | null;
+  overlap_minimo_anterior?: number | null;
 }
 
 export async function obtenerConfiguracion(
@@ -311,10 +479,38 @@ export async function actualizarConfiguracion(
     hora_apertura?: string;
     hora_cierre?: string;
     minutos_limpieza_demorada?: number;
+    confirmacion_segundos?: number;
+    overlap_minimo?: number;
+    umbral_ocupacion_alta?: number;
   }
 ): Promise<ConfiguracionResponse> {
   const res = await request.patch(`${BACKEND_URL}/configuracion`, { headers: authHeaders(token), data: datos });
   if (!res.ok()) throw new Error(`No se pudo actualizar configuración: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
+export interface DemandaFranjaResponse {
+  hora: number;
+  porcentaje_ocupacion: number;
+  minutos_ocupada: number;
+  minutos_medidos: number;
+}
+
+export interface DemandaResponse {
+  fecha_inicio: string;
+  fecha_fin: string;
+  dias: number;
+  franjas: DemandaFranjaResponse[];
+}
+
+/** Horarios de mayor demanda (T26-186, RF-24). Sin params devuelve la última semana. */
+export async function obtenerDemanda(
+  request: APIRequestContext,
+  token: string,
+  params?: { fecha_inicio?: string; fecha_fin?: string; sector_id?: number }
+): Promise<DemandaResponse> {
+  const res = await request.get(`${BACKEND_URL}/metricas/demanda`, { headers: authHeaders(token), params });
+  if (!res.ok()) throw new Error(`No se pudo obtener demanda: ${res.status()} ${await res.text()}`);
   return res.json();
 }
 
@@ -332,6 +528,41 @@ export async function obtenerRotacion(
 ): Promise<RotacionMesaResponse[]> {
   const res = await request.get(`${BACKEND_URL}/metricas/rotacion`, { headers: authHeaders(token), params });
   if (!res.ok()) throw new Error(`No se pudo obtener rotación: ${res.status()} ${await res.text()}`);
+  return res.json();
+}
+
+export interface TiempoPorEstadoResponse {
+  libre: number;
+  ocupada: number;
+  pendiente_limpieza: number;
+  reservada: number;
+}
+
+export interface OcupacionDiariaMesaResponse {
+  mesa_id: number;
+  numero: number;
+  sector_id: number;
+  minutos_por_estado: TiempoPorEstadoResponse;
+  porcentaje_ocupacion: number;
+}
+
+export interface OcupacionDiariaResponse {
+  fecha: string;
+  inicio: string;
+  fin: string;
+  total_mesas: number;
+  porcentaje_ocupacion: number;
+  minutos_por_estado: TiempoPorEstadoResponse;
+  mesas: OcupacionDiariaMesaResponse[];
+}
+
+export async function obtenerOcupacionDiaria(
+  request: APIRequestContext,
+  token: string,
+  params?: { fecha?: string; sector_id?: number }
+): Promise<OcupacionDiariaResponse> {
+  const res = await request.get(`${BACKEND_URL}/metricas/ocupacion-diaria`, { headers: authHeaders(token), params });
+  if (!res.ok()) throw new Error(`No se pudo obtener ocupación diaria: ${res.status()} ${await res.text()}`);
   return res.json();
 }
 

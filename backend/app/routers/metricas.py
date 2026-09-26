@@ -2,8 +2,13 @@
 # GET /metricas/ocupacion: % de ocupación del salón y conteo de mesas por
 # estado, calculado en el momento a partir de mesas (sin tabla ni modelo
 # propio: es una consulta agregada, no un dato persistente).
+#
+# El mismo endpoint resuelve la alerta de alta ocupación de RF-26 (T26-187): compara ese %
+# contra el umbral de configuracion_general y devuelve el booleano ya resuelto. No hay
+# endpoint nuevo porque el dato es exactamente el que este ya calcula; uno aparte tendría
+# que repetir la misma consulta agregada para responder una pregunta sobre ella.
 
-from datetime import datetime
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -11,13 +16,24 @@ from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.configuracion import ConfiguracionGeneral
+from app.routers._comun import validar_sector
+from app.models.configuracion import UMBRAL_OCUPACION_ALTA_DEFECTO, ConfiguracionGeneral
 from app.models.historial import HistorialEstado
 from app.models.mesa import EstadoMesa, Mesa
 from app.models.sector import Sector
 from app.routers.auth import get_usuario_actual
-from app.schemas.metricas import ConteoPorEstado, OcupacionResponse, RotacionMesaResponse
-from app.services.horario import en_horario_de_servicio
+from app.schemas.metricas import (
+    ConteoPorEstado,
+    DemandaFranjaResponse,
+    DemandaResponse,
+    OcupacionDiariaMesaResponse,
+    OcupacionDiariaResponse,
+    OcupacionResponse,
+    RotacionMesaResponse,
+    TiempoPorEstado,
+)
+from app.services.horario import en_horario_de_servicio, hoy_local, rango_dia_operativo
+from app.services.ocupacion import calcular_demanda_por_franja, calcular_ocupacion_por_mesa
 
 router = APIRouter(dependencies=[Depends(get_usuario_actual)])
 
@@ -29,11 +45,14 @@ router = APIRouter(dependencies=[Depends(get_usuario_actual)])
 # mostrarla sin mezclarla con el %.
 ESTADOS_QUE_CUENTAN_COMO_OCUPACION = {EstadoMesa.ocupada}
 
+# Ventana por defecto del reporte de demanda (T26-186): una semana. Suficiente para que un
+# patrón semanal se note y corto para que el resultado siga describiendo el salón actual.
+DIAS_DEMANDA_POR_DEFECTO = 7
+
 
 @router.get("/ocupacion", response_model=OcupacionResponse)
 def obtener_ocupacion(sector_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
-    if sector_id is not None and not db.query(Sector).filter(Sector.id == sector_id).first():
-        raise HTTPException(status_code=400, detail="El sector indicado no existe")
+    validar_sector(db, sector_id)
 
     query = db.query(Mesa.estado, func.count(Mesa.id)).filter(Mesa.activa == True)  # noqa: E712
     if sector_id is not None:
@@ -51,10 +70,44 @@ def obtener_ocupacion(sector_id: Optional[int] = Query(None), db: Session = Depe
 
     porcentaje_ocupacion = round((ocupadas / total_mesas) * 100, 2) if total_mesas > 0 else 0.0
 
+    # Alerta de alta ocupación (T26-187, RF-26). Sin fila de configuración se cae al mismo
+    # default que la columna en vez de apagar la alerta: una instalación recién creada, que
+    # es justo el caso sin fila, no debería quedarse sin el aviso.
+    config = db.query(ConfiguracionGeneral).filter(ConfiguracionGeneral.id == 1).first()
+    umbral = config.umbral_ocupacion_alta if config else UMBRAL_OCUPACION_ALTA_DEFECTO
+
+    # >= y no >: el umbral es el punto a partir del cual el salón se considera al límite, no
+    # el último valor tolerado. Es el mismo criterio que limpiezaDemorada() aplica sobre
+    # minutos_limpieza_demorada en el frontend (T26-173), y mantenerlos iguales evita que
+    # dos alertas del producto respondan distinto a "justo el umbral".
+    #
+    # El guard por total_mesas evita que un salón vacío alerte: sin mesas activas el
+    # porcentaje es 0.0 por definición, no un 0% medido, y con un umbral de 100 la
+    # comparación 0 >= 100 ya da False — pero con el salón vacío tampoco hay nada que
+    # reportar, así que se corta antes y no se depende de esa coincidencia.
+    ocupacion_alta = total_mesas > 0 and porcentaje_ocupacion >= umbral
+
+    # Horario de servicio (T26-200/F-2). Va en este endpoint y no en uno nuevo porque el
+    # consumidor —el panel de ocupación— ya lo pide, y porque este número es justamente el
+    # que el aviso califica: "esta foto se sacó con el local cerrado". Tampoco va en
+    # /configuracion, que el panel pide una sola vez al montar: un booleano de "abierto
+    # ahora" servido ahí quedaría congelado y seguiría diciendo "abierto" después de la hora
+    # de cierre. Acá viaja con cada refresco, que es la cadencia a la que la respuesta cambia.
+    #
+    # No agrega ninguna consulta: `config` ya está cargada arriba para el umbral.
+    hora_apertura = config.hora_apertura if config else None
+    hora_cierre = config.hora_cierre if config else None
+    local_abierto = en_horario_de_servicio(datetime.now(timezone.utc), hora_apertura, hora_cierre)
+
     return OcupacionResponse(
         total_mesas=total_mesas,
         porcentaje_ocupacion=porcentaje_ocupacion,
         conteo_por_estado=conteo,
+        umbral_ocupacion_alta=umbral,
+        ocupacion_alta=ocupacion_alta,
+        local_abierto=local_abierto,
+        hora_apertura=hora_apertura,
+        hora_cierre=hora_cierre,
     )
 
 
@@ -81,8 +134,7 @@ def obtener_rotacion(
 ):
     if fecha_inicio is not None and fecha_fin is not None and fecha_inicio > fecha_fin:
         raise HTTPException(status_code=400, detail="fecha_inicio no puede ser posterior a fecha_fin")
-    if sector_id is not None and not db.query(Sector).filter(Sector.id == sector_id).first():
-        raise HTTPException(status_code=400, detail="El sector indicado no existe")
+    validar_sector(db, sector_id)
 
     mesas_query = db.query(Mesa).filter(Mesa.activa == True)  # noqa: E712
     if sector_id is not None:
@@ -144,3 +196,150 @@ def obtener_rotacion(
         )
         for mesa in mesas
     ]
+
+
+# Resumen diario de ocupación (T26-185, RF-32): a diferencia de /ocupacion (foto del
+# instante) y /rotacion (conteo de transiciones), acá se reconstruye cuánto tiempo estuvo
+# cada mesa en cada estado durante el "día operativo" de `fecha` — ver rango_dia_operativo
+# en app/services/horario.py para la decisión de dónde se corta ese día.
+#
+# Sin filtro de Mesa.activa en la query: a diferencia de /ocupacion y /rotacion, una mesa
+# hoy inactiva puede haber estado activa durante el día pedido y sí debe poder aparecer. Es
+# calcular_ocupacion_por_mesa quien decide, mesa por mesa, si hay datos suficientes para
+# incluirla (ver app/services/ocupacion.py).
+@router.get("/ocupacion-diaria", response_model=OcupacionDiariaResponse)
+def obtener_ocupacion_diaria(
+    fecha: Optional[date] = Query(None), sector_id: Optional[int] = Query(None), db: Session = Depends(get_db)
+):
+    validar_sector(db, sector_id)
+
+    if fecha is None:
+        fecha = hoy_local()
+
+    config = db.query(ConfiguracionGeneral).filter(ConfiguracionGeneral.id == 1).first()
+    apertura = config.hora_apertura if config else None
+    cierre = config.hora_cierre if config else None
+    inicio, fin = rango_dia_operativo(fecha, apertura, cierre)
+
+    mesas_query = db.query(Mesa)
+    if sector_id is not None:
+        mesas_query = mesas_query.filter(Mesa.sector_id == sector_id)
+    mesas = mesas_query.all()
+
+    minutos_por_mesa = calcular_ocupacion_por_mesa(db, mesas, inicio, fin)
+
+    mesas_respuesta = []
+    total_minutos = {estado.value: 0.0 for estado in EstadoMesa}
+    ocupada_total = 0.0
+    ventana_total = 0.0
+
+    for mesa in mesas:
+        tiempos = minutos_por_mesa.get(mesa.id)
+        if tiempos is None:
+            continue
+
+        duracion_mesa = sum(tiempos.values())
+        ocupada_mesa = sum(tiempos[estado.value] for estado in ESTADOS_QUE_CUENTAN_COMO_OCUPACION)
+        porcentaje_mesa = round((ocupada_mesa / duracion_mesa) * 100, 2) if duracion_mesa > 0 else 0.0
+
+        mesas_respuesta.append(
+            OcupacionDiariaMesaResponse(
+                mesa_id=mesa.id,
+                numero=mesa.numero,
+                sector_id=mesa.sector_id,
+                minutos_por_estado=TiempoPorEstado(**tiempos),
+                porcentaje_ocupacion=porcentaje_mesa,
+            )
+        )
+        for estado_valor, minutos in tiempos.items():
+            total_minutos[estado_valor] += minutos
+        ventana_total += duracion_mesa
+        ocupada_total += ocupada_mesa
+
+    porcentaje_general = round((ocupada_total / ventana_total) * 100, 2) if ventana_total > 0 else 0.0
+    fin_efectivo = min(fin, datetime.now(timezone.utc))
+
+    return OcupacionDiariaResponse(
+        fecha=fecha,
+        inicio=inicio,
+        fin=fin_efectivo,
+        total_mesas=len(mesas_respuesta),
+        porcentaje_ocupacion=porcentaje_general,
+        minutos_por_estado=TiempoPorEstado(**total_minutos),
+        mesas=mesas_respuesta,
+    )
+
+
+# Horarios de mayor demanda (T26-186, RF-24).
+#
+# "Demanda" se mide como OCUPACIÓN media por franja, no como cantidad de llegadas. Las dos
+# lecturas son defendibles, pero el ticket pide "identificar los picos de ocupación del
+# salón", y además la ocupación es la que responde la pregunta operativa de fondo —cuándo
+# conviene tener más gente en el salón—: cinco mesas que se ocupan a las 21 y se liberan a
+# las 21:30 no cargan el salón igual que cinco que se quedan hasta el cierre, y un conteo de
+# llegadas las mostraría idénticas.
+#
+# Se apoya en la misma reconstrucción de historial que el reporte diario de T26-185 en vez de
+# contar filas: contar filas de historial_estados daría "cuántas veces se tocó la mesa", que
+# mezcla correcciones manuales con ocupaciones reales.
+@router.get("/demanda", response_model=DemandaResponse)
+def obtener_demanda(
+    fecha_inicio: Optional[date] = Query(None),
+    fecha_fin: Optional[date] = Query(None),
+    sector_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+):
+    validar_sector(db, sector_id)
+
+    # Por defecto, la última semana operativa terminada en hoy. Un rango por defecto acotado
+    # y no "todo el historial" a propósito: el patrón horario de hace tres meses no describe
+    # el salón de hoy, y barrer todo haría más lenta la consulta más común.
+    hoy = hoy_local()
+    if fecha_fin is None:
+        fecha_fin = hoy
+    if fecha_inicio is None:
+        fecha_inicio = fecha_fin - timedelta(days=DIAS_DEMANDA_POR_DEFECTO - 1)
+    if fecha_inicio > fecha_fin:
+        raise HTTPException(status_code=400, detail="fecha_inicio no puede ser posterior a fecha_fin")
+
+    config = db.query(ConfiguracionGeneral).filter(ConfiguracionGeneral.id == 1).first()
+    apertura = config.hora_apertura if config else None
+    cierre = config.hora_cierre if config else None
+
+    # Una ventana por día operativo. Los días futuros se piden igual y quedan vacíos solos:
+    # _intervalos_por_mesa() corta en `ahora` y no proyecta.
+    dias = [
+        rango_dia_operativo(fecha_inicio + timedelta(days=n), apertura, cierre)
+        for n in range((fecha_fin - fecha_inicio).days + 1)
+    ]
+
+    mesas_query = db.query(Mesa)
+    if sector_id is not None:
+        mesas_query = mesas_query.filter(Mesa.sector_id == sector_id)
+    mesas = mesas_query.all()
+
+    por_franja = calcular_demanda_por_franja(db, mesas, dias)
+
+    franjas = []
+    for hora in sorted(por_franja):
+        minutos = por_franja[hora]
+        medidos = sum(minutos.values())
+        ocupada = sum(minutos[estado.value] for estado in ESTADOS_QUE_CUENTAN_COMO_OCUPACION)
+        franjas.append(
+            DemandaFranjaResponse(
+                hora=hora,
+                porcentaje_ocupacion=round((ocupada / medidos) * 100, 2) if medidos > 0 else 0.0,
+                minutos_ocupada=round(ocupada, 2),
+                minutos_medidos=round(medidos, 2),
+            )
+        )
+
+    # Solo las franjas CON datos, y no las 24 rellenas con ceros: una franja fuera del horario
+    # de servicio no es "0% de ocupación", es una hora sobre la que el reporte no dice nada, y
+    # dibujarla en cero la haría parecer un valle medido.
+    return DemandaResponse(
+        fecha_inicio=fecha_inicio,
+        fecha_fin=fecha_fin,
+        dias=len(dias),
+        franjas=franjas,
+    )

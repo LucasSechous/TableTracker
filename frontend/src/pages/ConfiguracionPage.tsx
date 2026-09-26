@@ -19,9 +19,9 @@ import {
   mesasApi,
   camarasApi,
   roiMesaApi,
-  extraerDetalleApi,
+  extraerDetalle,
 } from "../services/api"
-import type { Configuracion, Sector, EstadoOpcion, Mesa, Camara, RoiMesa } from "../types"
+import type { Configuracion, ConfiguracionActualizada, Sector, EstadoOpcion, Mesa, Camara, RoiMesa } from "../types"
 import { calcularMinimoSalon, COLOR_POR_ESTADO } from "../constants"
 
 // Recuento de la instalación y, sobre todo, de lo que falta configurar (T26-168).
@@ -73,6 +73,9 @@ interface FormState {
   horaApertura: string
   horaCierre: string
   minutosLimpieza: string
+  confirmacionSegundos: string
+  overlapMinimo: string
+  umbralOcupacion: string
 }
 
 // El backend devuelve "HH:MM:SS" y el <input type="time"> trabaja con "HH:MM". Sin
@@ -91,6 +94,9 @@ function aFormState(config: Configuracion): FormState {
     horaApertura: aHoraInput(config.hora_apertura),
     horaCierre: aHoraInput(config.hora_cierre),
     minutosLimpieza: config.minutos_limpieza_demorada?.toString() ?? "",
+    confirmacionSegundos: config.confirmacion_segundos.toString(),
+    overlapMinimo: config.overlap_minimo.toString(),
+    umbralOcupacion: config.umbral_ocupacion_alta.toString(),
   }
 }
 
@@ -130,7 +136,7 @@ export default function ConfiguracionPage() {
       // Se guardan para el resumen del setup, que los necesita y así no los vuelve a pedir.
       setSectores(sectoresCargados)
     } catch (err) {
-      setError(await extraerDetalleApi(err, "Error al cargar la configuración"))
+      setError(await extraerDetalle(err, "Error al cargar la configuración"))
     } finally {
       setLoading(false)
     }
@@ -150,7 +156,7 @@ export default function ConfiguracionPage() {
         if (!cancelado) setEstados(data)
       })
       .catch(async (err) => {
-        if (!cancelado) setErrorEstados(await extraerDetalleApi(err, "No se pudieron cargar los estados."))
+        if (!cancelado) setErrorEstados(await extraerDetalle(err, "No se pudieron cargar los estados."))
       })
     return () => {
       cancelado = true
@@ -168,7 +174,7 @@ export default function ConfiguracionPage() {
         setResumen(calcularResumen(sectores, mesasRes.data, camarasRes.data, roisRes.data))
       })
       .catch(async (err) => {
-        if (!cancelado) setErrorResumen(await extraerDetalleApi(err, "No se pudo cargar el resumen del setup."))
+        if (!cancelado) setErrorResumen(await extraerDetalle(err, "No se pudo cargar el resumen del setup."))
       })
     return () => {
       cancelado = true
@@ -212,6 +218,26 @@ export default function ConfiguracionPage() {
         return "El umbral de limpieza demorada tiene que ser un número entero de minutos mayor que 0."
       }
     }
+    const confirmacion = Number(f.confirmacionSegundos)
+    if (f.confirmacionSegundos === "" || !Number.isFinite(confirmacion) || confirmacion <= 0) {
+      return "El tiempo de confirmación tiene que ser un número mayor que 0."
+    }
+    const overlap = Number(f.overlapMinimo)
+    if (f.overlapMinimo === "" || !Number.isFinite(overlap) || overlap <= 0 || overlap > 1) {
+      return "La superposición mínima tiene que ser un número mayor que 0 y menor o igual a 1."
+    }
+    // Mismos límites que el Field(gt=0, le=100) del backend y que el CHECK de la columna
+    // (T26-187). Se validan igual acá para que el error salga al lado del campo en vez de
+    // volver como un 422 genérico.
+    const umbralOcupacion = Number(f.umbralOcupacion)
+    if (
+      f.umbralOcupacion === "" ||
+      !Number.isFinite(umbralOcupacion) ||
+      umbralOcupacion <= 0 ||
+      umbralOcupacion > 100
+    ) {
+      return "El umbral de salón al límite tiene que ser un porcentaje mayor que 0 y menor o igual a 100."
+    }
     return null
   }
 
@@ -238,12 +264,21 @@ export default function ConfiguracionPage() {
       hora_apertura?: string
       hora_cierre?: string
       minutos_limpieza_demorada?: number
+      confirmacion_segundos: number
+      overlap_minimo: number
+      umbral_ocupacion_alta: number
     } = {
       ancho_salon: Number(form.ancho),
       alto_salon: Number(form.alto),
       // Se manda "" a propósito cuando está vacío: el backend ignora los null
       // (exclude_none), así que mandar null dejaría el nombre viejo sin avisar.
       nombre_establecimiento: form.nombre.trim(),
+      // A diferencia de los campos opcionales de abajo, estos dos no se pueden vaciar
+      // (la validación ya lo exige), así que siempre viajan.
+      confirmacion_segundos: Number(form.confirmacionSegundos),
+      overlap_minimo: Number(form.overlapMinimo),
+      // Igual que los dos de arriba: NOT NULL en el backend, no se puede vaciar (T26-187).
+      umbral_ocupacion_alta: Number(form.umbralOcupacion),
     }
     // En cambio la cantidad no se puede vaciar: 0 falla la validación gt=0 y null se ignora,
     // así que si el campo quedó vacío se omite y se avisa abajo con lo que devolvió el server.
@@ -258,12 +293,13 @@ export default function ConfiguracionPage() {
     if (form.minutosLimpieza !== "") datos.minutos_limpieza_demorada = Number(form.minutosLimpieza)
 
     try {
-      const { data } = await configuracionApi.actualizar(datos)
+      const { data }: { data: ConfiguracionActualizada } = await configuracionApi.actualizar(datos)
       // Se re-sincroniza con lo que devolvió el backend, no con lo que se tipeó: si el
       // servidor no aplicó algo, la pantalla tiene que mostrar la verdad y no el deseo.
       setOriginal(data)
       setForm(aFormState(data))
       setExito("Configuración guardada.")
+      const avisos: string[] = []
       const noBorrables: string[] = []
       if (form.cantidadMesas === "" && data.cantidad_mesas_referencia != null) {
         noBorrables.push("la cantidad de mesas de referencia")
@@ -275,13 +311,22 @@ export default function ConfiguracionPage() {
         noBorrables.push("el umbral de limpieza demorada")
       }
       if (noBorrables.length > 0) {
-        setAviso(
+        avisos.push(
           `No se puede borrar ${noBorrables.join(" ni ")} una vez cargado desde esta pantalla, ` +
             "así que se mantuvo el valor anterior."
         )
       }
+      // Umbrales de detección (T26-183): el backend solo manda el campo "_anterior" cuando
+      // ese PATCH cambió el valor, así que esto no se dispara con un guardado que no los tocó.
+      if (data.confirmacion_segundos_anterior != null || data.overlap_minimo_anterior != null) {
+        avisos.push(
+          "Cambiaste un parámetro de detección: el efecto se aplica a la detección en curso " +
+            "en los próximos segundos, sin reiniciar el módulo de visión."
+        )
+      }
+      if (avisos.length > 0) setAviso(avisos.join(" "))
     } catch (err) {
-      setError(await extraerDetalleApi(err, "Error al guardar la configuración"))
+      setError(await extraerDetalle(err, "Error al guardar la configuración"))
     } finally {
       setGuardando(false)
     }
@@ -424,6 +469,68 @@ export default function ConfiguracionPage() {
                 value={form.minutosLimpieza}
                 onChange={(e) => editar("minutosLimpieza", e.target.value)}
                 placeholder="Sin aviso"
+                style={estiloInput}
+              />
+            </Campo>
+
+            {/* Va acá, pegado al aviso de limpieza demorada, porque las dos son alertas de
+                operación del salón; los umbrales de detección de abajo son otra cosa (qué
+                tan sensible es la cámara). A diferencia del de arriba, este no se puede
+                vaciar: el backend lo tiene NOT NULL con default 85 (T26-187). */}
+            <Campo
+              etiqueta="Avisar salón al límite a partir de (% ocupado)"
+              ayuda="Cuando este porcentaje de las mesas activas esté ocupado, el panel de monitoreo muestra un aviso. Las mesas reservadas no cuentan como ocupadas. Poné 100 para avisar solo con el salón completo."
+            >
+              <input
+                type="number"
+                min={1}
+                max={100}
+                step={5}
+                data-testid="configuracion-umbral-ocupacion"
+                value={form.umbralOcupacion}
+                onChange={(e) => editar("umbralOcupacion", e.target.value)}
+                style={estiloInput}
+              />
+            </Campo>
+
+            <div style={{ height: 1, backgroundColor: "#e2e8f0" }} />
+
+            <div>
+              <h2 style={estiloTituloSeccion}>Detección automática</h2>
+              <p style={estiloAyudaSeccion}>
+                Controlan qué tan sensible es la cámara para marcar una mesa como ocupada. Cambiarlos
+                afecta a la detección que está corriendo ahora mismo, sin reiniciar nada — el módulo
+                de visión toma el cambio en los próximos segundos.
+              </p>
+            </div>
+
+            <Campo
+              etiqueta="Tiempo de confirmación (segundos)"
+              ayuda="Cuánto tiene que quedarse alguien en la mesa antes de marcarla ocupada. Subilo si alguien que solo pasa caminando dispara falsos positivos; bajalo si tarda demasiado en reflejar que llegaron clientes."
+            >
+              <input
+                type="number"
+                min={0.1}
+                step={0.5}
+                data-testid="configuracion-confirmacion-segundos"
+                value={form.confirmacionSegundos}
+                onChange={(e) => editar("confirmacionSegundos", e.target.value)}
+                style={estiloInput}
+              />
+            </Campo>
+
+            <Campo
+              etiqueta="Superposición mínima con la mesa"
+              ayuda="Cuánto tiene que superponerse una persona con el área de la mesa para contar como sentada ahí, de 0 a 1 (0,3 = un 30%). Subilo si mesas vecinas se marcan ocupadas por error; bajalo si a veces no detecta gente sentada."
+            >
+              <input
+                type="number"
+                min={0.01}
+                max={1}
+                step={0.05}
+                data-testid="configuracion-overlap-minimo"
+                value={form.overlapMinimo}
+                onChange={(e) => editar("overlapMinimo", e.target.value)}
                 style={estiloInput}
               />
             </Campo>

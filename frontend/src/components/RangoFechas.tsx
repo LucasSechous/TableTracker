@@ -55,7 +55,7 @@ export const labelStyle: CSSProperties = {
   color: "#444",
 }
 
-const inputStyle: CSSProperties = {
+export const inputStyle: CSSProperties = {
   padding: "6px 8px",
   borderRadius: 6,
   border: "1px solid #ccc",

@@ -1,10 +1,12 @@
 // Modal de alta de una nueva mesa dentro de un sector del salón.
 // La posición inicial se calcula en coordenadas locales al sector (ver nota sobre pos_x/pos_y más abajo).
+// El overlay, la caja y los botones los pone <Modal> (T26-200/F-3); acá queda solo el formulario.
 
 import { useState } from "react"
 import type { Mesa, Sector } from "../types"
 import { mesasApi, extraerDetalle } from "../services/api"
 import { DIAMETRO_MESA } from "../constants"
+import Modal from "./Modal"
 
 // SectorBloque.tsx posiciona el bloque del sector con position:absolute (creando su propio
 // contenedor de posicionamiento) y renderiza cada MesaVisual como hijo absoluto de ese bloque.
@@ -65,143 +67,77 @@ export default function ModalAltaMesa({ sectores, onClose, onMesaCreada }: Modal
 
       onMesaCreada(mesaPosicionada)
     } catch (err) {
-      setError(extraerDetalle(err, "No se pudo crear la mesa"))
+      setError(await extraerDetalle(err, "No se pudo crear la mesa"))
     } finally {
       setGuardando(false)
     }
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0,0,0,0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
+    <Modal
+      titulo="Nueva mesa"
+      error={error}
+      ocupado={guardando}
+      // Sin sectores no hay nada que crear, pero salir sí es una acción válida: por eso
+      // bloquea solo el botón primario y no también Cancelar.
+      confirmarDeshabilitado={!haySectores}
+      etiquetaConfirmar={guardando ? "Creando..." : "Crear mesa"}
+      onConfirmar={handleConfirmar}
+      onCancelar={onClose}
     >
-      <div
-        style={{
-          backgroundColor: "#fff",
-          borderRadius: 8,
-          padding: 24,
-          width: 360,
-          boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
-        }}
-      >
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1a1a1a", margin: "0 0 16px" }}>
-          Nueva mesa
-        </h2>
+      {!haySectores ? (
+        <p style={{ fontSize: 13, color: "#666", margin: "0 0 20px" }}>
+          No hay sectores creados todavía. Creá un sector primero.
+        </p>
+      ) : (
+        <>
+          <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 12 }}>
+            Número de mesa
+            <input
+              type="number"
+              min={1}
+              value={numero}
+              onChange={(e) => setNumero(e.target.value)}
+              autoFocus
+              style={{
+                display: "block",
+                width: "100%",
+                boxSizing: "border-box",
+                marginTop: 4,
+                padding: 8,
+                fontSize: 14,
+                border: "1px solid #ccc",
+                borderRadius: 6,
+              }}
+            />
+          </label>
 
-        {error && (
-          <p
-            style={{
-              fontSize: 13,
-              color: "#c62828",
-              backgroundColor: "#ffebee",
-              border: "1px solid #ef9a9a",
-              borderRadius: 6,
-              padding: "8px 12px",
-              margin: "0 0 12px",
-            }}
-          >
-            {error}
-          </p>
-        )}
-
-        {!haySectores ? (
-          <p style={{ fontSize: 13, color: "#666", margin: "0 0 20px" }}>
-            No hay sectores creados todavía. Creá un sector primero.
-          </p>
-        ) : (
-          <>
-            <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 12 }}>
-              Número de mesa
-              <input
-                type="number"
-                min={1}
-                value={numero}
-                onChange={(e) => setNumero(e.target.value)}
-                autoFocus
-                style={{
-                  display: "block",
-                  width: "100%",
-                  boxSizing: "border-box",
-                  marginTop: 4,
-                  padding: 8,
-                  fontSize: 14,
-                  border: "1px solid #ccc",
-                  borderRadius: 6,
-                }}
-              />
-            </label>
-
-            <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 20 }}>
-              Sector
-              <select
-                value={sectorId}
-                onChange={(e) => setSectorId(e.target.value === "" ? "" : Number(e.target.value))}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  boxSizing: "border-box",
-                  marginTop: 4,
-                  padding: 8,
-                  fontSize: 14,
-                  border: "1px solid #ccc",
-                  borderRadius: 6,
-                  backgroundColor: "#fff",
-                }}
-              >
-                {sectores.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nombre}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </>
-        )}
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button
-            onClick={onClose}
-            disabled={guardando}
-            style={{
-              padding: "6px 14px",
-              borderRadius: 6,
-              border: "1px solid #ccc",
-              fontSize: 13,
-              cursor: guardando ? "default" : "pointer",
-              backgroundColor: "#fff",
-              color: "#555",
-              fontWeight: 500,
-            }}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleConfirmar}
-            disabled={guardando || !haySectores}
-            style={{
-              padding: "6px 14px",
-              borderRadius: 6,
-              border: "none",
-              fontSize: 13,
-              cursor: guardando || !haySectores ? "default" : "pointer",
-              backgroundColor: "#1976d2",
-              color: "#fff",
-              fontWeight: 500,
-              opacity: guardando || !haySectores ? 0.6 : 1,
-            }}
-          >
-            {guardando ? "Creando..." : "Crear mesa"}
-          </button>
-        </div>
-      </div>
-    </div>
+          <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 20 }}>
+            Sector
+            <select
+              value={sectorId}
+              onChange={(e) => setSectorId(e.target.value === "" ? "" : Number(e.target.value))}
+              style={{
+                display: "block",
+                width: "100%",
+                boxSizing: "border-box",
+                marginTop: 4,
+                padding: 8,
+                fontSize: 14,
+                border: "1px solid #ccc",
+                borderRadius: 6,
+                backgroundColor: "#fff",
+              }}
+            >
+              {sectores.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
+    </Modal>
   )
 }

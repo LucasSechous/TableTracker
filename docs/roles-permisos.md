@@ -98,13 +98,79 @@ el email ya existe). Esto también rompía el autoregistro del usuario fijo de e
 [e2e/README.md](../e2e/README.md) para el nuevo paso de bootstrap requerido antes de correr la
 suite.
 
+## Gateo de la UI por rol
+
+El backend es el que decide: responde 403 mire lo que mire la interfaz, y nada de lo de acá
+abajo lo reemplaza. Lo que hace el frontend es no ofrecer un control que va a fallar.
+
+Dos piezas, las dos nuevas respecto de la primera versión de este documento:
+
+- **`frontend/src/hooks/useAuth.tsx`** — `AuthProvider` resuelve `GET /auth/me` **una sola vez**
+  para todo el árbol y expone `{ user, rol, loading }` vía `useAuth()`. Antes cada consumidor lo
+  pedía por su cuenta: `AdminRoute` uno y `DashboardPage` otro, así que entrar al salón y de ahí
+  a `/camaras` disparaba dos llamadas idénticas. El provider va dentro de `<BrowserRouter>` y no
+  llama a `/auth/me` si no hay token — con sesión cerrada el 401 dispararía la redirección a
+  `/login` del interceptor de axios, que remonta y vuelve a pedir: un bucle de recargas.
+- **`frontend/src/permisos.ts`** — funciones puras que replican el `requiere_rol(...)` del
+  endpoint que cada control termina llamando: `esAdmin`, `esEncargado`, `puedeEditarLayout`
+  (admin + encargado) y `puedeBorrar` (solo admin). Sin enum de roles a propósito: `User.rol` es
+  un `String` libre y declarar un enum del lado del frontend inventaría una fuente de verdad que
+  del otro lado no existe.
+
+### Qué ve cada rol en el salón
+
+| Control | Endpoint que dispara | Helper | admin | encargado | resto |
+|---|---|---|---|---|---|
+| Botón "Editar disposición" | — (entra al modo) | `puedeEditarLayout` | ✓ | ✓ | — |
+| "+ Nuevo sector" / "+ Nueva mesa" | `POST /sectores/`, `POST /mesas/` | `puedeEditarLayout` | ✓ | ✓ | — |
+| Arrastrar mesa | `PATCH /mesas/{id}/posicion` | `puedeEditarLayout` | ✓ | ✓ | — |
+| Arrastrar / redimensionar sector | `PATCH /sectores/{id}` | `puedeEditarLayout` | ✓ | ✓ | — |
+| Editar sector (lápiz) | `PATCH /sectores/{id}` | `puedeEditarLayout` | ✓ | ✓ | — |
+| **Borrar sector (papelera)** | `DELETE /sectores/{id}` | `puedeBorrar` | ✓ | — | — |
+| **Borrar mesa (papelera)** | `DELETE /mesas/{id}` | `puedeBorrar` | ✓ | — | — |
+| Redimensionar el salón | `PATCH /configuracion` | `esAdmin` | ✓ | — | — |
+| "Salir de edición" | — | *sin gate* | ✓ | ✓ | ✓ |
+
+### Qué ve cada rol en el panel de mesa
+
+Los controles de escritura del `PanelMesa` (T26-195) siguen la misma idea pero con permisos
+**cruzados**: ningún rol operativo los tiene todos, y cada uno tiene el que justifica su
+existencia. Por eso son tres helpers y no uno solo.
+
+| Control | Endpoint que dispara | Helper | admin | encargado | mozo | recepcion | limpieza |
+|---|---|---|---|---|---|---|---|
+| "Confirmar limpieza" | `PATCH /mesas/{id}/limpieza` | `puedeConfirmarLimpieza` | ✓ | ✓ | — | — | ✓ |
+| "Marcar como reservada" | `PATCH /mesas/{id}/reserva` | `puedeReservar` | ✓ | ✓ | — | ✓ | — |
+| Los 4 botones de estado | `PATCH /mesas/{id}/estado` | `puedeCambiarEstado` | ✓ | ✓ | ✓ | — | — |
+
+El desplegable "Corregir estado manualmente" contiene los dos últimos, así que se muestra si
+el rol puede **al menos uno**. Para `limpieza`, que no puede ninguno, se esconde entero: si
+se mostrara, abriría una caja vacía. Cubierto por `e2e/tests/18-permisos-panel-mesa.spec.ts`.
+
+`vision_module` queda fuera de `puedeCambiarEstado` aunque el backend lo acepte en
+`PATCH /mesas/{id}/estado`: es el usuario técnico del módulo de visión, no alguien que abra
+esta pantalla.
+
+Dos criterios que no son obvios y conviene no revertir sin pensarlo:
+
+- **Editar el layout NO es admin-only.** `POST`/`PATCH` de mesas y sectores piden `encargado`
+  (admin pasa implícito), así que gatear esto con `esAdmin` dejaría al encargado sin la tarea
+  que el backend le autoriza. Borrar sí es admin-only, y por eso las papeleras llevan un helper
+  más estricto que el lápiz que tienen al lado.
+- **No alcanza con esconder el botón.** El arrastre de mesas y sectores nace de un `mousedown`
+  sobre el elemento, no de un control que se pueda ocultar. Por eso `SectorBloque` y `MesaVisual`
+  cortan también en el handler (`if (modo !== "edicion" || !puedeEditar) return`): sin eso, un
+  rol sin permiso arrastraría igual y se comería el 403 al soltar, con la posición ya movida en
+  pantalla. Cubierto por `e2e/tests/17-permisos-layout.spec.ts`.
+
+`SectorBloque` y `MesaVisual` leen el rol con `useAuth()` directo, sin recibirlo por props:
+bajarlo desde `DashboardPage` obligaba a `SalonCanvas` a reenviar dos booleanos que no usa.
+
 ## Fuera de alcance (hallazgos, no corregidos en este ticket)
 
-- **Frontend sin gating por rol**: `DashboardPage` muestra "Editar disposición" (crear/mover
-  sectores y mesas) a cualquier usuario logueado, sin ocultar la acción a roles que el backend
-  ahora rechaza con 403 (ej. un `mozo` ve el botón y recién al hacer la request recibe el error).
-  `UsuariosPage` (T26-175) sí gatea por rol con `AdminRoute`, igual que `/camaras` y
-  `/calibracion-roi`; este hallazgo queda acotado a la edición de layout del salón.
+- ~~**Frontend sin gating por rol**~~ — **resuelto**. Cuando se escribió este documento,
+  `DashboardPage` mostraba "Editar disposición" a cualquier usuario logueado y el `mozo` se
+  enteraba del 403 recién al soltar la mesa. Ya no: ver "Gateo de la UI por rol" más abajo.
 - **`User.rol` sin validación**: es un `String` libre, sin `enum` ni `CHECK` en la base. Un typo
   al crear un usuario (`"admim"`) no falla en el alta — el usuario queda autenticado pero sin
   poder pasar ningún `requiere_rol(...)`, y el error solo aparece como 403 al primer intento de

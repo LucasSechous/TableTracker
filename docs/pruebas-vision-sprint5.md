@@ -18,7 +18,13 @@ Cada corrida se etiquetó con una descripción de las condiciones bajo las que s
 - Webcam local (dispositivo integrado de la notebook).
 - Cámara IP TP-Link Tapo C310, vía RTSP (`stream1`, alta calidad).
 
-**Configuración del modelo:** YOLOv8n, `YOLO_CONFIDENCE=0.5`, `YOLO_CLASSES=0` (únicamente la clase `person` de COCO). El filtro de clases significa que el pipeline, en esta etapa, solo evalúa la presencia de personas — no se probó la detección de mesas ni sillas, ya que el criterio de ocupación previsto para el MVP se basa en presencia humana dentro de la zona de la mesa, no en el reconocimiento del mobiliario en sí.
+**Configuración del modelo:** YOLOv8n, `YOLO_CONFIDENCE=0.5`, `YOLO_CLASSES=0` (únicamente la clase `person` de COCO).
+
+> **Nota posterior a Sprint 5.** Esa configuración es la que tenía el módulo en el momento de esta medición y se deja
+> tal cual para no falsear el registro. El default actual es **YOLOv8s con `YOLO_IMGSZ=960` y `YOLO_CONFIDENCE=0.35`**,
+> elegido por medición en T26-178 / T26-179 (tabla de costo p90 en `vision-module/app/config.py`). Los números de la
+> sección 3 **no** se recalcularon con la configuración nueva.
+ El filtro de clases significa que el pipeline, en esta etapa, solo evalúa la presencia de personas — no se probó la detección de mesas ni sillas, ya que el criterio de ocupación previsto para el MVP se basa en presencia humana dentro de la zona de la mesa, no en el reconocimiento del mobiliario en sí.
 
 ## 3. Resultados
 

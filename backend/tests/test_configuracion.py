@@ -40,6 +40,12 @@ def test_get_devuelve_los_valores(client, como, crear_configuracion):
         "hora_cierre": None,
         # Sin cargar: la alerta de limpieza demorada arranca apagada (T26-173).
         "minutos_limpieza_demorada": None,
+        # Umbrales de detección (T26-183): nunca None, son NOT NULL con default.
+        "confirmacion_segundos": 6,
+        "overlap_minimo": 0.30,
+        # Umbral de alta ocupación (T26-187): también NOT NULL con default, y a diferencia
+        # de minutos_limpieza_demorada su alerta arranca ENCENDIDA con este valor.
+        "umbral_ocupacion_alta": 85.0,
     }
 
 
@@ -78,3 +84,92 @@ def test_patch_exige_admin(client, como, crear_configuracion):
 def test_sin_autenticar_da_401(client, crear_configuracion):
     crear_configuracion()
     assert client.get("/configuracion").status_code == 401
+
+
+class TestUmbralesDeteccion:
+    # T26-183: los dos parámetros que vision-module antes leía del .env.
+
+    def test_patch_actualiza_los_umbrales(self, client, como, crear_configuracion):
+        crear_configuracion()
+        como("admin")
+
+        respuesta = client.patch(
+            "/configuracion", json={"confirmacion_segundos": 4, "overlap_minimo": 0.45}
+        )
+        cuerpo = respuesta.json()
+        assert respuesta.status_code == 200
+        assert cuerpo["confirmacion_segundos"] == 4
+        assert cuerpo["overlap_minimo"] == 0.45
+
+    def test_patch_devuelve_el_valor_anterior_de_lo_que_cambio(self, client, como, crear_configuracion):
+        crear_configuracion(confirmacion_segundos=6, overlap_minimo=0.30)
+        como("admin")
+
+        cuerpo = client.patch("/configuracion", json={"confirmacion_segundos": 10}).json()
+        assert cuerpo["confirmacion_segundos_anterior"] == 6
+        # No se tocó en este PATCH: no se informa un "anterior" para él.
+        assert cuerpo["overlap_minimo_anterior"] is None
+
+    def test_get_no_lleva_los_campos_anterior(self, client, como, crear_configuracion):
+        crear_configuracion()
+        como("mozo")
+        assert "confirmacion_segundos_anterior" not in client.get("/configuracion").json()
+
+    @pytest.mark.parametrize("valor", [0, -1])
+    def test_confirmacion_segundos_no_positiva_da_422(self, client, como, crear_configuracion, valor):
+        crear_configuracion()
+        como("admin")
+        assert client.patch("/configuracion", json={"confirmacion_segundos": valor}).status_code == 422
+
+    @pytest.mark.parametrize("valor", [0, -0.1, 1.5])
+    def test_overlap_minimo_fuera_de_rango_da_422(self, client, como, crear_configuracion, valor):
+        crear_configuracion()
+        como("admin")
+        assert client.patch("/configuracion", json={"overlap_minimo": valor}).status_code == 422
+
+    def test_overlap_minimo_limite_superior_es_valido(self, client, como, crear_configuracion):
+        crear_configuracion()
+        como("admin")
+        assert client.patch("/configuracion", json={"overlap_minimo": 1}).status_code == 200
+
+
+class TestUmbralOcupacionAlta:
+    """Umbral de alta ocupación (T26-187, RF-26).
+
+    Se edita por el mismo PATCH que el resto de los umbrales en vez de por un endpoint
+    propio: T26-183 ya dejó esta pantalla como el lugar donde se configuran los umbrales
+    del producto, y abrir un segundo camino para el tercero los desincronizaría.
+    """
+
+    def test_default_al_crear_la_fila(self, client, como, crear_configuracion):
+        crear_configuracion()
+        como("mozo")
+        assert client.get("/configuracion").json()["umbral_ocupacion_alta"] == 85.0
+
+    def test_patch_actualiza_el_umbral(self, client, como, crear_configuracion):
+        crear_configuracion()
+        como("admin")
+
+        respuesta = client.patch("/configuracion", json={"umbral_ocupacion_alta": 70})
+        assert respuesta.status_code == 200
+        assert respuesta.json()["umbral_ocupacion_alta"] == 70
+        assert client.get("/configuracion").json()["umbral_ocupacion_alta"] == 70
+
+    @pytest.mark.parametrize("valor", [0, -5, 100.1, 150])
+    def test_fuera_del_rango_de_porcentaje_da_422(self, client, como, crear_configuracion, valor):
+        """Es un porcentaje: 0 dejaría la alerta encendida para siempre y >100 nunca."""
+        crear_configuracion()
+        como("admin")
+        assert client.patch("/configuracion", json={"umbral_ocupacion_alta": valor}).status_code == 422
+
+    def test_el_cien_por_ciento_es_un_umbral_valido(self, client, como, crear_configuracion):
+        """Alertar solo con el salón completo es una política conservadora, no un error."""
+        crear_configuracion()
+        como("admin")
+        assert client.patch("/configuracion", json={"umbral_ocupacion_alta": 100}).status_code == 200
+
+    def test_un_mozo_no_puede_cambiar_el_umbral(self, client, como, crear_configuracion):
+        """Mismo criterio que el resto del PATCH: configurar el salón es solo de admin."""
+        crear_configuracion()
+        como("mozo")
+        assert client.patch("/configuracion", json={"umbral_ocupacion_alta": 70}).status_code == 403

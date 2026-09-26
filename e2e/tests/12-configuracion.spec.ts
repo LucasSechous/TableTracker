@@ -17,6 +17,9 @@ import {
   getConfiguracionDeshacerButton,
   getConfiguracionExito,
   getConfiguracionError,
+  getConfiguracionAviso,
+  getConfiguracionConfirmacionSegundosInput,
+  getConfiguracionOverlapMinimoInput,
 } from "../fixtures/ui-helpers";
 
 // Sección 12 — Pantalla de configuración de admin (T26-160, RF-28)
@@ -41,6 +44,10 @@ test.afterEach(async ({ request, token }) => {
     ancho_salon: configOriginal.ancho_salon,
     alto_salon: configOriginal.alto_salon,
     nombre_establecimiento: configOriginal.nombre_establecimiento ?? "",
+    // A diferencia de los campos de abajo, estos dos nunca son null (NOT NULL con
+    // default), así que siempre hay un valor original que restaurar.
+    confirmacion_segundos: configOriginal.confirmacion_segundos,
+    overlap_minimo: configOriginal.overlap_minimo,
     // Si originalmente era null se omite: el backend no acepta volver a null (gt=0 y
     // exclude_none), así que forzarlo tiraría 422 y rompería la limpieza.
     ...(configOriginal.cantidad_mesas_referencia != null
@@ -75,6 +82,10 @@ test("12.3 el formulario carga los valores actuales del backend", async ({ page,
   await expect(getConfiguracionCantidadMesasInput(page)).toHaveValue(
     configOriginal.cantidad_mesas_referencia?.toString() ?? ""
   );
+  await expect(getConfiguracionConfirmacionSegundosInput(page)).toHaveValue(
+    String(configOriginal.confirmacion_segundos)
+  );
+  await expect(getConfiguracionOverlapMinimoInput(page)).toHaveValue(String(configOriginal.overlap_minimo));
 
   // Sin cambios no hay nada que guardar ni que deshacer.
   await expect(getConfiguracionGuardarButton(page)).toBeDisabled();
@@ -127,6 +138,38 @@ test("12.5 no deja achicar el salón por debajo de lo que ocupan los sectores", 
   // es que NO haya salido el PATCH.
   const sinCambios = await obtenerConfiguracion(request, token);
   expect(sinCambios.ancho_salon).toBe(configOriginal.ancho_salon);
+});
+
+test("12.7 guardar un umbral de detección persiste el valor y avisa que afecta la detección en curso", async ({
+  page,
+  token,
+  request,
+}) => {
+  const nuevoOverlap = configOriginal.overlap_minimo === 0.5 ? 0.4 : 0.5;
+
+  await gotoConfiguracionAuthed(page, token);
+  await getConfiguracionOverlapMinimoInput(page).fill(String(nuevoOverlap));
+
+  await expect(getConfiguracionGuardarButton(page)).toBeEnabled();
+  await getConfiguracionGuardarButton(page).click();
+
+  await expect(getConfiguracionExito(page)).toBeVisible();
+  await expect(getConfiguracionAviso(page)).toBeVisible();
+  await expect(getConfiguracionAviso(page)).toContainText("detección en curso");
+
+  const guardada = await obtenerConfiguracion(request, token);
+  expect(guardada.overlap_minimo).toBe(nuevoOverlap);
+  // No se tocó en este guardado: tiene que seguir con su valor original.
+  expect(guardada.confirmacion_segundos).toBe(configOriginal.confirmacion_segundos);
+});
+
+test("12.8 no deja guardar una superposición mínima fuera de (0, 1]", async ({ page, token }) => {
+  await gotoConfiguracionAuthed(page, token);
+  await getConfiguracionOverlapMinimoInput(page).fill("1.5");
+  await getConfiguracionGuardarButton(page).click();
+
+  await expect(getConfiguracionError(page)).toBeVisible();
+  await expect(getConfiguracionExito(page)).toHaveCount(0);
 });
 
 test("12.6 deshacer devuelve el formulario a los valores cargados", async ({ page, token }) => {

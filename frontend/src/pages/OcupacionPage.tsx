@@ -12,10 +12,10 @@
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { PieChart, RefreshCw, LayoutGrid, MoonStar } from "lucide-react"
-import { metricasApi, configuracionApi, extraerDetalleApi } from "../services/api"
-import type { ConteoPorEstado, OcupacionResponse, Configuracion } from "../types"
+import { metricasApi, extraerDetalle } from "../services/api"
+import type { ConteoPorEstado, OcupacionResponse } from "../types"
 import { COLOR_POR_ESTADO, BORDE_POR_ESTADO } from "../constants"
-import { enHorarioDeServicio, sinSegundos } from "../horario"
+import { sinSegundos } from "../horario"
 
 // Mismo orden que la leyenda de SalonCanvas: el panel se recorre igual que el salón.
 // Se declara a mano (y no como Object.keys(COLOR_POR_ESTADO)) para que TypeScript valide
@@ -34,7 +34,6 @@ export default function OcupacionPage() {
   const [ocupacion, setOcupacion] = useState<OcupacionResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [config, setConfig] = useState<Configuracion | null>(null)
   const navigate = useNavigate()
 
   const cargar = useCallback(async () => {
@@ -47,7 +46,7 @@ export default function OcupacionPage() {
       // Se descarta la foto anterior: dejarla en pantalla junto al error haría pasar por
       // actual un número que ya no se pudo confirmar.
       setOcupacion(null)
-      setError(await extraerDetalleApi(err, "Error al cargar las métricas de ocupación"))
+      setError(await extraerDetalle(err, "Error al cargar las métricas de ocupación"))
     } finally {
       setLoading(false)
     }
@@ -57,20 +56,19 @@ export default function OcupacionPage() {
     cargar()
   }, [cargar])
 
-  // Solo alimenta el aviso de horario: si falla, el panel sirve igual y no corresponde
-  // mostrar un error por un dato accesorio.
-  useEffect(() => {
-    configuracionApi.obtener().then((res) => setConfig(res.data)).catch(() => {})
-  }, [])
-
   const conteo = ocupacion?.conteo_por_estado
   const salonSinMesas = ocupacion !== null && ocupacion.total_mesas === 0
   // El % NO se recorta por horario, a diferencia de la rotación: esto es una foto del
   // estado actual de las mesas, no un agregado sobre un rango, así que no hay nada que
   // filtrar. Lo que sí corresponde es avisar que la foto se sacó con el local cerrado,
   // porque un 0% a las 4 de la mañana no significa que el salón esté vacío de gente.
-  const fueraDeHorario =
-    config != null && !enHorarioDeServicio(new Date(), config.hora_apertura, config.hora_cierre)
+  // Lo resuelve el backend y llega hecho (T26-200/F-2). Antes esta pantalla pedía
+  // /configuracion aparte y recalculaba la franja con el reloj del navegador, así que el
+  // mismo instante podía dar "abierto" acá y "cerrado" del otro lado —el backend evalúa
+  // contra TZ_LOCAL—, y con RF-27 esa discrepancia se volvió visible: el dashboard podía
+  // marcar una mesa como dudosa por estar el local cerrado mientras este panel decía que
+  // estaba abierto.
+  const fueraDeHorario = ocupacion != null && !ocupacion.local_abierto
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
@@ -102,7 +100,7 @@ export default function OcupacionPage() {
       </header>
 
       <main style={{ padding: 24 }}>
-        {fueraDeHorario && config?.hora_apertura && config?.hora_cierre && (
+        {fueraDeHorario && ocupacion?.hora_apertura && ocupacion?.hora_cierre && (
           <p
             data-testid="ocupacion-fuera-de-horario"
             style={{
@@ -119,7 +117,7 @@ export default function OcupacionPage() {
             }}
           >
             <MoonStar size={15} style={{ flexShrink: 0 }} />
-            {`El local está cerrado ahora (servicio de ${sinSegundos(config.hora_apertura)} a ${sinSegundos(config.hora_cierre)}). Estos números son del momento actual, no del último servicio.`}
+            {`El local está cerrado ahora (servicio de ${sinSegundos(ocupacion.hora_apertura)} a ${sinSegundos(ocupacion.hora_cierre)}). Estos números son del momento actual, no del último servicio.`}
           </p>
         )}
 

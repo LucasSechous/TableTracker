@@ -1,14 +1,15 @@
 // Pantalla de ABM de cámaras (T26-126). Estructura calcada de CalibracionRoiPage.tsx (T26-128):
 // header con "Volver", estados cargandoInicial/errorInicial, banners de error/éxito reutilizando
-// los mismos estilos inline, y extraerDetalleApi para parsear errores. Acceso restringido a
+// los mismos estilos inline, y extraerDetalle para parsear errores. Acceso restringido a
 // admin (ver AdminRoute en App.tsx), igual que /camaras en el backend (requiere_rol("admin")).
 
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { camarasApi, sectoresApi, extraerDetalleApi } from "../services/api"
+import { camarasApi, sectoresApi, extraerDetalle } from "../services/api"
 import type { Camara, Sector, CamaraTestResponse } from "../types"
 import ModalAltaCamara from "../components/ModalAltaCamara"
 import ModalEditarCamara from "../components/ModalEditarCamara"
+import ModalConfirmacion from "../components/ModalConfirmacion"
 
 interface EstadoTest {
   probando: boolean
@@ -80,6 +81,8 @@ export default function CamarasPage() {
   const [modalAbierto, setModalAbierto] = useState<"alta" | "editar" | null>(null)
   const [camaraEditando, setCamaraEditando] = useState<Camara | null>(null)
 
+  // La cámara que está esperando confirmación para desactivarse, o null (T26-200/F-10).
+  const [camaraADesactivar, setCamaraADesactivar] = useState<Camara | null>(null)
   const [desactivando, setDesactivando] = useState<Record<number, boolean>>({})
   const [testsPorCamara, setTestsPorCamara] = useState<Record<number, EstadoTest>>({})
 
@@ -90,7 +93,7 @@ export default function CamarasPage() {
         setSectores(sectoresRes.data)
       })
       .catch(async (err: unknown) => {
-        setErrorInicial(await extraerDetalleApi(err, "No se pudieron cargar las cámaras"))
+        setErrorInicial(await extraerDetalle(err, "No se pudieron cargar las cámaras"))
       })
       .finally(() => setCargandoInicial(false))
   }, [])
@@ -101,7 +104,7 @@ export default function CamarasPage() {
       setCamaras(data)
       setErrorCamaras(null)
     } catch (err) {
-      setErrorCamaras(await extraerDetalleApi(err, "No se pudieron cargar las cámaras"))
+      setErrorCamaras(await extraerDetalle(err, "No se pudieron cargar las cámaras"))
     }
   }
 
@@ -133,14 +136,21 @@ export default function CamarasPage() {
     setModalAbierto("editar")
   }
 
-  async function handleDesactivar(camara: Camara) {
-    if (!window.confirm(`¿Desactivar la cámara "${camara.nombre}"?`)) return
+  function handleDesactivar(camara: Camara) {
+    setCamaraADesactivar(camara)
+  }
+
+  async function desactivarConfirmada(camara: Camara) {
     setDesactivando((prev) => ({ ...prev, [camara.id]: true }))
     try {
       await camarasApi.desactivar(camara.id)
       setCamaras((prev) => prev.filter((c) => c.id !== camara.id))
+      setCamaraADesactivar(null)
     } catch (err) {
-      alert(await extraerDetalleApi(err, "No se pudo desactivar la cámara"))
+      // El error va al banner de la lista, que es donde esta pantalla ya muestra los suyos
+      // (T26-200/F-9); el modal se cierra para no tapar el mensaje.
+      setCamaraADesactivar(null)
+      setErrorCamaras(await extraerDetalle(err, "No se pudo desactivar la cámara"))
     } finally {
       setDesactivando((prev) => ({ ...prev, [camara.id]: false }))
     }
@@ -154,7 +164,7 @@ export default function CamarasPage() {
       // resultado de la prueba. El mensaje ya viene redactado en español, se muestra tal cual.
       setTestsPorCamara((prev) => ({ ...prev, [camaraId]: { probando: false, resultado: data, error: null } }))
     } catch (err) {
-      const mensaje = await extraerDetalleApi(err, "No se pudo probar la conexión")
+      const mensaje = await extraerDetalle(err, "No se pudo probar la conexión")
       setTestsPorCamara((prev) => ({ ...prev, [camaraId]: { probando: false, resultado: null, error: mensaje } }))
     }
   }
@@ -288,6 +298,16 @@ export default function CamarasPage() {
             setCamaraEditando(null)
           }}
           onCamaraActualizada={handleCamaraActualizada}
+        />
+      )}
+      {camaraADesactivar && (
+        <ModalConfirmacion
+          titulo="Desactivar cámara"
+          mensaje={`¿Desactivar la cámara "${camaraADesactivar.nombre}"?`}
+          etiquetaConfirmar={desactivando[camaraADesactivar.id] ? "Desactivando..." : "Desactivar"}
+          ocupado={desactivando[camaraADesactivar.id] ?? false}
+          onConfirmar={() => desactivarConfirmada(camaraADesactivar)}
+          onCancelar={() => setCamaraADesactivar(null)}
         />
       )}
     </div>

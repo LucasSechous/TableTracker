@@ -12,11 +12,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { AxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
-import { camarasApi, mesasApi, roiMesaApi, extraerDetalleApi } from "../services/api";
+import { camarasApi, mesasApi, roiMesaApi, extraerDetalle } from "../services/api";
 import type { Camara, Mesa, RoiMesa, PuntoRoi } from "../types";
 import { useObjectUrl } from "../hooks/useObjectUrl";
 import { useDeteccionActual } from "../hooks/useDeteccionActual";
 import RoiCanvas from "../components/RoiCanvas";
+import ModalConfirmacion from "../components/ModalConfirmacion";
 
 const TIMEOUT_SNAPSHOT_SEGUNDOS = 5;
 // Cadencia del refresco automático de snapshot con el toggle prendido: el doble que el
@@ -98,6 +99,8 @@ export default function CalibracionRoiPage() {
   const [guardando, setGuardando] = useState(false);
   const [errorGuardado, setErrorGuardado] = useState<string | null>(null);
   const [exito, setExito] = useState<string | null>(null);
+  // Borrar la zona espera confirmación en un modal propio, no en un window.confirm (T26-200/F-10).
+  const [confirmandoBorrado, setConfirmandoBorrado] = useState(false);
 
   const [mostrarDetecciones, setMostrarDetecciones] = useState(false);
 
@@ -108,7 +111,7 @@ export default function CalibracionRoiPage() {
         setMesas(mesasRes.data);
       })
       .catch(async (err: unknown) => {
-        setErrorInicial(await extraerDetalleApi(err, "No se pudieron cargar cámaras y mesas"));
+        setErrorInicial(await extraerDetalle(err, "No se pudieron cargar cámaras y mesas"));
       })
       .finally(() => setCargandoInicial(false));
   }, []);
@@ -126,7 +129,7 @@ export default function CalibracionRoiPage() {
       setRois(data);
       setErrorRois(null);
     } catch (err) {
-      setErrorRois(await extraerDetalleApi(err, "No se pudieron cargar los ROI existentes de esta cámara"));
+      setErrorRois(await extraerDetalle(err, "No se pudieron cargar los ROI existentes de esta cámara"));
     }
   }
 
@@ -163,7 +166,7 @@ export default function CalibracionRoiPage() {
       const { data } = await camarasApi.snapshot(id, TIMEOUT_SNAPSHOT_SEGUNDOS);
       return data;
     } catch (err) {
-      throw new Error(await extraerDetalleApi(err, "No se pudo obtener el frame de la cámara"));
+      throw new Error(await extraerDetalle(err, "No se pudo obtener el frame de la cámara"));
     }
   }
 
@@ -251,7 +254,7 @@ export default function CalibracionRoiPage() {
           "Ya existe una zona activa para esta mesa en esta cámara: volvé a elegirla en el selector para editarla."
         );
       } else {
-        setErrorGuardado(await extraerDetalleApi(err, "No se pudo guardar la zona"));
+        setErrorGuardado(await extraerDetalle(err, "No se pudo guardar la zona"));
       }
     } finally {
       setGuardando(false);
@@ -270,16 +273,21 @@ export default function CalibracionRoiPage() {
       setExito("Cambios guardados.");
       if (camaraId !== "") await cargarRois(camaraId);
     } catch (err) {
-      setErrorGuardado(await extraerDetalleApi(err, "No se pudieron guardar los cambios"));
+      setErrorGuardado(await extraerDetalle(err, "No se pudieron guardar los cambios"));
     } finally {
       setGuardando(false);
     }
   }
 
-  async function handleEliminarZona() {
+  function handleEliminarZona() {
+    if (!roiEnEdicion) return;
+    setConfirmandoBorrado(true);
+  }
+
+  async function eliminarZonaConfirmada() {
     if (!roiEnEdicion) return;
     const mesa = mesas.find((m) => m.id === mesaId);
-    if (!window.confirm(`¿Eliminar la zona de la mesa ${mesa?.numero ?? mesaId}?`)) return;
+    setConfirmandoBorrado(false);
     setGuardando(true);
     setErrorGuardado(null);
     setExito(null);
@@ -290,7 +298,7 @@ export default function CalibracionRoiPage() {
       setExito(`Zona eliminada. Podés dibujar una nueva para la mesa ${mesa?.numero ?? mesaId}.`);
       if (camaraId !== "") await cargarRois(camaraId);
     } catch (err) {
-      setErrorGuardado(await extraerDetalleApi(err, "No se pudo eliminar la zona"));
+      setErrorGuardado(await extraerDetalle(err, "No se pudo eliminar la zona"));
     } finally {
       setGuardando(false);
     }
@@ -512,6 +520,16 @@ export default function CalibracionRoiPage() {
           </>
         )}
       </main>
+
+      {confirmandoBorrado && (
+        <ModalConfirmacion
+          titulo="Eliminar zona"
+          mensaje={`¿Eliminar la zona de la mesa ${mesas.find((m) => m.id === mesaId)?.numero ?? mesaId}?`}
+          etiquetaConfirmar="Eliminar"
+          onConfirmar={eliminarZonaConfirmada}
+          onCancelar={() => setConfirmandoBorrado(false)}
+        />
+      )}
     </div>
   );
 }

@@ -95,9 +95,15 @@ falta:
 
 ## Configuración
 
-Las variables se documentan en [.env.example](.env.example). Dos que conviene
+Las variables se documentan en [.env.example](.env.example). Tres que conviene
 tener presentes:
 
+- **`YOLO_MODEL_PATH` / `YOLO_IMGSZ`**: el default de producción es
+  **`models/yolov8s.pt` con `imgsz=960`** — no el `yolov8n` de la prueba de
+  concepto (T26-93) ni el `640` que trae ultralytics. La elección está medida en
+  T26-178 / T26-179: costo p90 por modelo y resolución contra el presupuesto de
+  2 s por ciclo, con la tabla en [app/config.py](app/config.py) y el
+  procedimiento en [docs/banco-pruebas-vision.md](../docs/banco-pruebas-vision.md).
 - **`CAMARA_PASSWORD`**: la API devuelve la URL RTSP con la contraseña tapada
   (`rtsp://admin:***@...`) por diseño, así que el módulo la completa desde el
   `.env`. Del backend salen host, puerto, ruta y usuario; el secreto no viaja
@@ -106,8 +112,13 @@ tener presentes:
   fuente (webcam, `.mp4`, imagen) en lugar del stream de la cámara registrada, y
   el módulo lo avisa al arrancar. En producción va vacío.
 
-Para calibrar `OVERLAP_MINIMO` contra la cámara del local, correr con
-`LOG_LEVEL=DEBUG`: se loguea el overlap máximo de cada mesa en cada frame.
+`OVERLAP_MINIMO` y `CONFIRMACION_SEGUNDOS` ya **no** se calibran acá (T26-183):
+se editan desde la pantalla de configuración de admin y el módulo los relee de
+`GET /configuracion` cada `CONFIGURACION_REFRESCO_ITERACIONES` iteraciones del
+loop, sin reiniciar el proceso. Los valores del `.env` quedan solo como
+respaldo si la API no responde al arrancar. Con `LOG_LEVEL=DEBUG` se sigue
+logueando el overlap máximo de cada mesa en cada frame, útil para ver el efecto
+de un cambio.
 
 ## Pruebas
 

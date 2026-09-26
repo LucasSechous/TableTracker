@@ -7,12 +7,15 @@ import DashboardPage from "./pages/DashboardPage";
 import HistorialPage from "./pages/HistorialPage";
 import OcupacionPage from "./pages/OcupacionPage";
 import RotacionPage from "./pages/RotacionPage";
+import OcupacionDiariaPage from "./pages/OcupacionDiariaPage";
+import DemandaPage from "./pages/DemandaPage";
 import ConfiguracionPage from "./pages/ConfiguracionPage";
 import CalibracionRoiPage from "./pages/CalibracionRoiPage";
 import CamarasPage from "./pages/CamarasPage";
 import UsuariosPage from "./pages/UsuariosPage";
 import AdminRoute from "./components/AdminRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { AuthProvider } from "./hooks/useAuth";
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const token = localStorage.getItem("token");
@@ -26,88 +29,114 @@ export default function App() {
     // aplicación en blanco (ver ErrorBoundary.tsx).
     <BrowserRouter>
       <ErrorBoundary>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route
-            path="/historial"
-            element={
-              <PrivateRoute>
-                <HistorialPage />
-              </PrivateRoute>
-            }
-          />
-          {/* Sin AdminRoute a propósito: el panel de ocupación lo consultan todos los roles
-              (mozo incluido), igual que GET /metricas/ocupacion, que pide sesión pero no rol. */}
-          <Route
-            path="/ocupacion"
-            element={
-              <PrivateRoute>
-                <OcupacionPage />
-              </PrivateRoute>
-            }
-          />
-          {/* Sin AdminRoute por el mismo motivo que /ocupacion: GET /metricas/rotacion
-              pide sesión pero no rol. */}
-          <Route
-            path="/rotacion"
-            element={
-              <PrivateRoute>
-                <RotacionPage />
-              </PrivateRoute>
-            }
-          />
-          {/* Con AdminRoute, a diferencia de /ocupacion y /rotacion: el PATCH /configuracion
-              exige rol admin, así que dejar entrar a un mozo sería mostrarle un formulario
-              que va a fallar con 403 recién al guardar. */}
-          <Route
-            path="/configuracion"
-            element={
-              <PrivateRoute>
-                <AdminRoute>
-                  <ConfiguracionPage />
-                </AdminRoute>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/calibracion-roi"
-            element={
-              <PrivateRoute>
-                <AdminRoute>
-                  <CalibracionRoiPage />
-                </AdminRoute>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/camaras"
-            element={
-              <PrivateRoute>
-                <AdminRoute>
-                  <CamarasPage />
-                </AdminRoute>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/usuarios"
-            element={
-              <PrivateRoute>
-                <AdminRoute>
-                  <UsuariosPage />
-                </AdminRoute>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/*"
-            element={
-              <PrivateRoute>
-                <DashboardPage />
-              </PrivateRoute>
-            }
-          />
-        </Routes>
+        {/* Dentro del router: el provider lee el token en cada render y necesita que una
+            navegación (el navigate("/") del login, el de logout) lo re-renderice para
+            volver a resolver la sesión. Dentro del boundary para que un fallo suyo caiga
+            en la pantalla de error y no deje la app en blanco. */}
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route
+              path="/historial"
+              element={
+                <PrivateRoute>
+                  <HistorialPage />
+                </PrivateRoute>
+              }
+            />
+            {/* Sin AdminRoute a propósito: el panel de ocupación lo consultan todos los roles
+                (mozo incluido), igual que GET /metricas/ocupacion, que pide sesión pero no rol. */}
+            <Route
+              path="/ocupacion"
+              element={
+                <PrivateRoute>
+                  <OcupacionPage />
+                </PrivateRoute>
+              }
+            />
+            {/* Sin AdminRoute por el mismo motivo que /ocupacion: GET /metricas/rotacion
+                pide sesión pero no rol. */}
+            <Route
+              path="/rotacion"
+              element={
+                <PrivateRoute>
+                  <RotacionPage />
+                </PrivateRoute>
+              }
+            />
+            {/* Sin AdminRoute por el mismo motivo que /ocupacion y /rotacion: GET
+                /metricas/ocupacion-diaria pide sesión pero no rol. */}
+            <Route
+              path="/ocupacion-diaria"
+              element={
+                <PrivateRoute>
+                  <OcupacionDiariaPage />
+                </PrivateRoute>
+              }
+            />
+            {/* Sin AdminRoute por el mismo motivo que las otras tres vistas de métricas:
+                GET /metricas/demanda pide sesión pero no rol (T26-186). */}
+            <Route
+              path="/demanda"
+              element={
+                <PrivateRoute>
+                  <DemandaPage />
+                </PrivateRoute>
+              }
+            />
+            {/* Con AdminRoute, a diferencia de /ocupacion y /rotacion: el PATCH /configuracion
+                exige rol admin, así que dejar entrar a un mozo sería mostrarle un formulario
+                que va a fallar con 403 recién al guardar. */}
+            <Route
+              path="/configuracion"
+              element={
+                <PrivateRoute>
+                  <AdminRoute>
+                    <ConfiguracionPage />
+                  </AdminRoute>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/calibracion-roi"
+              element={
+                <PrivateRoute>
+                  <AdminRoute>
+                    <CalibracionRoiPage />
+                  </AdminRoute>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/camaras"
+              element={
+                <PrivateRoute>
+                  <AdminRoute>
+                    <CamarasPage />
+                  </AdminRoute>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/usuarios"
+              element={
+                <PrivateRoute>
+                  <AdminRoute>
+                    <UsuariosPage />
+                  </AdminRoute>
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/*"
+              element={
+                <PrivateRoute>
+                  <DashboardPage />
+                </PrivateRoute>
+              }
+            />
+          </Routes>
+        </AuthProvider>
       </ErrorBoundary>
     </BrowserRouter>
   );

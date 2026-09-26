@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 
 from app.database import es_violacion_unique, get_db
+from app.routers._comun import validar_sector
 from app.models.camara import Camara
 from app.models.sector import Sector
 from app.schemas.camara import CamaraCreate, CamaraUpdate, CamaraResponse, CamaraTestResponse, CamaraTestUrlRequest
@@ -62,11 +63,6 @@ def _obtener(db: Session, camara_id: int) -> Camara:
     if not camara:
         raise HTTPException(status_code=404, detail="Cámara no encontrada")
     return camara
-
-
-def _validar_sector(db: Session, sector_id: Optional[int]) -> None:
-    if sector_id is not None and not db.query(Sector).filter(Sector.id == sector_id).first():
-        raise HTTPException(status_code=400, detail="El sector indicado no existe")
 
 
 # Nombre de la constraint en la base, fijado por la revisión 6597e37ddeab.
@@ -156,7 +152,7 @@ def obtener_camara(camara_id: int, db: Session = Depends(get_db)):
 
 @router.post("/", response_model=CamaraResponse, status_code=status.HTTP_201_CREATED, dependencies=SOLO_ADMIN)
 def crear_camara(datos: CamaraCreate, db: Session = Depends(get_db)):
-    _validar_sector(db, datos.sector_id)
+    validar_sector(db, datos.sector_id)
     _validar_nombre_libre(db, datos.nombre)
     campos = datos.model_dump()
     # La URL no se guarda textual: se parte en columnas y la contraseña va cifrada
@@ -178,7 +174,7 @@ def actualizar_camara(camara_id: int, datos: CamaraUpdate, db: Session = Depends
     cambios = datos.model_dump(exclude_unset=True)
 
     if "sector_id" in cambios:
-        _validar_sector(db, cambios["sector_id"])
+        validar_sector(db, cambios["sector_id"])
     if "nombre" in cambios:
         _validar_nombre_libre(db, cambios["nombre"], excluir_id=camara.id)
     if "rtsp_url" in cambios:

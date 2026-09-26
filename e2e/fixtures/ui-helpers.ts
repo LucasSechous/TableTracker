@@ -72,6 +72,32 @@ export function getPanelMesaToggle(page: Page): Locator {
   return page.getByTestId("panel-mesa-toggle-correccion");
 }
 
+/**
+ * Botón de cerrar del PanelMesa. Es la señal fiable de "el panel está abierto".
+ *
+ * Ojo: getPanelMesaToggle NO sirve para eso desde T26-195. El desplegable de corrección
+ * manual ahora se esconde para los roles que no pueden ni reservar ni cambiar estado
+ * (`limpieza`), así que su ausencia ya no significa "el panel está cerrado".
+ */
+export function getPanelMesaCerrar(page: Page): Locator {
+  return page.getByTestId("panel-mesa-cerrar");
+}
+
+/** "Confirmar limpieza" — solo aparece con la mesa en pendiente_limpieza Y rol habilitado. */
+export function getConfirmarLimpiezaButton(page: Page): Locator {
+  return page.getByRole("button", { name: "Confirmar limpieza" });
+}
+
+/** "Marcar como reservada", dentro del desplegable de corrección manual. */
+export function getMarcarReservadaButton(page: Page): Locator {
+  return page.getByRole("button", { name: "Marcar como reservada" });
+}
+
+/** Uno de los cuatro botones de corrección manual de estado, dentro del desplegable. */
+export function getPanelMesaEstadoButton(page: Page, estado: string): Locator {
+  return page.getByTestId(`panel-mesa-estado-${estado}`);
+}
+
 export async function cerrarPanelMesa(page: Page): Promise<void> {
   // Por testid y no por el rol con nombre "Cerrar": ese texto es prefijo de "Cerrar
   // sesión" y "Cerrar menú", y getByRole matchea por subcadena.
@@ -92,6 +118,44 @@ export function getEditarSectorButton(sectorBlock: Locator): Locator {
 /** Locator del botón de eliminar (tacho, esquina superior derecha) de un SectorBloque, en modo edición. */
 export function getEliminarSectorButton(sectorBlock: Locator): Locator {
   return sectorBlock.locator('button[title="Eliminar sector"]');
+}
+
+/**
+ * Locator del botón de eliminar de una mesa, en modo edición. Solo lo ve un admin.
+ *
+ * Ojo: matchea TODOS los botones de borrar del sector. Sirve para contar o para afirmar
+ * visibilidad —que es para lo que lo usa el spec 17—, pero no para clickear uno cuando el
+ * sector tiene más de una mesa. Para eso está getEliminarMesaButtonDe.
+ */
+export function getEliminarMesaButton(sectorBlock: Locator): Locator {
+  return sectorBlock.locator('button[title="Eliminar mesa"]');
+}
+
+/** El botón de eliminar de UNA mesa concreta, por su número. */
+export function getEliminarMesaButtonDe(page: Page, numero: number): Locator {
+  return page.getByTestId(`mesa-${numero}-eliminar`);
+}
+
+/** El modal de confirmación de una acción destructiva. Su ausencia es que está cerrado. */
+export function getModalConfirmacion(page: Page): Locator {
+  return page.getByTestId("modal");
+}
+
+/** Cancela el ModalConfirmacion sin ejecutar la acción. */
+export async function cancelarEnModal(page: Page): Promise<void> {
+  await page.getByTestId("modal-cancelar").click();
+}
+
+/**
+ * Acepta el ModalConfirmacion que aparece ante una acción destructiva.
+ *
+ * Reemplaza al `page.once("dialog", (d) => d.accept())` que hacía falta mientras esas
+ * confirmaciones eran window.confirm (T26-200/F-10). Con el modal propio ya no hay diálogo
+ * nativo que interceptar: es un botón como cualquier otro, y el test puede además afirmar
+ * sobre lo que dice antes de confirmar.
+ */
+export async function confirmarEnModal(page: Page): Promise<void> {
+  await page.getByTestId("modal-confirmar").click();
 }
 
 /**
@@ -333,6 +397,18 @@ export function getConfiguracionError(page: Page): Locator {
   return page.getByTestId("configuracion-error");
 }
 
+export function getConfiguracionAviso(page: Page): Locator {
+  return page.getByTestId("configuracion-aviso");
+}
+
+export function getConfiguracionConfirmacionSegundosInput(page: Page): Locator {
+  return page.getByTestId("configuracion-confirmacion-segundos");
+}
+
+export function getConfiguracionOverlapMinimoInput(page: Page): Locator {
+  return page.getByTestId("configuracion-overlap-minimo");
+}
+
 export async function gotoRotacionAuthed(page: Page, token: string): Promise<void> {
   await injectToken(page, token);
   await page.goto("/rotacion");
@@ -419,6 +495,49 @@ export function getRotacionSinRotaciones(page: Page): Locator {
   return page.getByTestId("rotacion-sin-rotaciones");
 }
 
+export async function gotoOcupacionDiariaAuthed(page: Page, token: string): Promise<void> {
+  await injectToken(page, token);
+  await page.goto("/ocupacion-diaria");
+  await waitForOcupacionDiariaLoaded(page);
+}
+
+export async function waitForOcupacionDiariaLoaded(page: Page): Promise<void> {
+  await page.getByText("Cargando reporte...").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
+}
+
+export function getOcupacionDiariaFechaInput(page: Page): Locator {
+  return page.getByTestId("ocupacion-diaria-fecha");
+}
+
+export function getOcupacionDiariaSectorSelect(page: Page): Locator {
+  return page.getByTestId("ocupacion-diaria-filtro-sector");
+}
+
+export function getOcupacionDiariaBuscarButton(page: Page): Locator {
+  return page.getByTestId("ocupacion-diaria-buscar");
+}
+
+export function getOcupacionDiariaPorcentaje(page: Page): Locator {
+  return page.getByTestId("ocupacion-diaria-porcentaje");
+}
+
+export function getOcupacionDiariaFila(page: Page, mesaId: number): Locator {
+  return page.getByTestId(`ocupacion-diaria-fila-${mesaId}`);
+}
+
+export function getOcupacionDiariaPorcentajeFila(page: Page, mesaId: number): Locator {
+  return page.getByTestId(`ocupacion-diaria-porcentaje-${mesaId}`);
+}
+
+export function getOcupacionDiariaVacio(page: Page): Locator {
+  return page.getByTestId("ocupacion-diaria-vacio");
+}
+
+/** Todas las filas de mesa de la tabla de ocupación diaria, como Locator. */
+export function getOcupacionDiariaFilas(page: Page): Locator {
+  return page.locator("tbody tr[data-testid^='ocupacion-diaria-fila-']");
+}
+
 /** Todas las filas del cuerpo de la tabla de historial. */
 export function getHistorialRows(page: Page): Locator {
   return page.locator("table tbody tr");
@@ -429,4 +548,38 @@ export function getHistorialRow(page: Page, mesaId: number, estadoLabel: string)
   return getHistorialRows(page)
     .filter({ has: page.locator("td", { hasText: new RegExp(`^${mesaId}$`) }) })
     .filter({ has: page.locator("td", { hasText: new RegExp(`^${estadoLabel}$`) }) });
+}
+// --- Filtro por estado del dashboard (RF-15) --------------------------------
+
+/** <select> del filtro por estado de la barra de monitoreo del salón. */
+export function getDashboardEstadoFilter(page: Page): Locator {
+  return page.getByTestId("dashboard-filtro-estado");
+}
+
+/** Aviso "Mostrando solo mesas en «X»", visible únicamente con un filtro activo. */
+export function getDashboardFiltroAviso(page: Page): Locator {
+  return page.getByTestId("dashboard-filtro-aviso");
+}
+
+/** Atajo "Ver todas" que limpia el filtro sin pasar por el <select>. */
+export function getDashboardFiltroLimpiar(page: Page): Locator {
+  return page.getByTestId("dashboard-filtro-limpiar");
+}
+
+/** Value de cada <option> del filtro, en el orden en que se pintan. */
+export async function getDashboardEstadoOpciones(page: Page): Promise<string[]> {
+  return getDashboardEstadoFilter(page).locator("option").evaluateAll((opciones) =>
+    opciones.map((o) => (o as HTMLOptionElement).value)
+  );
+}
+
+/** Horarios de mayor demanda (T26-186, RF-24). */
+export async function gotoDemandaAuthed(page: Page, token: string): Promise<void> {
+  await injectToken(page, token);
+  await page.goto("/demanda");
+  await waitForDemandaLoaded(page);
+}
+
+export async function waitForDemandaLoaded(page: Page): Promise<void> {
+  await page.getByText("Cargando demanda...").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
 }

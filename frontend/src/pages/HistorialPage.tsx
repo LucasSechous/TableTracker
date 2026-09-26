@@ -81,10 +81,10 @@ export default function HistorialPage() {
         setHistorial(res.filas)
         setTruncado(res.truncado)
       })
-      .catch((err: unknown) => {
+      .catch(async (err: unknown) => {
         setHistorial([])
         setTruncado(false)
-        setError(extraerDetalle(err, "Error al cargar el historial"))
+        setError(await extraerDetalle(err, "Error al cargar el historial"))
       })
       .finally(() => setLoading(false))
   }
@@ -129,7 +129,7 @@ export default function HistorialPage() {
       )
       descargarCsv(nombreArchivoCsv("historial", aplicados.fechaInicio, aplicados.fechaFin), contenido)
     } catch (err) {
-      setError(extraerDetalle(err, "No se pudo exportar el historial"))
+      setError(await extraerDetalle(err, "No se pudo exportar el historial"))
     } finally {
       setExportando(false)
     }

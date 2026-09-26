@@ -2,6 +2,9 @@
 
 from datetime import datetime, timedelta
 
+import pytest
+
+from app.models.configuracion import ConfiguracionGeneral
 from app.models.historial import HistorialEstado
 from app.models.mesa import EstadoMesa
 
@@ -14,7 +17,61 @@ def test_ocupacion_sin_mesas(client, como):
         "total_mesas": 0,
         "porcentaje_ocupacion": 0.0,
         "conteo_por_estado": {"libre": 0, "ocupada": 0, "pendiente_limpieza": 0, "reservada": 0},
+        # Sin fila de configuración cae al default de la columna (T26-187), y un salón sin
+        # mesas nunca alerta: 0% no es una ocupación medida, es que no hay nada que medir.
+        "umbral_ocupacion_alta": 85.0,
+        "ocupacion_alta": False,
+        # Horario de servicio (T26-200/F-2). Sin fila de configuración no hay franja, y el
+        # default documentado de en_horario_de_servicio es "siempre en horario": el aviso de
+        # local cerrado no tiene que aparecerle a quien no configuró ningún horario.
+        "local_abierto": True,
+        "hora_apertura": None,
+        "hora_cierre": None,
     }
+
+
+# --- Horario de servicio en la respuesta de ocupación (T26-200/F-2) ----------
+#
+# La regla dejó de estar duplicada en el frontend (que la evaluaba con el reloj del navegador)
+# y ahora viaja resuelta en este endpoint. Lo que se prueba acá es ese cableado —que el
+# booleano salga de la configuración y que las horas se devuelvan para poder rotular el
+# aviso—; la regla en sí, con su cruce de medianoche, ya está cubierta en test_horario.py.
+
+
+def _hora_local_actual():
+    """La hora del reloj del local ahora mismo, que es contra la que evalúa el endpoint."""
+    from datetime import datetime, timezone
+
+    from app.services.horario import hora_local
+
+    return hora_local(datetime.now(timezone.utc)).hour
+
+
+def test_ocupacion_dice_que_el_local_esta_abierto_dentro_de_la_franja(client, como, db):
+    # Franja de ±1 hora alrededor de ahora. Se calcula en vez de fijarse para que el test no
+    # dependa de a qué hora se corra la suite; el margen de una hora para cada lado lo deja
+    # lejos de cualquier borde. Si la franja cruza medianoche, es justamente el caso que
+    # en_horario_de_servicio resuelve por complemento.
+    hora = _hora_local_actual()
+    _configurar_horario(db, (hora - 1) % 24, (hora + 1) % 24)
+    como("admin")
+
+    cuerpo = client.get("/metricas/ocupacion").json()
+    assert cuerpo["local_abierto"] is True
+    # Las horas viajan en el mismo payload para que el panel pueda escribir "servicio de X a
+    # Y" sin pedir /configuracion aparte.
+    assert cuerpo["hora_apertura"] == f"{(hora - 1) % 24:02d}:00:00"
+    assert cuerpo["hora_cierre"] == f"{(hora + 1) % 24:02d}:00:00"
+
+
+def test_ocupacion_dice_que_el_local_esta_cerrado_fuera_de_la_franja(client, como, db):
+    # Franja que arranca dentro de 2 horas y cerró hace 2: deja el momento actual afuera
+    # cualquiera sea la hora a la que corra la suite.
+    hora = _hora_local_actual()
+    _configurar_horario(db, (hora + 2) % 24, (hora - 2) % 24)
+    como("admin")
+
+    assert client.get("/metricas/ocupacion").json()["local_abierto"] is False
 
 
 def test_ocupacion_cuenta_por_estado(client, como, crear_mesa):
@@ -86,6 +143,147 @@ def test_ocupacion_cualquier_rol_autenticado_puede_leer(client, como, crear_mesa
 def test_sin_autenticar_da_401(client, crear_mesa):
     crear_mesa()
     assert client.get("/metricas/ocupacion").status_code == 401
+
+
+# ------------------------------------------- alerta de alta ocupación (T26-187, RF-26)
+
+
+@pytest.fixture
+def umbral(db):
+    """Fija umbral_ocupacion_alta en la fila singleton, creándola si no existe."""
+
+    def _fijar(porcentaje):
+        config = db.query(ConfiguracionGeneral).filter(ConfiguracionGeneral.id == 1).first()
+        if config is None:
+            config = ConfiguracionGeneral(id=1)
+            db.add(config)
+        config.umbral_ocupacion_alta = porcentaje
+        db.commit()
+        return config
+
+    return _fijar
+
+
+def _ocupacion(client):
+    return client.get("/metricas/ocupacion").json()
+
+
+def test_por_debajo_del_umbral_no_alerta(client, como, crear_mesa, umbral):
+    umbral(85)
+    # 1 de 4 ocupadas = 25%.
+    crear_mesa(estado=EstadoMesa.ocupada)
+    for _ in range(3):
+        crear_mesa(estado=EstadoMesa.libre)
+    como("admin")
+
+    cuerpo = _ocupacion(client)
+    assert cuerpo["porcentaje_ocupacion"] == 25.0
+    assert cuerpo["ocupacion_alta"] is False
+    assert cuerpo["umbral_ocupacion_alta"] == 85.0
+
+
+def test_al_superar_el_umbral_alerta(client, como, crear_mesa, umbral):
+    umbral(85)
+    # 4 de 4 ocupadas = 100%.
+    for _ in range(4):
+        crear_mesa(estado=EstadoMesa.ocupada)
+    como("admin")
+
+    cuerpo = _ocupacion(client)
+    assert cuerpo["porcentaje_ocupacion"] == 100.0
+    assert cuerpo["ocupacion_alta"] is True
+
+
+def test_al_bajar_de_nuevo_deja_de_alertar(client, como, crear_mesa, umbral):
+    """El ciclo completo: la alerta tiene que apagarse sola cuando el salón se descomprime.
+
+    Es el caso que de verdad importa —una alerta que se enciende y no se apaga es peor que
+    no tenerla—, y por eso se recorre la transición en un solo test en vez de asumir que
+    dos tests independientes la cubren.
+    """
+    umbral(85)
+    mesas = [crear_mesa(estado=EstadoMesa.ocupada) for _ in range(4)]
+    como("admin")
+    assert _ocupacion(client)["ocupacion_alta"] is True
+
+    # Se libera una: 3 de 4 = 75%, por debajo del umbral.
+    assert client.patch(f"/mesas/{mesas[0].id}/estado", json={"estado": "libre"}).status_code == 200
+
+    cuerpo = _ocupacion(client)
+    assert cuerpo["porcentaje_ocupacion"] == 75.0
+    assert cuerpo["ocupacion_alta"] is False
+
+
+def test_justo_en_el_umbral_alerta(client, como, crear_mesa, umbral):
+    """El umbral es el punto a partir del cual se alerta, no el último valor tolerado.
+
+    Fija el criterio >= del router para que no se convierta en > por descuido: es el mismo
+    que usa la alerta de limpieza demorada (T26-173) y las dos deben responder igual.
+    """
+    umbral(50)
+    crear_mesa(estado=EstadoMesa.ocupada)
+    crear_mesa(estado=EstadoMesa.libre)
+    como("admin")
+
+    cuerpo = _ocupacion(client)
+    assert cuerpo["porcentaje_ocupacion"] == 50.0
+    assert cuerpo["ocupacion_alta"] is True
+
+
+def test_el_umbral_configurado_manda_sobre_el_default(client, como, crear_mesa, umbral):
+    # 50% de ocupación: no alerta con el default de 85, sí con un umbral de 40.
+    crear_mesa(estado=EstadoMesa.ocupada)
+    crear_mesa(estado=EstadoMesa.libre)
+    como("admin")
+
+    umbral(85)
+    assert _ocupacion(client)["ocupacion_alta"] is False
+
+    umbral(40)
+    cuerpo = _ocupacion(client)
+    assert cuerpo["ocupacion_alta"] is True
+    assert cuerpo["umbral_ocupacion_alta"] == 40.0
+
+
+def test_reservada_no_dispara_la_alerta(client, como, crear_mesa, umbral):
+    """Coherencia con la decisión de T26-154: reservada no es ocupación física.
+
+    Si la alerta contara las reservadas, el salón alertaría "al límite" con todas las mesas
+    vacías y la mitad reservadas, que es exactamente la lectura que ese ticket descartó.
+    """
+    umbral(50)
+    crear_mesa(estado=EstadoMesa.reservada)
+    crear_mesa(estado=EstadoMesa.reservada)
+    como("admin")
+
+    cuerpo = _ocupacion(client)
+    assert cuerpo["porcentaje_ocupacion"] == 0.0
+    assert cuerpo["ocupacion_alta"] is False
+
+
+def test_las_mesas_inactivas_no_cuentan_para_la_alerta(client, como, crear_mesa, umbral):
+    """El umbral es sobre el total ACTIVO: una mesa dada de baja no infla ni diluye el %."""
+    umbral(85)
+    crear_mesa(estado=EstadoMesa.ocupada)
+    crear_mesa(estado=EstadoMesa.libre, activa=False)
+    como("admin")
+
+    cuerpo = _ocupacion(client)
+    assert cuerpo["total_mesas"] == 1
+    assert cuerpo["ocupacion_alta"] is True
+
+
+def test_la_alerta_respeta_el_filtro_por_sector(client, como, crear_sector, crear_mesa, umbral):
+    """Con sector_id la alerta es la de ese sector, no la del salón entero."""
+    umbral(85)
+    lleno = crear_sector(nombre="Lleno")
+    vacio = crear_sector(nombre="Vacio")
+    crear_mesa(sector_id=lleno.id, estado=EstadoMesa.ocupada)
+    crear_mesa(sector_id=vacio.id, estado=EstadoMesa.libre)
+    como("admin")
+
+    assert client.get(f"/metricas/ocupacion?sector_id={lleno.id}").json()["ocupacion_alta"] is True
+    assert client.get(f"/metricas/ocupacion?sector_id={vacio.id}").json()["ocupacion_alta"] is False
 
 
 # --------------------------------------------------------------- /rotacion
@@ -297,3 +495,335 @@ def test_una_ocupacion_fuera_de_horario_no_infla_la_siguiente_en_horario(client,
     como("admin")
 
     assert _rotaciones_de(client, mesa.id) == 0
+
+
+# --------------------------------------------------------- /ocupacion-diaria (T26-185, RF-32)
+
+
+def test_ocupacion_diaria_sin_mesas(client, como):
+    como("admin")
+    cuerpo = client.get("/metricas/ocupacion-diaria", params={"fecha": "2026-08-30"}).json()
+    assert cuerpo["total_mesas"] == 0
+    assert cuerpo["porcentaje_ocupacion"] == 0.0
+    assert cuerpo["mesas"] == []
+
+
+def test_ocupacion_diaria_reconstruye_minutos_por_estado_y_asume_libre_antes_del_primer_evento(
+    client, como, db, crear_mesa
+):
+    # Sin horario configurado, el día operativo del 30/08 es medianoche a medianoche civil
+    # (24h = 1440 min). Sin fila previa a las 00:00, la mesa arranca 'libre' (decisión: mesa
+    # sin historial previo se asume libre).
+    mesa = crear_mesa()
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(2, dia=30))
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(4, dia=30))
+    como("admin")
+
+    cuerpo = client.get("/metricas/ocupacion-diaria", params={"fecha": "2026-08-30"}).json()
+    fila = cuerpo["mesas"][0]
+    # libre: 00:00-02:00 (120) + 04:00-24:00 (1200) = 1320. ocupada: 02:00-04:00 = 120.
+    assert fila["minutos_por_estado"]["libre"] == 1320
+    assert fila["minutos_por_estado"]["ocupada"] == 120
+    assert cuerpo["total_mesas"] == 1
+    assert cuerpo["porcentaje_ocupacion"] == round(120 / 1440 * 100, 2)
+
+
+def test_ocupacion_diaria_incluye_mesa_activa_sin_historial_como_libre_todo_el_dia(client, como, crear_mesa):
+    crear_mesa()
+    como("admin")
+
+    cuerpo = client.get("/metricas/ocupacion-diaria", params={"fecha": "2026-08-30"}).json()
+    fila = cuerpo["mesas"][0]
+    assert fila["minutos_por_estado"]["libre"] == 24 * 60
+    assert fila["porcentaje_ocupacion"] == 0.0
+
+
+def test_ocupacion_diaria_no_parte_turno_que_cruza_medianoche_con_horario_configurado(client, como, db, crear_mesa):
+    """El caso central del ticket: un turno 20:00->02:00 no se parte en dos días.
+
+    Franja del 30/08: 20:00 del 30 a 02:00 del 31 (6h = 360 min). El evento de las 01:00 del
+    31 cae DESPUÉS de medianoche civil pero sigue dentro del día operativo del 30.
+    """
+    mesa = crear_mesa(estado=EstadoMesa.libre)
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(21, dia=30))
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(23, dia=30))
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(1, dia=31))
+    _configurar_horario(db, 20, 2)
+    como("admin")
+
+    cuerpo = client.get("/metricas/ocupacion-diaria", params={"fecha": "2026-08-30"}).json()
+    fila = cuerpo["mesas"][0]
+    # libre: 20:00-21:00 (60) + 23:00-01:00 (120) = 180. ocupada: 21:00-23:00 (120) + 01:00-02:00 (60) = 180.
+    assert fila["minutos_por_estado"]["libre"] == 180
+    assert fila["minutos_por_estado"]["ocupada"] == 180
+
+
+def test_ocupacion_diaria_sin_horario_usa_medianoche_civil(client, como, db, crear_mesa):
+    """Contraste con el test anterior: sin horario configurado no hay franja que anclar, así
+    que el mismo turno real (23:00 del 30 a 01:00 del 31) SÍ queda partido en dos días."""
+    mesa = crear_mesa()
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(23, dia=30))
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(1, dia=31))
+    como("admin")
+
+    fila_30 = client.get("/metricas/ocupacion-diaria", params={"fecha": "2026-08-30"}).json()["mesas"][0]
+    fila_31 = client.get("/metricas/ocupacion-diaria", params={"fecha": "2026-08-31"}).json()["mesas"][0]
+
+    # Día 30: ocupada de 23:00 a medianoche (60 min), libre las 23h restantes.
+    assert fila_30["minutos_por_estado"]["ocupada"] == 60
+    assert fila_30["minutos_por_estado"]["libre"] == 23 * 60
+    # Día 31: sigue ocupada (arrastre) de medianoche a 01:00 (60 min), libre el resto.
+    assert fila_31["minutos_por_estado"]["ocupada"] == 60
+    assert fila_31["minutos_por_estado"]["libre"] == 23 * 60
+
+
+def test_ocupacion_diaria_no_proyecta_a_futuro(db, crear_mesa):
+    """Prueba directa de calcular_ocupacion_por_mesa: para "hoy", el tramo abierto llega
+    hasta `ahora`, no hasta el fin teórico del rango. No se puede probar vía HTTP porque el
+    endpoint usa datetime.now() real; acá se inyecta un `ahora` fijo."""
+    from app.services.ocupacion import calcular_ocupacion_por_mesa
+
+    mesa = crear_mesa()
+    inicio = _a_las(0, dia=30)
+    fin = _a_las(0, dia=31)
+    ahora = _a_las(12, dia=30)
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(6, dia=30))
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(18, dia=30))  # posterior a `ahora`: no debe contarse
+
+    tiempos = calcular_ocupacion_por_mesa(db, [mesa], inicio, fin, ahora=ahora)[mesa.id]
+
+    assert tiempos["libre"] == 360  # 00:00-06:00
+    assert tiempos["ocupada"] == 360  # 06:00-12:00 (ahora)
+    assert sum(tiempos.values()) == 720  # 12 horas contadas, no las 24 del rango teórico
+
+
+def test_ocupacion_diaria_mesa_inactiva_cuenta_hasta_su_ultimo_evento(client, como, db, crear_mesa):
+    # Sin columna de fecha de baja, se aproxima con el último evento que la mesa tuvo ese
+    # día: de ahí en más no hay dato, así que no se cuenta tiempo.
+    mesa = crear_mesa(activa=False)
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(10, dia=30))
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(14, dia=30))
+    como("admin")
+
+    cuerpo = client.get("/metricas/ocupacion-diaria", params={"fecha": "2026-08-30"}).json()
+    fila = cuerpo["mesas"][0]
+    assert fila["minutos_por_estado"]["libre"] == 10 * 60  # 00:00-10:00
+    assert fila["minutos_por_estado"]["ocupada"] == 4 * 60  # 10:00-14:00
+    assert sum(fila["minutos_por_estado"].values()) == 14 * 60  # nada después de las 14:00
+
+
+def test_ocupacion_diaria_mesa_inactiva_sin_eventos_se_excluye(client, como, crear_mesa):
+    crear_mesa(activa=False)
+    como("admin")
+
+    cuerpo = client.get("/metricas/ocupacion-diaria", params={"fecha": "2026-08-30"}).json()
+    assert cuerpo["mesas"] == []
+    assert cuerpo["total_mesas"] == 0
+
+
+def test_ocupacion_diaria_filtra_por_sector(client, como, db, crear_sector, crear_mesa):
+    sector_a, sector_b = crear_sector(), crear_sector()
+    mesa_a = crear_mesa(sector_id=sector_a.id)
+    mesa_b = crear_mesa(sector_id=sector_b.id)
+    _historial(db, mesa_a.id, EstadoMesa.ocupada, _a_las(10, dia=30))
+    _historial(db, mesa_b.id, EstadoMesa.ocupada, _a_las(10, dia=30))
+    como("admin")
+
+    cuerpo = client.get(
+        "/metricas/ocupacion-diaria", params={"fecha": "2026-08-30", "sector_id": sector_a.id}
+    ).json()
+    assert [fila["mesa_id"] for fila in cuerpo["mesas"]] == [mesa_a.id]
+
+
+def test_ocupacion_diaria_sector_inexistente_da_400(client, como):
+    como("admin")
+    respuesta = client.get("/metricas/ocupacion-diaria", params={"sector_id": 9999})
+    assert respuesta.status_code == 400
+
+
+def test_ocupacion_diaria_fecha_futura_da_vacio_no_error(client, como, db, crear_mesa):
+    mesa = crear_mesa()
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(10, dia=30))
+    como("admin")
+
+    respuesta = client.get("/metricas/ocupacion-diaria", params={"fecha": "2099-01-01"})
+    assert respuesta.status_code == 200
+    cuerpo = respuesta.json()
+    assert cuerpo["mesas"] == []
+    assert cuerpo["total_mesas"] == 0
+    assert cuerpo["porcentaje_ocupacion"] == 0.0
+
+
+def test_ocupacion_diaria_cualquier_rol_autenticado_puede_leer(client, como, crear_mesa):
+    crear_mesa()
+    como("mozo")
+    assert client.get("/metricas/ocupacion-diaria").status_code == 200
+
+
+def test_ocupacion_diaria_sin_autenticar_da_401(client, crear_mesa):
+    crear_mesa()
+    assert client.get("/metricas/ocupacion-diaria").status_code == 401
+
+
+# --------------------------------------------------------------- /demanda (T26-186, RF-24)
+#
+# Lo que hay que proteger acá es el REPARTO por franja. Sumar bien el total ya lo cubre
+# /ocupacion-diaria; lo nuevo es que una ocupación que cruza el borde de la hora caiga
+# partida y no entera en la franja donde arrancó, porque eso es justo lo que fabricaría un
+# pico falso en el gráfico que este reporte existe para dibujar.
+
+
+def _franjas(cuerpo):
+    return {f["hora"]: f for f in cuerpo["franjas"]}
+
+
+def test_demanda_sin_mesas_no_devuelve_franjas(client, como):
+    como("admin")
+    cuerpo = client.get("/metricas/demanda", params={"fecha_inicio": "2026-08-30", "fecha_fin": "2026-08-30"}).json()
+    assert cuerpo["franjas"] == []
+    assert cuerpo["dias"] == 1
+
+
+def test_demanda_agrupa_por_hora_local_y_no_utc(client, como, db, crear_mesa):
+    """La franja es la del reloj del local. Con TZ_LOCAL en UTC-3 la diferencia son 3 horas.
+
+    Si se agrupara por UTC, esta ocupación de 14:00 a 15:00 local aparecería en la franja 17.
+    """
+    mesa = crear_mesa(estado=EstadoMesa.libre)
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(14, dia=30))
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(15, dia=30))
+    como("admin")
+
+    franjas = _franjas(
+        client.get("/metricas/demanda", params={"fecha_inicio": "2026-08-30", "fecha_fin": "2026-08-30"}).json()
+    )
+    assert franjas[14]["minutos_ocupada"] == 60
+    assert franjas[15]["minutos_ocupada"] == 0
+    assert 17 not in franjas or franjas[17]["minutos_ocupada"] == 0
+
+
+def test_demanda_reparte_una_ocupacion_que_cruza_el_borde_de_la_hora(client, como, db, crear_mesa):
+    """De 20:50 a 21:40 son 10 minutos en la franja 20 y 40 en la 21, no 50 en la 20."""
+    from datetime import timedelta as _td
+
+    mesa = crear_mesa(estado=EstadoMesa.libre)
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(20, dia=30) + _td(minutes=50))
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(21, dia=30) + _td(minutes=40))
+    como("admin")
+
+    franjas = _franjas(
+        client.get("/metricas/demanda", params={"fecha_inicio": "2026-08-30", "fecha_fin": "2026-08-30"}).json()
+    )
+    assert franjas[20]["minutos_ocupada"] == 10
+    assert franjas[21]["minutos_ocupada"] == 40
+    # Y el total sigue siendo el real: el reparto no inventa ni pierde minutos.
+    assert franjas[20]["minutos_ocupada"] + franjas[21]["minutos_ocupada"] == 50
+
+
+def test_demanda_acumula_varios_dias_en_la_misma_franja(client, como, db, crear_mesa):
+    """Dos días con la misma hora ocupada suman en la misma franja: eso es el patrón."""
+    mesa = crear_mesa(estado=EstadoMesa.libre)
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(13, dia=30))
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(14, dia=30))
+    _historial(db, mesa.id, EstadoMesa.ocupada, _a_las(13, dia=31))
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(14, dia=31))
+    como("admin")
+
+    cuerpo = client.get("/metricas/demanda", params={"fecha_inicio": "2026-08-30", "fecha_fin": "2026-08-31"}).json()
+    assert cuerpo["dias"] == 2
+    assert _franjas(cuerpo)[13]["minutos_ocupada"] == 120
+
+
+def test_demanda_el_porcentaje_es_sobre_lo_medido_no_sobre_la_franja_entera(client, como, db, crear_mesa):
+    """Una mesa ocupada media hora de dos mesas-hora medidas es 25%, no 50%."""
+    from datetime import timedelta as _td
+
+    ocupada = crear_mesa(estado=EstadoMesa.libre)
+    crear_mesa(estado=EstadoMesa.libre)  # segunda mesa, libre toda la franja
+    _historial(db, ocupada.id, EstadoMesa.ocupada, _a_las(13, dia=30))
+    _historial(db, ocupada.id, EstadoMesa.libre, _a_las(13, dia=30) + _td(minutes=30))
+    como("admin")
+
+    franja = _franjas(
+        client.get("/metricas/demanda", params={"fecha_inicio": "2026-08-30", "fecha_fin": "2026-08-30"}).json()
+    )[13]
+    assert franja["minutos_ocupada"] == 30
+    assert franja["minutos_medidos"] == 120  # 2 mesas x 60 min
+    assert franja["porcentaje_ocupacion"] == 25.0
+
+
+def test_demanda_reservada_no_cuenta_como_ocupacion(client, como, db, crear_mesa):
+    """Coherencia con T26-154: reservada es un bucket aparte, no ocupación física."""
+    mesa = crear_mesa(estado=EstadoMesa.libre)
+    _historial(db, mesa.id, EstadoMesa.reservada, _a_las(13, dia=30))
+    _historial(db, mesa.id, EstadoMesa.libre, _a_las(14, dia=30))
+    como("admin")
+
+    franja = _franjas(
+        client.get("/metricas/demanda", params={"fecha_inicio": "2026-08-30", "fecha_fin": "2026-08-30"}).json()
+    )[13]
+    assert franja["minutos_ocupada"] == 0
+    assert franja["porcentaje_ocupacion"] == 0.0
+
+
+def test_demanda_solo_devuelve_franjas_del_horario_de_servicio(client, como, db, crear_mesa):
+    """Con horario 20:00->02:00 el reporte habla de 6 franjas, no de 24 con ceros.
+
+    Una hora con el local cerrado no es "0% de ocupación": es una hora sobre la que el
+    reporte no dice nada, y dibujarla en cero la haría parecer un valle medido.
+    """
+    crear_mesa(estado=EstadoMesa.libre)
+    _configurar_horario(db, 20, 2)
+    como("admin")
+
+    cuerpo = client.get("/metricas/demanda", params={"fecha_inicio": "2026-08-30", "fecha_fin": "2026-08-30"}).json()
+    # 20:00 -> 02:00 son seis franjas: 20, 21, 22, 23, 0 y 1.
+    assert sorted(_franjas(cuerpo)) == [0, 1, 20, 21, 22, 23]
+
+
+def test_demanda_rango_por_defecto_es_una_semana(client, como, crear_mesa):
+    crear_mesa()
+    como("admin")
+    cuerpo = client.get("/metricas/demanda").json()
+    assert cuerpo["dias"] == 7
+
+
+def test_demanda_fecha_inicio_posterior_a_fin_da_400(client, como):
+    como("admin")
+    respuesta = client.get(
+        "/metricas/demanda", params={"fecha_inicio": "2026-08-31", "fecha_fin": "2026-08-30"}
+    )
+    assert respuesta.status_code == 400
+
+
+def test_demanda_sector_inexistente_da_400(client, como):
+    como("admin")
+    assert client.get("/metricas/demanda", params={"sector_id": 9999}).status_code == 400
+
+
+def test_demanda_filtra_por_sector(client, como, db, crear_sector, crear_mesa):
+    sector_a = crear_sector(nombre="A")
+    sector_b = crear_sector(nombre="B")
+    mesa_a = crear_mesa(sector_id=sector_a.id, estado=EstadoMesa.libre)
+    mesa_b = crear_mesa(sector_id=sector_b.id, estado=EstadoMesa.libre)
+    _historial(db, mesa_a.id, EstadoMesa.ocupada, _a_las(13, dia=30))
+    _historial(db, mesa_b.id, EstadoMesa.ocupada, _a_las(13, dia=30))
+    como("admin")
+
+    cuerpo = client.get(
+        "/metricas/demanda",
+        params={"fecha_inicio": "2026-08-30", "fecha_fin": "2026-08-30", "sector_id": sector_a.id},
+    ).json()
+    # Solo la mesa de A: 60 min medidos en la franja 13, no 120.
+    assert _franjas(cuerpo)[13]["minutos_medidos"] == 60
+
+
+def test_demanda_cualquier_rol_autenticado_puede_leer(client, como, crear_mesa):
+    crear_mesa()
+    como("mozo")
+    assert client.get("/metricas/demanda").status_code == 200
+
+
+def test_demanda_sin_autenticar_da_401(client, crear_mesa):
+    crear_mesa()
+    assert client.get("/metricas/demanda").status_code == 401

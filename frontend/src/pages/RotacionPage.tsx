@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowDownUp, Clock, Download, RefreshCw, Repeat } from "lucide-react"
-import { metricasApi, sectoresApi, configuracionApi, extraerDetalleApi } from "../services/api"
+import { metricasApi, sectoresApi, configuracionApi, extraerDetalle } from "../services/api"
 import type { RotacionMesa, Sector, Configuracion } from "../types"
 import RangoFechas, { finDelDia, labelStyle } from "../components/RangoFechas"
 import { descargarCsv, generarCsv, nombreArchivoCsv } from "../csv"
@@ -65,7 +65,7 @@ export default function RotacionPage() {
       // Se vacía la tabla: dejar las filas del rango anterior junto a un error las haría
       // pasar por el resultado del rango que se acaba de pedir.
       setFilas([])
-      setError(await extraerDetalleApi(err, "Error al cargar la rotación de mesas"))
+      setError(await extraerDetalle(err, "Error al cargar la rotación de mesas"))
     } finally {
       setLoading(false)
     }

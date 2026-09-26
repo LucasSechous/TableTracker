@@ -2,7 +2,6 @@
 // Filtros opcionales por mesa y rango de fechas; sin filtros muestra el historial completo.
 
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
 import { Download } from "lucide-react"
 import { historialApi, mesasApi, extraerDetalle } from "../services/api"
 import type { HistorialFiltros } from "../services/api"
@@ -10,6 +9,8 @@ import type { HistorialEstado, Mesa } from "../types"
 import RangoFechas, { finDelDia, labelStyle } from "../components/RangoFechas"
 import { ETIQUETA_POR_ESTADO } from "../constants"
 import { descargarCsv, formatearFechaCsv, generarCsv, nombreArchivoCsv } from "../csv"
+import Layout from "../components/Layout"
+import Boton from "../components/ui/Boton"
 
 interface FiltrosUi {
   mesaId: string
@@ -64,7 +65,6 @@ export default function HistorialPage() {
   const [loading, setLoading] = useState(true)
   const [exportando, setExportando] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const navigate = useNavigate()
 
   useEffect(() => {
     mesasApi.listar().then((res) => setMesas(res.data)).catch(() => {})
@@ -152,37 +152,7 @@ export default function HistorialPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
-      <header
-        style={{
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-          padding: "12px 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>
-          Historial de mesas
-        </h1>
-        <button
-          onClick={() => navigate("/")}
-          style={{
-            padding: "6px 14px",
-            borderRadius: 6,
-            border: "1px solid #1976d2",
-            fontSize: 13,
-            cursor: "pointer",
-            backgroundColor: "#fff",
-            color: "#1976d2",
-            fontWeight: 500,
-          }}
-        >
-          Volver al salón
-        </button>
-      </header>
-
+    <Layout>
       <main style={{ padding: 24 }}>
         <div
           style={{
@@ -232,60 +202,26 @@ export default function HistorialPage() {
             </select>
           </label>
 
-          <button
-            onClick={handleBuscar}
-            style={{
-              padding: "8px 16px",
-              borderRadius: 6,
-              border: "none",
-              backgroundColor: "#1976d2",
-              color: "#fff",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
+          <Boton variante="primario" onClick={handleBuscar}>
             Buscar
-          </button>
+          </Boton>
 
-          <button
-            onClick={handleLimpiar}
-            style={{
-              padding: "8px 16px",
-              borderRadius: 6,
-              border: "1px solid #ccc",
-              backgroundColor: "#fff",
-              color: "#444",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
+          <Boton variante="neutro" onClick={handleLimpiar}>
             Limpiar filtros
-          </button>
+          </Boton>
 
-          <button
+          <Boton
             data-testid="historial-exportar-csv"
+            icono={Download}
             onClick={handleExportar}
-            disabled={loading || exportando || historial.length === 0}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 16px",
-              borderRadius: 6,
-              border: "1px solid #1976d2",
-              backgroundColor: "#fff",
-              color: "#1976d2",
-              fontSize: 13,
-              fontWeight: 600,
-              fontFamily: "inherit",
-              opacity: loading || exportando || historial.length === 0 ? 0.5 : 1,
-              cursor: loading || exportando || historial.length === 0 ? "default" : "pointer",
-            }}
+            // Sin filas no hay CSV que bajar: el botón se deshabilita en vez de generar un
+            // archivo con solo el encabezado.
+            disabled={loading || historial.length === 0}
+            cargando={exportando}
+            textoCargando="Exportando..."
           >
-            <Download size={15} />
-            {exportando ? "Exportando..." : "Exportar CSV"}
-          </button>
+            Exportar CSV
+          </Boton>
         </div>
 
         {loading && <p style={{ fontSize: 14, color: "#888" }}>Cargando historial...</p>}
@@ -358,6 +294,6 @@ export default function HistorialPage() {
           </div>
         )}
       </main>
-    </div>
+    </Layout>
   )
 }

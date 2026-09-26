@@ -503,6 +503,94 @@ class TestCacheUmbrales:
         assert "No se pudo refrescar la configuración" in caplog.text
 
 
+class TestCacheZonas:
+    # T26-199: antes de esto, cargar_zonas() se llamaba una sola vez al arrancar y una
+    # mesa/sector dado de baja en pleno funcionamiento no se reflejaba hasta reiniciar.
+
+    def test_no_llama_a_la_api_antes_de_la_iteracion_n(self):
+        cliente = cliente_falso()
+        cache = main.CacheZonas(cliente, CAMARA, sector_id=2, confirmador=MagicMock(), zonas_iniciales=[], cada_iteraciones=3)
+
+        cache.actualizar()
+        cache.actualizar()
+
+        cliente.listar_rois.assert_not_called()
+
+    def test_llama_a_la_api_en_la_iteracion_n(self):
+        cliente = cliente_falso(
+            rois=[{"id": 7, "mesa_id": 221, "coordenadas": [[0, 0], [10, 0], [10, 10]]}],
+            mesas=[{"id": 221, "numero": 6}],
+        )
+        cache = main.CacheZonas(cliente, CAMARA, sector_id=2, confirmador=MagicMock(), zonas_iniciales=[], cada_iteraciones=3)
+
+        for _ in range(3):
+            cache.actualizar()
+
+        cliente.listar_rois.assert_called_once_with(CAMARA["id"])
+
+    def test_actualiza_las_zonas_con_lo_que_devuelve_la_api(self):
+        cliente = cliente_falso(
+            rois=[{"id": 7, "mesa_id": 221, "coordenadas": [[0, 0], [10, 0], [10, 10]]}],
+            mesas=[{"id": 221, "numero": 6}],
+        )
+        cache = main.CacheZonas(cliente, CAMARA, sector_id=2, confirmador=MagicMock(), zonas_iniciales=[], cada_iteraciones=1)
+
+        cache.actualizar()
+
+        assert [z.mesa_id for z in cache.zonas] == [221]
+
+    def test_avisa_al_confirmador_que_mesas_siguen_vigentes(self):
+        # Es lo que hace que una mesa dada de baja deje de arrastrar su observación
+        # vieja: sin esto, Confirmador la resucitaría con un reloj que arrancó hace rato.
+        cliente = cliente_falso(
+            rois=[{"id": 7, "mesa_id": 221, "coordenadas": [[0, 0], [10, 0], [10, 10]]}],
+            mesas=[{"id": 221, "numero": 6}],
+        )
+        confirmador = MagicMock()
+        cache = main.CacheZonas(cliente, CAMARA, sector_id=2, confirmador=confirmador, zonas_iniciales=[], cada_iteraciones=1)
+
+        cache.actualizar()
+
+        confirmador.olvidar.assert_called_once_with([221])
+
+    def test_un_fallo_de_la_api_mantiene_las_ultimas_zonas_conocidas(self, caplog):
+        from app.mapping.zonas import Zona
+
+        cliente = cliente_falso()
+        cliente.listar_rois.side_effect = ErrorBackend("backend caído")
+        confirmador = MagicMock()
+        anteriores = [Zona(221, [(0, 0), (10, 0), (10, 10)], roi_id=7)]
+        cache = main.CacheZonas(cliente, CAMARA, sector_id=2, confirmador=confirmador, zonas_iniciales=anteriores, cada_iteraciones=1)
+
+        with caplog.at_level("WARNING"):
+            cache.actualizar()
+
+        assert cache.zonas is anteriores
+        confirmador.olvidar.assert_not_called()
+        assert "No se pudo refrescar las zonas" in caplog.text
+
+    def test_si_todas_las_mesas_quedaron_inactivas_mantiene_las_ultimas_zonas_conocidas(self, caplog):
+        from app.mapping.zonas import Zona
+
+        # Ningún ROI apunta a una mesa vigente del sector: cargar_zonas() levanta
+        # ConfiguracionInvalida, igual que al arrancar — pero acá el proceso ya está
+        # corriendo y no tiene por qué cortarse por eso.
+        cliente = cliente_falso(
+            rois=[{"id": 8, "mesa_id": 999, "coordenadas": [[0, 0], [10, 0], [10, 10]]}],
+            mesas=[{"id": 221, "numero": 6}],
+        )
+        confirmador = MagicMock()
+        anteriores = [Zona(221, [(0, 0), (10, 0), (10, 10)], roi_id=7)]
+        cache = main.CacheZonas(cliente, CAMARA, sector_id=2, confirmador=confirmador, zonas_iniciales=anteriores, cada_iteraciones=1)
+
+        with caplog.at_level("ERROR"):
+            cache.actualizar()
+
+        assert cache.zonas is anteriores
+        confirmador.olvidar.assert_not_called()
+        assert "No se pudieron refrescar las zonas" in caplog.text
+
+
 class TestCargarUmbralesIniciales:
     def test_usa_lo_que_devuelve_la_api(self):
         cliente = MagicMock()
@@ -625,6 +713,90 @@ class TestBucleConUmbrales:
 
     def test_sin_umbrales_sigue_usando_el_env_como_antes(self, monkeypatch):
         # Compatibilidad: bucle() se puede seguir llamando sin umbrales (default None),
+        # tal como lo hacen los tests preexistentes de TestBucle.
+        from app.mapping.zonas import Zona
+
+        monkeypatch.setattr(config, "OVERLAP_MINIMO", 0.3)
+        cliente = cliente_falso()
+        confirmador = MagicMock()
+        confirmador.actualizar.return_value = {}
+        frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+
+        with patch("app.main.time.sleep"), pytest.raises(KeyboardInterrupt):
+            main.bucle(
+                self._video([frame]),
+                MagicMock(detect=MagicMock(return_value=[])),
+                cliente,
+                [Zona(1, [(0, 0), (10, 0), (10, 10)])],
+                confirmador,
+                CAMARA["id"],
+            )
+
+        assert confirmador.actualizar.call_args.args[0] == {1: False}
+
+
+class TestBucleConZonasCache:
+    def _video(self, frames):
+        video = MagicMock()
+        video.read_frame.side_effect = list(frames) + [KeyboardInterrupt]
+        return video
+
+    def test_el_bucle_refresca_las_zonas_en_cada_iteracion(self, monkeypatch):
+        from app.mapping.zonas import Zona
+
+        monkeypatch.setattr(config, "OVERLAP_MINIMO", 0.3)
+        cliente = cliente_falso()
+        confirmador = MagicMock()
+        confirmador.actualizar.return_value = {}
+        zonas_cache = MagicMock()
+        zonas_cache.zonas = [Zona(1, [(0, 0), (10, 0), (10, 10)])]
+        frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+
+        with patch("app.main.time.sleep"), pytest.raises(KeyboardInterrupt):
+            main.bucle(
+                self._video([frame]),
+                MagicMock(detect=MagicMock(return_value=[])),
+                cliente,
+                [Zona(1, [(0, 0), (10, 0), (10, 10)])],
+                confirmador,
+                CAMARA["id"],
+                zonas_cache=zonas_cache,
+            )
+
+        # Igual que con umbrales: una vez por el frame real y otra en la iteración que
+        # corta con KeyboardInterrupt, porque se refresca antes de leer el frame.
+        assert zonas_cache.actualizar.call_count == 2
+
+    def test_el_bucle_usa_las_zonas_del_cache_y_no_las_fijas_que_recibio(self, monkeypatch):
+        from app.mapping.zonas import Zona
+
+        monkeypatch.setattr(config, "OVERLAP_MINIMO", 0.3)
+        cliente = cliente_falso()
+        confirmador = MagicMock()
+        confirmador.actualizar.return_value = {}
+        # La zona fija que recibe bucle() apunta a la mesa 1; el cache ya la refrescó y
+        # ahora apunta a la mesa 2. Si el bucle usara la fija en vez de la del cache, la
+        # ocupación resuelta sería sobre la mesa equivocada.
+        zonas_cache = MagicMock()
+        zonas_cache.zonas = [Zona(2, [(0, 0), (10, 0), (10, 10)])]
+        deteccion = MagicMock(bbox=(0, 0, 10, 10))
+        frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+
+        with patch("app.main.time.sleep"), pytest.raises(KeyboardInterrupt):
+            main.bucle(
+                self._video([frame]),
+                MagicMock(detect=MagicMock(return_value=[deteccion])),
+                cliente,
+                [Zona(1, [(0, 0), (10, 0), (10, 10)])],
+                confirmador,
+                CAMARA["id"],
+                zonas_cache=zonas_cache,
+            )
+
+        assert confirmador.actualizar.call_args.args[0] == {2: True}
+
+    def test_sin_zonas_cache_sigue_usando_la_lista_fija_como_antes(self, monkeypatch):
+        # Compatibilidad: bucle() se puede seguir llamando sin zonas_cache (default None),
         # tal como lo hacen los tests preexistentes de TestBucle.
         from app.mapping.zonas import Zona
 

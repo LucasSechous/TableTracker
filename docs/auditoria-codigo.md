@@ -292,10 +292,10 @@ El riesgo que este hallazgo señalaba —agregar un estado en el backend deja el
 | ~~F-4~~ | ~~Ciclo de arrastre reimplementado~~ (eran **cuatro** instancias, no tres) · **RESUELTO** | Frontend | Duplicación | — |
 | ~~F-8~~ | ~~Cuatro métodos muertos en `api.ts`~~ · **CORREGIDO**: solo uno lo estaba | Frontend | Código muerto | — |
 | ~~I-3~~ | ~~Etiquetas de estado con dos fuentes de verdad~~ · **RESUELTO** como convivencia documentada | Integración | Duplicación | — |
-| F-11 | `permisos.ts` contradice su propio invariante declarado | Frontend | Inconsistencia | Bajo (decisión en B-4/B-5) — **T26-199** |
-| B-4 | `DELETE` con dos semánticas según el recurso | Backend | Inconsistencia | Alto (cambio de contrato) — **T26-199** |
+| ~~B-4~~ | ~~`DELETE` con dos semánticas según el recurso~~ · **RESUELTO** (T26-199) | Backend | Inconsistencia | — |
+| F-11 | `permisos.ts` contradice su propio invariante declarado | Frontend | Inconsistencia | Bajo — B-4 ya resuelto, queda pendiente de B-5 |
 | B-5 | El rol exigido cambia entre `PATCH` y `DELETE` | Backend | Inconsistencia | Gating — **T26-199** |
-| B-3 | Dos endpoints de test de conexión, uno sin consumidor | Backend | Duplicación | Bajo (depende de B-4) |
+| B-3 | Dos endpoints de test de conexión, uno sin consumidor | Backend | Duplicación | Bajo — desbloqueado por B-4 |
 | I-2 | Cuatro endpoints sin consumidor | Integración | Código muerto | Decisión de alcance |
 
 **Lo que está limpio y conviene no volver a revisar:** los 33 schemas del backend (ninguno huérfano), la centralización del HTTP en `api.ts` (cero llamadas sueltas), y la ausencia de llamadas a endpoints inexistentes.
@@ -317,7 +317,7 @@ Tres puntos de este informe no se pueden cerrar sin mirar `vision-module`, que q
 
 1. **`GET /mesas/{id}` y `POST /camaras/{id}/deteccion-actual`** figuran sin consumidor en el frontend y **no se marcaron como muertos** porque los usa `vision-module/app/client/backend_client.py` (líneas 142 y 156). Si ese cliente cambia en T26-197, hay que revalidar que sigan teniendo consumidor.
 
-2. **B-4 (semántica de `DELETE`) toca a vision-module indirectamente.** El módulo lee mesas con `GET /mesas/` y filtra por estado; pasar mesas y sectores a baja lógica cambiaría qué filas devuelve ese listado. La decisión no debería tomarse sin verificar cómo el módulo trata las mesas inactivas.
+2. ~~**B-4 (semántica de `DELETE`) toca a vision-module indirectamente.**~~ **Verificado y resuelto en T26-199.** `GET /mesas/` ya filtraba `activa=true` por default antes de este ticket, y `listar_mesas()` del backend_client nunca pidió `incluir_inactivos`, así que pasar el `DELETE` a baja lógica no cambió qué filas devuelve ese listado. El riesgo real estaba en otro lado: `cargar_zonas()` se leía una sola vez al arrancar, así que una mesa dada de baja en pleno funcionamiento seguía recibiendo cambios de estado hasta el próximo reinicio. T26-199 agregó `CacheZonas` (`vision-module/app/main.py`), que refresca zonas cada `ZONAS_REFRESCO_ITERACIONES` y limpia el rastro de `Confirmador` (`olvidar()`, que existía sin usarse desde antes) para las mesas que dejaron de estar vigentes. Lo que ese cambio **no** cubre es el lado del backend: `cambiar_estado_mesa` sigue sin mirar `activa`, así que el agujero queda acotado a la ventana de refresco en vez de cerrado. Ver N-4.
 
 3. **F-2 (la regla de horario duplicada) gana un tercer lado si vision-module llega a consumirla.** Hoy no la usa —lee `confirmacion_segundos` y `overlap_minimo` de `/configuracion`, no las horas—, pero es el mismo endpoint, así que conviene confirmarlo cuando el módulo se estabilice.
 
@@ -352,7 +352,7 @@ propio (T26-199) o depende de una decisión de contrato.
 | F-2 · `horario.ts` espejaba `horario.py` | **Resuelto** (T26-200, tanda 3) | El backend responde "¿está abierto ahora?" en `GET /metricas/ocupacion` (`local_abierto`); `enHorarioDeServicio` dado de baja |
 | I-3 · etiquetas con dos fuentes de verdad | **Resuelto como convivencia documentada** (T26-200, tanda 3) | Ver I-3: los dos se quedan, con el porqué anotado en `routers/estados.py` |
 | B-3 · dos endpoints de test de conexión | Pendiente | Depende de B-4/B-5 (el segundo no tiene consumidor) |
-| B-4 · `DELETE` con dos semánticas | **Pendiente — T26-199** | Cambio de contrato |
+| B-4 · `DELETE` con dos semánticas según el recurso | **Resuelto** (T26-199) | `eliminar_mesa`/`eliminar_sector` pasaron a baja lógica; `crear_mesa`/`crear_sector` reactivan la fila dada de baja (mismo criterio que `roi_mesa`); `docs/roles-permisos.md` actualizado. F-11, que dependía de esto, queda desbloqueado pero sin decidir |
 | B-5 · rol distinto entre PATCH y DELETE | **Pendiente — T26-199** | Gating |
 | F-11 · `permisos.ts` contradice su invariante | **Pendiente — T26-199** | Depende de B-4/B-5 |
 | I-2 · endpoints sin consumidor | Pendiente | `POST /camaras/test-conexion`, `POST /auth/register`, `GET /sectores/{id}`, `GET /roi-mesa/{id}`. Cada uno es una decisión de alcance, no un fix |
@@ -385,3 +385,75 @@ por `e2e/tests/23-usuarios.spec.ts` (8 casos). Para que fuera testeable hubo que
 
 `16-filtro-estado` y `16-ocupacion-diaria` colisionaban. El segundo pasó a `22-`, respetando
 que el número identifica la sección y que el 16 ya estaba tomado.
+
+### N-4 · Una mesa dada de baja en caliente sigue recibiendo estados de vision-module · **RESUELTO EN PARTE (T26-199)**
+
+> **Corregido al día siguiente de escribirlo.** La versión original de este hallazgo daba la
+> recarga periódica de zonas por "fuera de alcance para el MVP". Estaba equivocada: la rama de
+> T26-199 ya la tenía implementada cuando esto se escribió (`CacheZonas`), y resuelve
+> exactamente las tres dudas que se listaban como abiertas. Lo que sigue pendiente es solo la
+> mitad backend. Ver "Estado real" al final.
+
+Detectado al evaluar qué le hace T26-199 (baja lógica en `DELETE /mesas/{id}`) al módulo de
+visión. **No lo introduce T26-199: ya pasa hoy**, porque el frontend viene dando de baja mesas
+con `PATCH activa:false` desde antes.
+
+**Qué está bien y conviene no volver a revisar.** El módulo no procesa a ciegas lo que le
+devuelve la API. `main.cargar_zonas()` arma un diccionario con las mesas activas del sector y
+lo usa como lista blanca para descartar ROI huérfanos, con un `logger.warning` por cada uno, y
+levanta `ConfiguracionInvalida` si no sobrevive ninguno. El caso "ROI activo apuntando a una
+mesa dada de baja" está previsto y documentado ahí mismo. Para cámaras y ROI la estrategia es
+otra: nunca ve inactivos porque el recorrido arranca en `listar_camaras()` y sigue con
+`listar_rois(camara_id)`, que ya filtran del lado del servidor.
+
+**Qué está mal.** Esa validación corre **una sola vez, antes del loop** (`main.py`, donde se
+llaman `seleccionar_camara` y `cargar_zonas`). `_ciclar` recibe las zonas como parámetro fijo y
+no las recarga nunca. Entonces una mesa desactivada *mientras el módulo corre* sigue siendo
+detectada y sigue recibiendo `PATCH /mesas/{id}/estado` hasta que el proceso se reinicie.
+
+El backend no la frena: ni `_obtener()` ni `cambiar_estado_mesa` miran `activa`. Y ahí aparece
+una inconsistencia dentro del mismo router, que es la parte accionable del hallazgo:
+
+| Endpoint | ¿Rechaza una mesa inactiva? |
+|---|---|
+| `PATCH /mesas/{id}/posicion` | **Sí** — chequea `not mesa.activa` y devuelve 404 |
+| `PATCH /mesas/{id}/estado` | **No** — pasa derecho |
+| `GET /mesas/{id}` | **No** — devuelve la inactiva igual |
+
+Mover una mesa dada de baja da 404; cambiarle el estado funciona.
+
+**Cuánto daño hace.** Poco, y casi invisible. La mesa ya no se dibuja en el canvas, y
+`GET /metricas/ocupacion` solo cuenta activas, así que ni el salón ni el porcentaje se
+alteran. El único lugar donde asoma es la pantalla de Historial: `GET /historial/` **no**
+filtra por mesa activa, así que se verían filas nuevas de una mesa borrada, con origen
+automático y fecha posterior a la baja. Para que eso moleste tienen que darse cuatro cosas en
+fila: el módulo corriendo, borrar justo una mesa con ROI en la cámara activa, abrir Historial
+después, y que alguien mire la fecha.
+
+**Estado real, por mitades.**
+
+*La recarga de zonas: **hecha** en T26-199.* La rama agregó `CacheZonas` en
+`vision-module/app/main.py`, que rearma las zonas cada `ZONAS_REFRESCO_ITERACIONES` (15 por
+defecto, misma cadencia que `CacheUmbrales`) y llama a `Confirmador.olvidar()` con las mesas
+que siguen vigentes, para que una que vuelve a estar activa no arrastre un reloj viejo. Si la
+recarga falla o deja cero zonas, sigue con las últimas buenas en vez de tumbar el proceso. Eso
+cierra el agujero por el lado del módulo: una mesa dada de baja deja de recibir estados dentro
+de ~15 iteraciones en vez de nunca.
+
+*El chequeo de `activa` en el backend: **sigue abierto**.* En la rama de T26-199,
+`cambiar_estado_mesa` sigue siendo `if not mesa: 404`, sin mirar `activa` — el propio comentario
+de `CacheZonas` lo reconoce ("aplicar_cambio() no chequea `activa` al escribir un cambio de
+estado"). Con la recarga andando el impacto queda acotado a esa ventana de ~15 iteraciones,
+pero la asimetría con `/posicion` sigue en pie y cualquier otro cliente puede seguir
+cambiándole el estado a una mesa dada de baja.
+
+**Recomendación.** Sumar el chequeo de `activa` a `cambiar_estado_mesa` dentro de T26-199, que
+ya toca ese archivo y ya está definiendo la semántica de la baja: cierra el agujero de raíz en
+vez de acotarlo, y alinea el endpoint con su hermano de posición. Es una línea. Mientras no
+esté, la regla operativa sigue valiendo para la ventana de refresco: **conviene no dar de baja
+mesas con vision-module corriendo**.
+
+**Detalle menor, de paso.** La FK `roi_mesa.mesa_id` no declara `ondelete`, así que un borrado
+físico de una mesa con ROI falla por integridad y el handler lo reporta como *"tiene historial
+de estados asociado"* — mensaje equivocado si la causa fue el ROI. Si T26-199 pasa mesas a baja
+lógica, ese camino deja de alcanzarse y el punto se vuelve teórico.

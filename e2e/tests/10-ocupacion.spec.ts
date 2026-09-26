@@ -47,8 +47,12 @@ test("10.2 la entrada del menú lateral navega al panel de ocupación", async ({
   // Que la entrada se vea para un rol no-admin no se puede afirmar acá: TEST_USER es admin y
   // no hay endpoint para borrar usuarios (ver 09-calibracion-roi.spec.ts), así que crear un
   // mozo de prueba lo dejaría permanentemente en la base real. Lo que sí se verifica es que
-  // convive con "Ver historial", la otra entrada sin gate de admin.
-  await expect(page.getByRole("button", { name: "Ver historial" })).toBeVisible();
+  // convive con "Historial de mesas", la otra entrada sin gate de admin.
+  //
+  // El nombre cambio en T26-205: el menu decia "Ver historial" y la pantalla se titulaba
+  // "Historial de mesas". Ahora los dos salen de la misma tabla (frontend/src/navegacion.ts),
+  // asi que no pueden volver a decir cosas distintas.
+  await expect(page.getByRole("button", { name: "Historial de mesas" })).toBeVisible();
   const entradaOcupacion = page.getByRole("button", { name: "Ocupación del salón" });
   await expect(entradaOcupacion).toBeVisible();
 

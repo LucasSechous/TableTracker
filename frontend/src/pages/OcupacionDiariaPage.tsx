@@ -15,7 +15,8 @@
 // PrivateRoute (ver App.tsx).
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import Layout from "../components/Layout"
+import Boton from "../components/ui/Boton"
 import { Calendar, Clock, Download, PieChart, RefreshCw } from "lucide-react"
 import { metricasApi, sectoresApi, extraerDetalle } from "../services/api"
 import type { OcupacionDiariaResponse, Sector } from "../types"
@@ -64,7 +65,6 @@ export default function OcupacionDiariaPage() {
   // Los filtros con los que se trajo lo que está en pantalla, para que el CSV exportado
   // corresponda a la tabla que se está viendo y no a lo que quedó tipeado sin buscar.
   const [aplicados, setAplicados] = useState<Filtros>(FILTROS_INICIALES)
-  const navigate = useNavigate()
 
   useEffect(() => {
     sectoresApi.listar().then((res) => setSectores(res.data)).catch(() => {})
@@ -140,36 +140,13 @@ export default function OcupacionDiariaPage() {
   const sinMesas = !loading && !error && reporte !== null && reporte.mesas.length === 0
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
-      <header
-        style={{
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-          padding: "12px 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>
-          Ocupación diaria
-        </h1>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button
-            onClick={() => buscar(filtros)}
-            disabled={loading}
-            style={{ ...estiloBoton, opacity: loading ? 0.6 : 1 }}
-          >
-            <RefreshCw size={15} />
-            Actualizar
-          </button>
-          <button onClick={() => navigate("/")} style={estiloBoton}>
-            Volver al salón
-          </button>
-        </div>
-      </header>
-
+    <Layout
+      acciones={
+        <Boton onClick={() => buscar(filtros)} icono={RefreshCw} cargando={loading} textoCargando="Actualizando...">
+          Actualizar
+        </Boton>
+      }
+    >
       <main style={{ padding: 24 }}>
         <div
           style={{
@@ -212,27 +189,22 @@ export default function OcupacionDiariaPage() {
             </select>
           </label>
 
-          <button data-testid="ocupacion-diaria-buscar" onClick={() => buscar(filtros)} style={estiloBotonPrimario}>
+          <Boton variante="primario" data-testid="ocupacion-diaria-buscar" onClick={() => buscar(filtros)}>
             Buscar
-          </button>
+          </Boton>
 
-          <button data-testid="ocupacion-diaria-limpiar" onClick={handleLimpiar} style={estiloBotonSecundario}>
+          <Boton variante="neutro" data-testid="ocupacion-diaria-limpiar" onClick={handleLimpiar}>
             Hoy
-          </button>
+          </Boton>
 
-          <button
+          <Boton
             data-testid="ocupacion-diaria-exportar-csv"
+            icono={Download}
             onClick={handleExportar}
             disabled={loading || filasOrdenadas.length === 0}
-            style={{
-              ...estiloBoton,
-              opacity: loading || filasOrdenadas.length === 0 ? 0.5 : 1,
-              cursor: loading || filasOrdenadas.length === 0 ? "default" : "pointer",
-            }}
           >
-            <Download size={15} />
             Exportar CSV
-          </button>
+          </Boton>
         </div>
 
         {loading && <p style={{ fontSize: 14, color: "#888" }}>Cargando reporte...</p>}
@@ -389,7 +361,7 @@ export default function OcupacionDiariaPage() {
           </>
         )}
       </main>
-    </div>
+    </Layout>
   )
 }
 
@@ -399,34 +371,5 @@ const celdaEncabezado: React.CSSProperties = {
   fontWeight: 600,
 }
 
-const estiloBoton: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 6,
-  minHeight: 44,
-  padding: "0 14px",
-  borderRadius: 6,
-  border: "1px solid #1976d2",
-  fontSize: 13,
-  fontWeight: 500,
-  fontFamily: "inherit",
-  cursor: "pointer",
-  backgroundColor: "#fff",
-  color: "#1976d2",
-  whiteSpace: "nowrap",
-}
 
-const estiloBotonPrimario: React.CSSProperties = {
-  ...estiloBoton,
-  border: "none",
-  backgroundColor: "#1976d2",
-  color: "#fff",
-  fontWeight: 600,
-}
 
-const estiloBotonSecundario: React.CSSProperties = {
-  ...estiloBoton,
-  border: "1px solid #ccc",
-  color: "#444",
-}

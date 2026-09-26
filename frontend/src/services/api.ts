@@ -115,8 +115,9 @@ export const mesasApi = {
   marcarReservada: (id: number) => api.patch<Mesa>(`/mesas/${id}/reserva`),
 
   // Soft-delete vía el PATCH genérico (mismo endpoint que usa MesaUpdate.activa en el
-  // backend), igual que sectoresApi.actualizar(id, { activo: false }). No usa el
-  // DELETE /mesas/{id} (hard-delete, solo admin, falla con 409 si hay historial).
+  // backend), igual que sectoresApi.actualizar(id, { activo: false }). No usa
+  // DELETE /mesas/{id} (solo admin) porque ese endpoint pide confirmación aparte en la
+  // UI (papelera) — desde T26-199 los dos hacen la misma baja lógica, ver roles-permisos.md.
   desactivar: (id: number) => api.patch<Mesa>(`/mesas/${id}`, { activa: false }),
 };
 

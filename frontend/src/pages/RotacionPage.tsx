@@ -10,7 +10,9 @@
 // endpoint, que exige sesión pero no rol admin.
 
 import { useCallback, useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import Layout from "../components/Layout"
+import PestanasMetricas from "../components/PestanasMetricas"
+import Boton from "../components/ui/Boton"
 import { ArrowDownUp, Clock, Download, RefreshCw, Repeat } from "lucide-react"
 import { metricasApi, sectoresApi, configuracionApi, extraerDetalle } from "../services/api"
 import type { RotacionMesa, Sector, Configuracion } from "../types"
@@ -41,7 +43,6 @@ export default function RotacionPage() {
   // si el usuario cambió el rango y todavía no le dio a Buscar, y el CSV tiene que
   // corresponderse con la tabla que está viendo, no con lo que quedó tipeado.
   const [aplicados, setAplicados] = useState<Filtros>(FILTROS_VACIOS)
-  const navigate = useNavigate()
 
   useEffect(() => {
     sectoresApi.listar().then((res) => setSectores(res.data)).catch(() => {})
@@ -129,37 +130,16 @@ export default function RotacionPage() {
   const sinRotaciones = !loading && !error && filas.length > 0 && totalRotaciones === 0
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
-      <header
-        style={{
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-          padding: "12px 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>
-          Rotación de mesas
-        </h1>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button
-            onClick={() => buscar(filtros)}
-            disabled={loading}
-            style={{ ...estiloBoton, opacity: loading ? 0.6 : 1 }}
-          >
-            <RefreshCw size={15} />
-            Actualizar
-          </button>
-          <button onClick={() => navigate("/")} style={estiloBoton}>
-            Volver al salón
-          </button>
-        </div>
-      </header>
-
+    <Layout
+      acciones={
+        <Boton onClick={() => buscar(filtros)} icono={RefreshCw} cargando={loading} textoCargando="Actualizando...">
+          Actualizar
+        </Boton>
+      }
+    >
       <main style={{ padding: 24 }}>
+        <PestanasMetricas />
+
         <div
           style={{
             display: "flex",
@@ -197,27 +177,22 @@ export default function RotacionPage() {
             </select>
           </label>
 
-          <button data-testid="rotacion-buscar" onClick={() => buscar(filtros)} style={estiloBotonPrimario}>
+          <Boton variante="primario" data-testid="rotacion-buscar" onClick={() => buscar(filtros)}>
             Buscar
-          </button>
+          </Boton>
 
-          <button data-testid="rotacion-limpiar" onClick={handleLimpiar} style={estiloBotonSecundario}>
+          <Boton variante="neutro" data-testid="rotacion-limpiar" onClick={handleLimpiar}>
             Limpiar filtros
-          </button>
+          </Boton>
 
-          <button
+          <Boton
             data-testid="rotacion-exportar-csv"
+            icono={Download}
             onClick={handleExportar}
             disabled={loading || filas.length === 0}
-            style={{
-              ...estiloBoton,
-              opacity: loading || filas.length === 0 ? 0.5 : 1,
-              cursor: loading || filas.length === 0 ? "default" : "pointer",
-            }}
           >
-            <Download size={15} />
             Exportar CSV
-          </button>
+          </Boton>
         </div>
 
         {loading && <p style={{ fontSize: 14, color: "#888" }}>Cargando rotación...</p>}
@@ -330,7 +305,7 @@ export default function RotacionPage() {
           </>
         )}
       </main>
-    </div>
+    </Layout>
   )
 }
 
@@ -376,34 +351,5 @@ function ColumnaOrdenable({ etiqueta, propia, activa, direccion, onOrdenar }: Co
   )
 }
 
-const estiloBoton: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 6,
-  minHeight: 44,
-  padding: "0 14px",
-  borderRadius: 6,
-  border: "1px solid #1976d2",
-  fontSize: 13,
-  fontWeight: 500,
-  fontFamily: "inherit",
-  cursor: "pointer",
-  backgroundColor: "#fff",
-  color: "#1976d2",
-  whiteSpace: "nowrap",
-}
 
-const estiloBotonPrimario: React.CSSProperties = {
-  ...estiloBoton,
-  border: "none",
-  backgroundColor: "#1976d2",
-  color: "#fff",
-  fontWeight: 600,
-}
 
-const estiloBotonSecundario: React.CSSProperties = {
-  ...estiloBoton,
-  border: "1px solid #ccc",
-  color: "#444",
-}

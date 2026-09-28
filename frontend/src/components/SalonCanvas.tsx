@@ -9,7 +9,7 @@ import type { CSSProperties, ReactNode } from "react"
 import type { Sector, Mesa, Modo } from "../types"
 import SectorBloque from "./SectorBloque"
 import PanelMesa from "./PanelMesa"
-import { COLOR_POR_ESTADO, ETIQUETA_POR_ESTADO, calcularMinimoSalon } from "../constants"
+import { COLOR_POR_ESTADO, ETIQUETA_POR_ESTADO, ICONO_POR_ESTADO, calcularMinimoSalon } from "../constants"
 import { useAuth } from "../hooks/useAuth"
 import { useArrastre } from "../hooks/useArrastre"
 import { esAdmin } from "../permisos"
@@ -126,23 +126,34 @@ export default function SalonCanvas({
           marginBottom: 12,
         }}
       >
-        {Object.entries(COLOR_POR_ESTADO).map(([estado, color]) => (
+        {Object.entries(COLOR_POR_ESTADO).map(([estado, color]) => {
+          const Icono = ICONO_POR_ESTADO[estado]
+          return (
           <div key={estado} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {/* La muestra de la leyenda lleva el mismo icono que la mesa, y no solo el
+                color: es lo que permite aprender la correspondencia icono-estado mirando
+                acá, y lo que hace que la leyenda siga sirviendo en blanco y negro. */}
             <span
               style={{
-                width: 14,
-                height: 14,
+                width: 18,
+                height: 18,
                 borderRadius: 3,
                 backgroundColor: color,
-                display: "inline-block",
+                color: "#fff",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
                 flexShrink: 0,
               }}
-            />
+            >
+              {Icono && <Icono size={12} aria-hidden />}
+            </span>
             <span style={{ fontSize: 13, color: "#475569", fontWeight: 500 }}>
               {ETIQUETA_POR_ESTADO[estado] ?? estado}
             </span>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Los dos filtros del salón —sector y estado— comparten fila. Envuelve con flexWrap

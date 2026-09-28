@@ -2,17 +2,18 @@
 // Carga mesas y sectores, los agrupa, y orquesta los cambios de estado y posición.
 
 import { useEffect, useRef, useState } from "react"
-import { useNavigate } from "react-router-dom"
-import { Pencil, Menu, TriangleAlert } from "lucide-react"
+import { Pencil, TriangleAlert } from "lucide-react"
 import { mesasApi, sectoresApi, configuracionApi, metricasApi, extraerDetalle } from "../services/api"
 import type { Mesa, Sector, Modo, Configuracion, OcupacionResponse } from "../types"
 import SalonCanvas from "../components/SalonCanvas"
 import ModalAltaSector from "../components/ModalAltaSector"
 import ModalAltaMesa from "../components/ModalAltaMesa"
-import MenuLateral from "../components/MenuLateral"
+import Layout from "../components/Layout"
+import IndicadorFrescura from "../components/IndicadorFrescura"
+import Boton from "../components/ui/Boton"
 import { useAuth } from "../hooks/useAuth"
 import { AvisoErrorProvider } from "../hooks/useAvisoError"
-import { esAdmin, puedeEditarLayout } from "../permisos"
+import { puedeEditarLayout } from "../permisos"
 import { labelStyle } from "../components/RangoFechas"
 import { COLOR_OCUPACION_ALTA, ETIQUETA_POR_ESTADO } from "../constants"
 
@@ -35,15 +36,11 @@ const OPCIONES_ESTADO = Object.entries(ETIQUETA_POR_ESTADO)
 // tal cual como value del <option>, igual que hacen los filtros de Historial y Rotación.
 const SIN_FILTRO = ""
 
-// El header pasó a position:fixed para quedar visible al scrollear un salón
-// grande; con altura fija se puede compensar con un spacer del mismo tamaño
-// en vez de medirla en runtime.
-const ALTURA_HEADER = 68
-
 export default function DashboardPage() {
-  // El usuario sale del contexto y no de un authApi.me() propio: es la misma respuesta
-  // que ya resolvió AuthProvider una vez para todo el árbol.
-  const { user, rol } = useAuth()
+  // El rol sale del contexto y no de un authApi.me() propio: es la misma respuesta que ya
+  // resolvió AuthProvider una vez para todo el árbol. El nombre del usuario ya no se lee
+  // acá: lo muestra el menú lateral, que desde T26-205 lo toma del contexto por su cuenta.
+  const { rol } = useAuth()
   const [sectores, setSectores] = useState<Sector[]>([])
   const [configuracion, setConfiguracion] = useState<Configuracion | null>(null)
   const [loading, setLoading] = useState(true)
@@ -55,7 +52,6 @@ export default function DashboardPage() {
   const [errorAccion, setErrorAccion] = useState<string | null>(null)
   const [modo, setModo] = useState<Modo>("monitoreo")
   const [modalAbierto, setModalAbierto] = useState<"sector" | "mesa" | null>(null)
-  const [menuAbierto, setMenuAbierto] = useState(false)
   // Filtro por estado (RF-15). Se resuelve contra el backend (GET /mesas?estado=...), no
   // recortando el array en el cliente: el endpoint ya lo soporta y así el canvas no
   // recibe mesas que no va a dibujar.
@@ -71,11 +67,14 @@ export default function DashboardPage() {
   // esa: aquella depende de datos que el canvas ya tiene (estado y reloj de cada mesa),
   // esta depende del total del salón, que el canvas filtrado no conoce.
   const [ocupacion, setOcupacion] = useState<OcupacionResponse | null>(null)
+  // Momento del último refresco que SÍ trajo datos, para poder decir en pantalla qué tan
+  // viejo es lo que se está mirando. Se guarda el éxito y no el intento: un intento que
+  // falló no rejuvenece el dato, y contarlo sería justo lo contrario de lo que esto mide.
+  const [ultimoRefrescoOk, setUltimoRefrescoOk] = useState<number | null>(null)
   // El spinner de "Cargando salón..." solo tiene sentido la primera vez. Al cambiar el
   // filtro el canvas ya está dibujado, y desmontarlo por unos milisegundos se ve como un
   // parpadeo del salón entero.
   const yaCargoUnaVez = useRef(false)
-  const navigate = useNavigate()
 
   useEffect(() => {
     if (!yaCargoUnaVez.current) setLoading(true)
@@ -98,6 +97,7 @@ export default function DashboardPage() {
           rawSectores.map((s) => ({ ...s, mesas: mesasBySector.get(s.id) ?? [] }))
         )
         setConfiguracion(configuracionRes.data)
+        setUltimoRefrescoOk(Date.now())
       })
       .catch(async (err: unknown) => {
         setError(await extraerDetalle(err, "Error al cargar el salón"))
@@ -129,9 +129,14 @@ export default function DashboardPage() {
         setSectores((prev) =>
           prev.map((s) => ({ ...s, mesas: mesasBySector.get(s.id) ?? [] }))
         )
+        setUltimoRefrescoOk(Date.now())
       } catch {
         // Fallo de red puntual: se reintenta solo en el próximo tick, sin mostrar
         // un error intrusivo por algo que se resuelve solo la mayoría de las veces.
+        //
+        // Callar acá es correcto, pero no puede ser lo único que pase: si los fallos se
+        // encadenan, el salón se queda congelado sin avisar. Por eso `ultimoRefrescoOk`
+        // no se toca, y el indicador del encabezado se encarga de que eso se vea.
       }
     }
 
@@ -303,11 +308,6 @@ export default function DashboardPage() {
     setModalAbierto(null)
   }
 
-  function handleLogout() {
-    localStorage.removeItem("token")
-    navigate("/login")
-  }
-
   // El estado del filtro vive acá (es esta pantalla la que refiltra pidiendo /mesas), pero el
   // control se dibuja dentro de SalonCanvas, a la derecha de los tabs de sector, para que los
   // dos filtros del salón queden juntos en la misma fila.
@@ -366,33 +366,25 @@ export default function DashboardPage() {
     ) : undefined
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
-      <header
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 150,
-          height: ALTURA_HEADER,
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-          padding: "12px 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>
-          TableTracker
-        </h1>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <Layout
+      acciones={
+        <>
+          {/* Qué tan fresco es lo que se ve. Va en el encabezado y no dentro del salón
+              porque tiene que seguir visible con el canvas scrolleado, que es justo
+              cuando se está mirando una mesa puntual y se decide algo con ella. */}
+          <IndicadorFrescura
+            ultimoExito={ultimoRefrescoOk}
+            intervaloMs={INTERVALO_REFRESCO_MESAS_MS}
+            pausado={modo === "edicion"}
+          />
           {/* Solo quien puede escribir el layout ve la puerta de entrada al modo edición.
               El criterio es puedeEditarLayout (admin + encargado) y no esAdmin: mover y
               crear mesas/sectores pide `encargado` en el backend, así que gatearlo con
               "solo admin" dejaría al encargado sin su tarea (docs/roles-permisos.md). */}
-          {modo === "monitoreo" && puedeEditarLayout(rol) && (
-            <button
+          {modo === "monitoreo" && puedeEditarLayout(rol) ? (
+            <Boton
+              variante="primario"
+              icono={Pencil}
               onClick={() => {
                 // Se limpia el filtro al entrar en edición: acomodar el salón con mesas
                 // escondidas es peligroso —se puede soltar una encima de otra que no se
@@ -400,50 +392,13 @@ export default function DashboardPage() {
                 setEstadoFiltro(SIN_FILTRO)
                 setModo("edicion")
               }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                minHeight: 44,
-                padding: "0 16px",
-                borderRadius: 8,
-                border: "none",
-                backgroundColor: "#1976d2",
-                color: "#fff",
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
             >
-              <Pencil size={16} />
               Editar disposición
-            </button>
-          )}
-          <button
-            onClick={() => setMenuAbierto(true)}
-            aria-label="Abrir menú"
-            style={{
-              width: 44,
-              height: 44,
-              flexShrink: 0,
-              border: "none",
-              borderRadius: 10,
-              backgroundColor: "#f1f5f9",
-              color: "#1a1a1a",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Menu size={20} />
-          </button>
-        </div>
-      </header>
-
-      {/* Compensa el header fijo: sin esto el contenido de abajo arrancaría tapado. */}
-      <div style={{ height: ALTURA_HEADER }} />
+            </Boton>
+          ) : null}
+        </>
+      }
+    >
 
       {modo === "edicion" && (
         <div
@@ -630,39 +585,21 @@ export default function DashboardPage() {
         >
           {puedeEditarLayout(rol) && (
             <>
-              <button onClick={() => setModalAbierto("sector")} style={editActionBtnStyle}>
-                + Nuevo sector
-              </button>
-              <button onClick={() => setModalAbierto("mesa")} style={editActionBtnStyle}>
-                + Nueva mesa
-              </button>
+              {/* El "+" va en el texto y no como icono, aunque el icono se vea mejor: el
+                  rótulo tiene que quedar idéntico al de antes de T26-205. Cambiarlo movía
+                  el nombre accesible del botón de "+ Nuevo sector" a "Nuevo sector", que
+                  es lo que ve un lector de pantalla y lo que usa la suite para ubicarlo. */}
+              <Boton onClick={() => setModalAbierto("sector")}>+ Nuevo sector</Boton>
+              <Boton onClick={() => setModalAbierto("mesa")}>+ Nueva mesa</Boton>
             </>
           )}
           {/* Sin gate: es la única salida del modo edición. Esconderla ante un rol sin
               permiso lo dejaría encerrado en una pantalla que no puede usar. */}
-          <button onClick={() => setModo("monitoreo")} style={editExitBtnStyle}>
+          <Boton onClick={() => setModo("monitoreo")} style={editExitBtnStyle}>
             Salir de edición
-          </button>
+          </Boton>
         </div>
       )}
-
-      <MenuLateral
-        abierto={menuAbierto}
-        onClose={() => setMenuAbierto(false)}
-        nombre={user?.nombre ?? ""}
-        rol={rol ?? ""}
-        esAdmin={esAdmin(rol)}
-        onVerHistorial={() => navigate("/historial")}
-        onVerOcupacion={() => navigate("/ocupacion")}
-        onVerRotacion={() => navigate("/rotacion")}
-        onVerOcupacionDiaria={() => navigate("/ocupacion-diaria")}
-        onVerDemanda={() => navigate("/demanda")}
-        onCamaras={() => navigate("/camaras")}
-        onCalibrarRoi={() => navigate("/calibracion-roi")}
-        onConfiguracion={() => navigate("/configuracion")}
-        onUsuarios={() => navigate("/usuarios")}
-        onLogout={handleLogout}
-      />
 
       {modalAbierto === "sector" && (
         <ModalAltaSector onClose={() => setModalAbierto(null)} onSectorCreado={handleSectorCreado} />
@@ -670,24 +607,14 @@ export default function DashboardPage() {
       {modalAbierto === "mesa" && (
         <ModalAltaMesa sectores={sectores} onClose={() => setModalAbierto(null)} onMesaCreada={handleMesaCreada} />
       )}
-    </div>
+    </Layout>
   )
 }
 
-const editActionBtnStyle: React.CSSProperties = {
-  minHeight: 44,
-  padding: "0 18px",
-  borderRadius: 8,
-  border: "2px solid #1976d2",
-  backgroundColor: "#fff",
-  color: "#1976d2",
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: "pointer",
-}
-
+// Salir de edición no es ninguna de las variantes de Boton: es la única salida de un
+// modo, y el negro la separa de las dos acciones azules que tiene al lado para que no
+// se lea como una tercera cosa que crear.
 const editExitBtnStyle: React.CSSProperties = {
-  minHeight: 44,
   padding: "0 18px",
   borderRadius: 8,
   border: "none",
@@ -695,5 +622,4 @@ const editExitBtnStyle: React.CSSProperties = {
   color: "#fff",
   fontSize: 14,
   fontWeight: 600,
-  cursor: "pointer",
 }

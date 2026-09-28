@@ -1,49 +1,58 @@
-// Menú lateral de navegación: misma mecánica (overlay + drawer deslizante) que
-// PanelMesa. Agrupa la navegación de la app para que el header principal quede
-// liviano (solo nombre, leyenda y las dos acciones de mayor jerarquía).
+// Menú lateral de navegación: overlay + drawer deslizante, misma mecánica que PanelMesa.
+//
+// Hasta T26-205 recibía diez callbacks (onVerHistorial, onCamaras, onConfiguracion...) y
+// los diez los cableaba DashboardPage. Eso ataba el menú a una pantalla: era la única que
+// sabía armarlo, así que era la única que lo tenía, y desde las otras nueve la única
+// salida era un botón "Volver al salón". Moverse entre dos secciones obligaba a pasar por
+// el salón —ir de Cámaras a Usuarios eran tres pasos— y en ningún lado se veía dónde
+// estaba uno parado.
+//
+// Ahora el menú navega solo, recorriendo la tabla de navegacion.ts, y lo monta Layout, que
+// envuelve a todas las pantallas. Sin props de navegación no hay nada que cablear, que es
+// lo que permitió sacarlo del Dashboard.
 
-import { User, History, PieChart, Repeat, CalendarClock, Camera, Crosshair, Settings, Users, LogOut, BarChart3 } from "lucide-react"
+import { useEffect } from "react"
+import { useLocation, useNavigate } from "react-router-dom"
+import { User, LogOut } from "lucide-react"
 import type { CSSProperties } from "react"
+import { useAuth } from "../hooks/useAuth"
+import { esAdmin as rolEsAdmin } from "../permisos"
+import { GRUPOS, SECCIONES, TITULO_GRUPO } from "../navegacion"
 
 interface Props {
   abierto: boolean
-  nombre: string
-  rol: string
-  esAdmin: boolean
   onClose: () => void
-  onVerHistorial: () => void
-  onVerOcupacion: () => void
-  onVerRotacion: () => void
-  onVerOcupacionDiaria: () => void
-  onVerDemanda: () => void
-  onCamaras: () => void
-  onCalibrarRoi: () => void
-  onConfiguracion: () => void
-  onUsuarios: () => void
-  onLogout: () => void
 }
 
-export default function MenuLateral({
-  abierto,
-  nombre,
-  rol,
-  esAdmin,
-  onClose,
-  onVerHistorial,
-  onVerOcupacion,
-  onVerRotacion,
-  onVerOcupacionDiaria,
-  onVerDemanda,
-  onCamaras,
-  onCalibrarRoi,
-  onConfiguracion,
-  onUsuarios,
-  onLogout,
-}: Props) {
-  function ir(accion: () => void) {
-    accion()
+export default function MenuLateral({ abierto, onClose }: Props) {
+  const { user, rol } = useAuth()
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const esAdmin = rolEsAdmin(rol)
+
+  // Escape cierra el drawer. Un panel que tapa la pantalla y solo se cierra apuntándole a
+  // la × o al overlay obliga a usar el mouse para deshacer algo que se abrió sin querer.
+  useEffect(() => {
+    if (!abierto) return
+    function alTeclear(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", alTeclear)
+    return () => window.removeEventListener("keydown", alTeclear)
+  }, [abierto, onClose])
+
+  function ir(ruta: string) {
+    navigate(ruta)
     onClose()
   }
+
+  function salir() {
+    localStorage.removeItem("token")
+    navigate("/login")
+    onClose()
+  }
+
+  const visibles = SECCIONES.filter((s) => !s.soloAdmin || esAdmin)
 
   return (
     <>
@@ -59,7 +68,18 @@ export default function MenuLateral({
           transition: "opacity 0.2s ease",
         }}
       />
-      <div
+      <nav
+        aria-label="Navegación principal"
+        // inert mientras está cerrado. El drawer no se desmonta —se desplaza fuera de
+        // pantalla con un transform, que es lo que permite animarlo—, así que sin esto
+        // queda un menú entero operable que nadie ve: un lector de pantalla lee diez
+        // destinos invisibles y el tabulador mete el foco adentro, donde el usuario no
+        // puede ver dónde está parado.
+        //
+        // inert y no aria-hidden: aria-hidden lo saca del árbol de accesibilidad pero deja
+        // los botones enfocables, que es la peor de las dos mitades —el foco entra en algo
+        // que ya no se anuncia—. inert hace las dos cosas a la vez.
+        inert={!abierto}
         style={{
           position: "fixed",
           top: 0,
@@ -89,8 +109,8 @@ export default function MenuLateral({
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <User size={20} color="#1e293b" />
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "#1e293b" }}>{nombre}</div>
-              <div style={{ fontSize: 12, color: "#94a3b8", textTransform: "capitalize" }}>{rol}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#1e293b" }}>{user?.nombre ?? ""}</div>
+              <div style={{ fontSize: 12, color: "#94a3b8", textTransform: "capitalize" }}>{rol ?? ""}</div>
             </div>
           </div>
           <button
@@ -117,61 +137,58 @@ export default function MenuLateral({
         </div>
 
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", padding: "8px 0" }}>
-          <button onClick={() => ir(onVerHistorial)} style={itemStyle}>
-            <History size={18} />
-            Ver historial
-          </button>
-          {/* Sin gate de esAdmin, agrupado con "Ver historial": las dos son vistas de
-              consulta que sirven a cualquier rol, a diferencia de las de configuración. */}
-          <button onClick={() => ir(onVerOcupacion)} style={itemStyle}>
-            <PieChart size={18} />
-            Ocupación del salón
-          </button>
-          <button onClick={() => ir(onVerRotacion)} style={itemStyle}>
-            <Repeat size={18} />
-            Rotación de mesas
-          </button>
-          <button onClick={() => ir(onVerOcupacionDiaria)} style={itemStyle}>
-            <CalendarClock size={18} />
-            Ocupación diaria
-          </button>
-          <button onClick={() => ir(onVerDemanda)} style={itemStyle}>
-            <BarChart3 size={18} />
-            Horarios de demanda
-          </button>
-          {esAdmin && (
-            <button onClick={() => ir(onCamaras)} style={itemStyle}>
-              <Camera size={18} />
-              Cámaras
-            </button>
-          )}
-          {esAdmin && (
-            <button onClick={() => ir(onCalibrarRoi)} style={itemStyle}>
-              <Crosshair size={18} />
-              Calibrar ROI
-            </button>
-          )}
-          {esAdmin && (
-            <button onClick={() => ir(onConfiguracion)} style={itemStyle}>
-              <Settings size={18} />
-              Configuración
-            </button>
-          )}
-          {esAdmin && (
-            <button onClick={() => ir(onUsuarios)} style={itemStyle}>
-              <Users size={18} />
-              Usuarios
-            </button>
-          )}
+          {GRUPOS.map((grupo) => {
+            const delGrupo = visibles.filter((s) => s.grupo === grupo)
+            // Un rol no admin no ve ninguna sección de administración: sin esto quedaría
+            // el rótulo del grupo solo, encabezando una lista vacía.
+            if (delGrupo.length === 0) return null
+
+            return (
+              <div key={grupo}>
+                <div
+                  style={{
+                    padding: "10px 20px 4px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: 0.5,
+                    textTransform: "uppercase",
+                    color: "#94a3b8",
+                  }}
+                >
+                  {TITULO_GRUPO[grupo]}
+                </div>
+                {delGrupo.map((seccion) => {
+                  const Icono = seccion.icono
+                  const actual = seccion.ruta === pathname
+                  return (
+                    <button
+                      key={seccion.ruta}
+                      onClick={() => ir(seccion.ruta)}
+                      // aria-current es lo que anuncia "estás acá" a un lector de pantalla.
+                      // El color y la barra de la izquierda dicen lo mismo para quien ve.
+                      aria-current={actual ? "page" : undefined}
+                      style={{
+                        ...itemStyle,
+                        ...(actual ? itemActivoStyle : null),
+                      }}
+                    >
+                      <Icono size={18} aria-hidden />
+                      {seccion.etiqueta}
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          })}
 
           <div style={{ height: 1, background: "#e2e8f0", margin: "8px 20px", marginTop: "auto" }} />
 
-          <button onClick={() => ir(onLogout)} style={{ ...itemStyle, color: "#ef4444" }}>
-            <LogOut size={18} />
+          <button onClick={salir} style={{ ...itemStyle, color: "#ef4444" }}>
+            <LogOut size={18} aria-hidden />
             Cerrar sesión
           </button>
         </div>
-      </div>
+      </nav>
     </>
   )
 }
@@ -184,6 +201,7 @@ const itemStyle: CSSProperties = {
   minHeight: 44,
   padding: "12px 20px",
   border: "none",
+  borderLeft: "3px solid transparent",
   background: "none",
   fontSize: 14,
   fontWeight: 600,
@@ -191,4 +209,13 @@ const itemStyle: CSSProperties = {
   color: "#334155",
   cursor: "pointer",
   textAlign: "left",
+}
+
+// La sección actual, marcada por tres canales a la vez: fondo, color de texto y la barra
+// de la izquierda. La barra es la que sobrevive en escala de grises y para quien no
+// distingue el azul del gris.
+const itemActivoStyle: CSSProperties = {
+  backgroundColor: "#eff6ff",
+  color: "#1d4ed8",
+  borderLeft: "3px solid #1d4ed8",
 }

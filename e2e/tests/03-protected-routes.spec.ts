@@ -1,7 +1,7 @@
 import { test, expect } from "../fixtures/test-fixtures";
 import { createSector, createMesa, deleteMesa, deleteSector, uniqueSuffix } from "../fixtures/api-helpers";
 import {
-  getLogoutButton,
+  getMenuButton,
   getSectorBlock,
   getMesaCircle,
   corregirEstadoDesdePanel,
@@ -18,7 +18,7 @@ test("3.1 acceder a /dashboard sin sesión redirige a /login", async ({ page }) 
 test("3.2 acceder a /dashboard con sesión activa carga el dashboard", async ({ page, token }) => {
   await page.addInitScript((t) => window.localStorage.setItem("token", t), token);
   await page.goto("/dashboard");
-  await expect(getLogoutButton(page)).toBeVisible();
+  await expect(getMenuButton(page)).toBeVisible();
 });
 
 test("3.3 un token corrupto en localStorage redirige a login sin colgar la app", async ({ page }) => {

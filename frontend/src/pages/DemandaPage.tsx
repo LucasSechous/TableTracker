@@ -17,7 +17,9 @@
 // una semana.
 
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import Layout from "../components/Layout"
+import PestanasMetricas from "../components/PestanasMetricas"
+import Boton from "../components/ui/Boton"
 import { BarChart3, Download, RefreshCw } from "lucide-react"
 import { metricasApi, sectoresApi, extraerDetalle } from "../services/api"
 import type { DemandaResponse, Sector } from "../types"
@@ -29,19 +31,6 @@ import { descargarCsv, generarCsv, nombreArchivoCsv } from "../csv"
 // que lo lee, no de esta pantalla.
 const DIAS_MINIMOS_PARA_PATRON = 3
 
-const estiloBoton: React.CSSProperties = {
-  padding: "8px 16px",
-  borderRadius: 6,
-  border: "1px solid #1976d2",
-  fontSize: 13,
-  cursor: "pointer",
-  backgroundColor: "#fff",
-  color: "#1976d2",
-  fontWeight: 500,
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-}
 
 const estiloTarjeta: React.CSSProperties = {
   backgroundColor: "#fff",
@@ -78,7 +67,6 @@ function aFechaInput(fecha: Date): string {
 const hh = (hora: number) => `${String(hora).padStart(2, "0")}:00`
 
 export default function DemandaPage() {
-  const navigate = useNavigate()
 
   const hoy = new Date()
   const haceUnaSemana = new Date(hoy)
@@ -138,32 +126,16 @@ export default function DemandaPage() {
   )
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
-      <header
-        style={{
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-          padding: "12px 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>
-          Horarios de mayor demanda
-        </h1>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={buscar} style={estiloBoton} data-testid="demanda-actualizar">
-            <RefreshCw size={14} />
-            Actualizar
-          </button>
-          <button onClick={() => navigate("/")} style={estiloBoton}>
-            Volver al salón
-          </button>
-        </div>
-      </header>
-
+    <Layout
+      acciones={
+        <Boton onClick={buscar} icono={RefreshCw} data-testid="demanda-actualizar">
+          Actualizar
+        </Boton>
+      }
+    >
       <main style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, maxWidth: 1000 }}>
+        <PestanasMetricas />
+
         <div style={{ ...estiloTarjeta, display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
           <RangoFechas desde={desde} hasta={hasta} onDesdeChange={setDesde} onHastaChange={setHasta} />
           <label style={labelStyle}>
@@ -182,17 +154,12 @@ export default function DemandaPage() {
               ))}
             </select>
           </label>
-          <button
-            onClick={buscar}
-            data-testid="demanda-buscar"
-            style={{ ...estiloBoton, backgroundColor: "#1976d2", color: "#fff" }}
-          >
+          <Boton variante="primario" onClick={buscar} data-testid="demanda-buscar">
             Buscar
-          </button>
-          <button onClick={exportar} disabled={!datos?.franjas.length} style={estiloBoton}>
-            <Download size={14} />
+          </Boton>
+          <Boton icono={Download} onClick={exportar} disabled={!datos?.franjas.length}>
             Exportar CSV
-          </button>
+          </Boton>
         </div>
 
         {cargando && <p style={{ fontSize: 14, color: "#888" }}>Cargando demanda...</p>}
@@ -342,6 +309,6 @@ export default function DemandaPage() {
           </>
         )}
       </main>
-    </div>
+    </Layout>
   )
 }

@@ -11,11 +11,12 @@
 // sin otra request).
 
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
 import { ShieldAlert } from "lucide-react"
 import { usuariosApi, extraerDetalle } from "../services/api"
 import type { UsuarioAdmin } from "../types"
 import { useAuth } from "../hooks/useAuth"
+import Layout from "../components/Layout"
+import Boton from "../components/ui/Boton"
 import ModalConfirmacion from "../components/ModalConfirmacion"
 
 // Valores de rol usados en el resto del sistema (docs/roles-permisos.md). No hay
@@ -24,23 +25,6 @@ import ModalConfirmacion from "../components/ModalConfirmacion"
 // no repetir el typo documentado ("admim") que deja a alguien sin poder pasar
 // ningún requiere_rol(...), no una validación real.
 const ROLES = ["admin", "encargado", "mozo", "recepcion", "limpieza", "vision_module"] as const
-
-const estiloBoton: React.CSSProperties = {
-  padding: "6px 14px",
-  borderRadius: 6,
-  border: "1px solid #1976d2",
-  fontSize: 13,
-  cursor: "pointer",
-  backgroundColor: "#fff",
-  color: "#1976d2",
-  fontWeight: 500,
-}
-
-const estiloBotonPeligro: React.CSSProperties = {
-  ...estiloBoton,
-  border: "1px solid #c62828",
-  color: "#c62828",
-}
 
 const estiloSelect: React.CSSProperties = {
   padding: "6px 10px",
@@ -60,8 +44,6 @@ const estiloError: React.CSSProperties = {
 }
 
 export default function UsuariosPage() {
-  const navigate = useNavigate()
-
   // El usuario propio sale del contexto y no de un authApi.me() de esta pantalla: es la
   // misma respuesta que AuthProvider ya resolvió una sola vez para todo el árbol. Antes acá
   // vivían un estado `miId` y un efecto que repetían ese GET /auth/me en cada visita.
@@ -128,23 +110,7 @@ export default function UsuariosPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
-      <header
-        style={{
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-          padding: "12px 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>Usuarios</h1>
-        <button onClick={() => navigate("/")} style={estiloBoton}>
-          Volver al salón
-        </button>
-      </header>
-
+    <Layout>
       <main style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, maxWidth: 900 }}>
         {cargandoInicial && <p style={{ fontSize: 14, color: "#888" }}>Cargando usuarios...</p>}
         {errorInicial && <p style={estiloError}>{errorInicial}</p>}
@@ -245,16 +211,15 @@ export default function UsuariosPage() {
                           ))}
                         </select>
 
-                        <button
+                        <Boton
                           onClick={() => handleToggleActivo(usuario)}
-                          disabled={guardando[usuario.id] || (usuario.activo && bloquearDesactivar)}
-                          style={{
-                            ...(usuario.activo ? estiloBotonPeligro : estiloBoton),
-                            opacity: guardando[usuario.id] || (usuario.activo && bloquearDesactivar) ? 0.5 : 1,
-                          }}
+                          variante={usuario.activo ? "peligro" : "secundario"}
+                          disabled={usuario.activo && bloquearDesactivar}
+                          cargando={guardando[usuario.id]}
+                          textoCargando="Guardando..."
                         >
-                          {guardando[usuario.id] ? "Guardando..." : usuario.activo ? "Desactivar" : "Reactivar"}
-                        </button>
+                          {usuario.activo ? "Desactivar" : "Reactivar"}
+                        </Boton>
                       </div>
                     </div>
 
@@ -278,6 +243,6 @@ export default function UsuariosPage() {
           onCancelar={() => setUsuarioAConfirmar(null)}
         />
       )}
-    </div>
+    </Layout>
   )
 }

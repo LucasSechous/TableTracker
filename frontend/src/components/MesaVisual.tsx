@@ -9,6 +9,8 @@ import {
   DIAMETRO_MESA,
   COLOR_POR_ESTADO,
   BORDE_POR_ESTADO,
+  ICONO_POR_ESTADO,
+  ETIQUETA_POR_ESTADO,
   COLOR_LIMPIEZA_DEMORADA,
   COLOR_ESTADO_DUDOSO,
   limpiezaDemorada,
@@ -126,6 +128,8 @@ export default function MesaVisual({
   // tercera condición en el futuro no dependa de que sigan siendo excluyentes.
   const dudosa = modo === "monitoreo" && mesa.estado_dudoso === true
 
+  const Icono = ICONO_POR_ESTADO[mesa.estado]
+
   const colorBorde = atrasada
     ? COLOR_LIMPIEZA_DEMORADA
     : dudosa
@@ -139,6 +143,10 @@ export default function MesaVisual({
         // que tenía cuando las mesas se dibujaban redondas; ahora son cuadradas y ese
         // selector dejó de encontrar nada.
         data-testid={`mesa-${mesa.numero}`}
+        // El estado como texto, que es lo que un lector de pantalla puede anunciar: el
+        // relleno y el icono no dicen nada a quien no los ve. De paso sirve de tooltip al
+        // pasar el mouse, que es como se lee el estado sin abrir el panel de la mesa.
+        title={`Mesa ${mesa.numero} · ${ETIQUETA_POR_ESTADO[mesa.estado] ?? mesa.estado}`}
         style={{
           width: DIAMETRO_MESA,
           height: DIAMETRO_MESA,
@@ -164,6 +172,18 @@ export default function MesaVisual({
         onClick={handleClick}
       >
         {mesa.numero}
+        {/* El estado, otra vez, sin depender del color (T26-205). Va abajo del número y no
+            encima: el número es el dato que se busca cuando se mira una mesa puntual, y el
+            icono el que se barre de un vistazo cuando se mira el salón entero.
+            aria-hidden porque el estado ya viaja como texto en el title del contenedor;
+            leerlo dos veces sería ruido para un lector de pantalla. */}
+        {Icono && (
+          <Icono
+            size={13}
+            aria-hidden
+            style={{ position: "absolute", bottom: 3, opacity: 0.85, pointerEvents: "none" }}
+          />
+        )}
       </div>
 
       {atrasada && minutosAtraso !== null && (

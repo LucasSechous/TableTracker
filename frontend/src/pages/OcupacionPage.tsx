@@ -11,6 +11,9 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
+import Layout from "../components/Layout"
+import PestanasMetricas from "../components/PestanasMetricas"
+import Boton from "../components/ui/Boton"
 import { PieChart, RefreshCw, LayoutGrid, MoonStar } from "lucide-react"
 import { metricasApi, extraerDetalle } from "../services/api"
 import type { ConteoPorEstado, OcupacionResponse } from "../types"
@@ -71,35 +74,18 @@ export default function OcupacionPage() {
   const fueraDeHorario = ocupacion != null && !ocupacion.local_abierto
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
-      <header
-        style={{
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-          padding: "12px 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>
-          Ocupación del salón
-        </h1>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* Las métricas son una foto del momento, no un stream: sin este botón la única
-              forma de refrescarlas sería recargar la página entera. */}
-          <button onClick={cargar} disabled={loading} style={{ ...estiloBoton, opacity: loading ? 0.6 : 1 }}>
-            <RefreshCw size={15} />
-            Actualizar
-          </button>
-          <button onClick={() => navigate("/")} style={estiloBoton}>
-            Volver al salón
-          </button>
-        </div>
-      </header>
-
+    <Layout
+      acciones={
+        /* Las métricas son una foto del momento, no un stream: sin este botón la única
+           forma de refrescarlas sería recargar la página entera. */
+        <Boton onClick={cargar} icono={RefreshCw} cargando={loading} textoCargando="Actualizando...">
+          Actualizar
+        </Boton>
+      }
+    >
       <main style={{ padding: 24 }}>
+        <PestanasMetricas />
+
         {fueraDeHorario && ocupacion?.hora_apertura && ocupacion?.hora_cierre && (
           <p
             data-testid="ocupacion-fuera-de-horario"
@@ -164,9 +150,9 @@ export default function OcupacionPage() {
               Sin mesas cargadas no hay ocupación que medir. Agregá mesas desde el modo edición
               del panel principal y las métricas aparecen acá.
             </p>
-            <button onClick={() => navigate("/")} style={{ ...estiloBotonPrimario, marginTop: 6 }}>
+            <Boton variante="primario" onClick={() => navigate("/")} style={{ marginTop: 6 }}>
               Ir al salón
-            </button>
+            </Boton>
           </div>
         )}
 
@@ -340,34 +326,10 @@ export default function OcupacionPage() {
           </>
         )}
       </main>
-    </div>
+    </Layout>
   )
 }
 
 // Mismo lenguaje visual que los botones de HistorialPage/CamarasPage, pero con minHeight 44
 // para respetar el target táctil mínimo que usa el resto de la app.
-const estiloBoton: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 6,
-  minHeight: 44,
-  padding: "0 14px",
-  borderRadius: 6,
-  border: "1px solid #1976d2",
-  fontSize: 13,
-  fontWeight: 500,
-  fontFamily: "inherit",
-  cursor: "pointer",
-  backgroundColor: "#fff",
-  color: "#1976d2",
-  whiteSpace: "nowrap",
-}
 
-const estiloBotonPrimario: React.CSSProperties = {
-  ...estiloBoton,
-  border: "none",
-  backgroundColor: "#1976d2",
-  color: "#fff",
-  fontWeight: 600,
-}

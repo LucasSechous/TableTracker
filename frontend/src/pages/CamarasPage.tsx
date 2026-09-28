@@ -1,44 +1,26 @@
-// Pantalla de ABM de cámaras (T26-126). Estructura calcada de CalibracionRoiPage.tsx (T26-128):
-// header con "Volver", estados cargandoInicial/errorInicial, banners de error/éxito reutilizando
-// los mismos estilos inline, y extraerDetalle para parsear errores. Acceso restringido a
-// admin (ver AdminRoute en App.tsx), igual que /camaras en el backend (requiere_rol("admin")).
+// Pantalla de ABM de cámaras (T26-126). Estados cargandoInicial/errorInicial, banners de
+// error/éxito y extraerDetalle para parsear errores, igual que CalibracionRoiPage.tsx
+// (T26-128). Acceso restringido a admin (ver AdminRoute en App.tsx), igual que /camaras en
+// el backend (requiere_rol("admin")). El encabezado y la navegación los pone Layout.
 
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
 import { camarasApi, sectoresApi, extraerDetalle } from "../services/api"
 import type { Camara, Sector, CamaraTestResponse } from "../types"
 import ModalAltaCamara from "../components/ModalAltaCamara"
 import ModalEditarCamara from "../components/ModalEditarCamara"
 import ModalConfirmacion from "../components/ModalConfirmacion"
+import CamaraEnVivo from "../components/CamaraEnVivo"
+import Layout from "../components/Layout"
+import Boton from "../components/ui/Boton"
 
 interface EstadoTest {
   probando: boolean
   resultado: CamaraTestResponse | null
   error: string | null
-}
-
-const estiloBoton: React.CSSProperties = {
-  padding: "6px 14px",
-  borderRadius: 6,
-  border: "1px solid #1976d2",
-  fontSize: 13,
-  cursor: "pointer",
-  backgroundColor: "#fff",
-  color: "#1976d2",
-  fontWeight: 500,
-}
-
-const estiloBotonPrimario: React.CSSProperties = {
-  ...estiloBoton,
-  border: "none",
-  backgroundColor: "#1976d2",
-  color: "#fff",
-}
-
-const estiloBotonPeligro: React.CSSProperties = {
-  ...estiloBoton,
-  border: "1px solid #c62828",
-  color: "#c62828",
+  // Cuenta de pruebas de esta cámara. Sube en cada una y se usa como key de CamaraEnVivo,
+  // para que volver a probar abra un stream nuevo en vez de reusar el anterior, que puede
+  // haber quedado cortado.
+  intento: number
 }
 
 const estiloSelect: React.CSSProperties = {
@@ -68,7 +50,6 @@ const estiloExito: React.CSSProperties = {
 }
 
 export default function CamarasPage() {
-  const navigate = useNavigate()
 
   const [sectores, setSectores] = useState<Sector[]>([])
   const [camaras, setCamaras] = useState<Camara[]>([])
@@ -157,36 +138,40 @@ export default function CamarasPage() {
   }
 
   async function handleProbarConexion(camaraId: number) {
-    setTestsPorCamara((prev) => ({ ...prev, [camaraId]: { probando: true, resultado: null, error: null } }))
+    const intento = (testsPorCamara[camaraId]?.intento ?? 0) + 1
+    setTestsPorCamara((prev) => ({
+      ...prev,
+      [camaraId]: { probando: true, resultado: null, error: null, intento },
+    }))
     try {
       const { data } = await camarasApi.testConexion(camaraId)
       // Siempre 200: que la cámara no responda (ok=false) no es un error de red, es el
       // resultado de la prueba. El mensaje ya viene redactado en español, se muestra tal cual.
-      setTestsPorCamara((prev) => ({ ...prev, [camaraId]: { probando: false, resultado: data, error: null } }))
+      setTestsPorCamara((prev) => ({
+        ...prev,
+        [camaraId]: { probando: false, resultado: data, error: null, intento },
+      }))
     } catch (err) {
       const mensaje = await extraerDetalle(err, "No se pudo probar la conexión")
-      setTestsPorCamara((prev) => ({ ...prev, [camaraId]: { probando: false, resultado: null, error: mensaje } }))
+      setTestsPorCamara((prev) => ({
+        ...prev,
+        [camaraId]: { probando: false, resultado: null, error: mensaje, intento },
+      }))
     }
   }
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
-      <header
-        style={{
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-          padding: "12px 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>Cámaras</h1>
-        <button onClick={() => navigate("/")} style={estiloBoton}>
-          Volver al salón
-        </button>
-      </header>
-
+    // "+ Nueva cámara" sube al encabezado: es la acción principal de la pantalla y estaba
+    // al final de la fila de filtros, donde se leía como un control de filtrado más.
+    <Layout
+      acciones={
+        !cargandoInicial && !errorInicial ? (
+          <Boton variante="primario" onClick={() => setModalAbierto("alta")}>
+            + Nueva cámara
+          </Boton>
+        ) : undefined
+      }
+    >
       <main style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, maxWidth: 900 }}>
         {cargandoInicial && <p style={{ fontSize: 14, color: "#888" }}>Cargando cámaras...</p>}
         {errorInicial && <p style={estiloError}>{errorInicial}</p>}
@@ -209,10 +194,6 @@ export default function CamarasPage() {
                   ))}
                 </select>
               </label>
-
-              <button onClick={() => setModalAbierto("alta")} style={estiloBotonPrimario}>
-                + Nueva cámara
-              </button>
             </div>
 
             {errorCamaras && <p style={estiloError}>{errorCamaras}</p>}
@@ -254,28 +235,38 @@ export default function CamarasPage() {
                       </div>
 
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button
+                        <Boton
                           onClick={() => handleProbarConexion(camara.id)}
-                          disabled={test?.probando}
-                          style={{ ...estiloBoton, opacity: test?.probando ? 0.6 : 1 }}
+                          cargando={test?.probando}
+                          textoCargando="Probando..."
                         >
-                          {test?.probando ? "Probando..." : "Probar conexión"}
-                        </button>
-                        <button onClick={() => handleEditarClick(camara)} style={estiloBoton}>
-                          Editar
-                        </button>
-                        <button
+                          Probar conexión
+                        </Boton>
+                        <Boton onClick={() => handleEditarClick(camara)}>Editar</Boton>
+                        <Boton
+                          variante="peligro"
                           onClick={() => handleDesactivar(camara)}
-                          disabled={desactivando[camara.id]}
-                          style={{ ...estiloBotonPeligro, opacity: desactivando[camara.id] ? 0.6 : 1 }}
+                          cargando={desactivando[camara.id]}
+                          textoCargando="Desactivando..."
                         >
-                          {desactivando[camara.id] ? "Desactivando..." : "Desactivar"}
-                        </button>
+                          Desactivar
+                        </Boton>
                       </div>
                     </div>
 
+                    {/* La vista en vivo va al lado del mensaje y solo cuando la conexión
+                        dio bien: si la cámara no respondió no hay stream que abrir. Se monta
+                        con key={intento} para que volver a probar reinicie la conexión en vez
+                        de reusar la anterior, que puede haber quedado cortada. */}
                     {test?.resultado && (
-                      <p style={test.resultado.ok ? estiloExito : estiloError}>{test.resultado.mensaje}</p>
+                      <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                        <p style={{ ...(test.resultado.ok ? estiloExito : estiloError), flex: 1, minWidth: 240 }}>
+                          {test.resultado.mensaje}
+                        </p>
+                        {test.resultado.ok && (
+                          <CamaraEnVivo key={test.intento} camaraId={camara.id} nombre={camara.nombre} />
+                        )}
+                      </div>
                     )}
                     {test?.error && <p style={estiloError}>{test.error}</p>}
                   </div>
@@ -310,6 +301,6 @@ export default function CamarasPage() {
           onCancelar={() => setCamaraADesactivar(null)}
         />
       )}
-    </div>
+    </Layout>
   )
 }

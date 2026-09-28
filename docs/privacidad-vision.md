@@ -51,8 +51,27 @@ Esta situación responde en parte al estado incompleto del pipeline (sección 2)
 
 - Filmar únicamente a personas que sepan que están siendo grabadas y para qué. Para el banco de desarrollo alcanza con integrantes del equipo y una maqueta de mesa y sillas: **no hace falta —ni corresponde— grabar clientes reales de un local**.
 - No commitear el material bajo ninguna circunstancia, ni siquiera "temporalmente".
-- No adjuntarlo a tickets, informes ni a la tesis. Lo que se comparte es la tabla de resultados del benchmark, que son números, no imágenes.
+- No adjuntarlo a tickets, informes ni a la tesis. Lo que se comparte es la tabla de resultados del benchmark, que son números, no imágenes. **La única excepción es el video de demostración, más abajo.**
 - `metadata.json` guarda la URL de la fuente **enmascarada** (`app/utils/rtsp_url.enmascarar`), porque lleva la contraseña de la cámara y el archivo se mira al discutir resultados.
+
+### Excepción documentada: video de demostración para la defensa
+
+**Qué se persiste.** Un MP4 con la escena grabada y, superpuestos, los polígonos de los ROI coloreados por estado, las cajas de detección y un panel con el estado de cada mesa. Lo genera `vision-module/scripts/render_demo.py`.
+
+**Por qué es la excepción más expuesta del documento.** Las demás describen material que vive en un disco local y se borra. Esta es la única donde el material **se proyecta ante personas ajenas al proyecto**. Por eso se separa de la regla de arriba en vez de estirarla: lo que la regla prohíbe —adjuntar imágenes a la tesis— sigue prohibido, y esto es un permiso acotado y con condiciones, no una derogación.
+
+**Por qué existe.** Una demostración en vivo depende de que la cámara, el backend, la base y la red estén operativos en ese momento, y de que alguien se siente a una mesa en el instante correcto. Un video renderizado de antemano es reproducible y permite pausar para explicar. Además muestra el comportamiento que más cuesta ver en vivo: que el módulo **no** reacciona a alguien que pasa caminando, porque exige `CONFIRMACION_SEGUNDOS` sostenidos.
+
+**Dónde.** `vision-module/data/videos/`, cubierto por `.gitignore` (`data/videos/*`). Tanto el video de entrada como el renderizado.
+
+**Condición de activación.** Manual y explícita: alguien ejecuta `python -m scripts.render_demo`. No hay ninguna ruta de código que lo dispare solo, y `app/main.py` sigue sin escribir un frame a disco.
+
+**Condiciones de uso.** Las de arriba siguen valiendo, y se suman estas:
+
+- Solo pueden aparecer **integrantes del equipo**, que saben que se los está grabando y que el video se va a proyectar en una defensa. Nadie más, y en particular ningún cliente de un local real.
+- Se proyecta, no se distribuye: no se sube a un repositorio, a un drive compartido ni a una plataforma de video, y no se entrega como anexo de la tesis.
+- Se borra cuando termina la instancia que lo justificó.
+- Si alguien que aparece pide que no se use, se rehace sin esa persona. No hace falta justificar el pedido.
 
 ## 4. Verificación: reconocimiento facial o re-identificación de personas
 

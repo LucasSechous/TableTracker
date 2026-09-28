@@ -21,6 +21,12 @@ models/*
 data/samples/*
 !data/samples/.gitkeep
 
+# Videos de entrada y demos renderizadas (scripts/render_demo.py). Van acá y no al
+# repo: pesan, y muestran gente identificable — ver la excepción documentada en
+# docs/privacidad-vision.md.
+data/videos/*
+!data/videos/.gitkeep
+
 # Configuración real de zonas (la de ejemplo sí se versiona)
 config/zonas.json
 

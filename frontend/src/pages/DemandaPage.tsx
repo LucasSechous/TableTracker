@@ -18,6 +18,7 @@
 
 import { useEffect, useState } from "react"
 import Layout from "../components/Layout"
+import PestanasMetricas from "../components/PestanasMetricas"
 import Boton from "../components/ui/Boton"
 import { BarChart3, Download, RefreshCw } from "lucide-react"
 import { metricasApi, sectoresApi, extraerDetalle } from "../services/api"
@@ -133,6 +134,8 @@ export default function DemandaPage() {
       }
     >
       <main style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, maxWidth: 1000 }}>
+        <PestanasMetricas />
+
         <div style={{ ...estiloTarjeta, display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
           <RangoFechas desde={desde} hasta={hasta} onDesdeChange={setDesde} onHastaChange={setHasta} />
           <label style={labelStyle}>

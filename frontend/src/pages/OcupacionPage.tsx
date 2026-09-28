@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import Layout from "../components/Layout"
+import PestanasMetricas from "../components/PestanasMetricas"
 import Boton from "../components/ui/Boton"
 import { PieChart, RefreshCw, LayoutGrid, MoonStar } from "lucide-react"
 import { metricasApi, extraerDetalle } from "../services/api"
@@ -83,6 +84,8 @@ export default function OcupacionPage() {
       }
     >
       <main style={{ padding: 24 }}>
+        <PestanasMetricas />
+
         {fueraDeHorario && ocupacion?.hora_apertura && ocupacion?.hora_cierre && (
           <p
             data-testid="ocupacion-fuera-de-horario"

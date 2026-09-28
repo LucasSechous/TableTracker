@@ -47,7 +47,7 @@ export const SECCIONES: Seccion[] = [
   { ruta: "/ocupacion", etiqueta: "Ocupación del salón", icono: PieChart, grupo: "metricas", soloAdmin: false },
   { ruta: "/rotacion", etiqueta: "Rotación de mesas", icono: Repeat, grupo: "metricas", soloAdmin: false },
   { ruta: "/ocupacion-diaria", etiqueta: "Ocupación diaria", icono: CalendarClock, grupo: "metricas", soloAdmin: false },
-  { ruta: "/demanda", etiqueta: "Horarios de demanda", icono: BarChart3, grupo: "metricas", soloAdmin: false },
+  { ruta: "/demanda", etiqueta: "Horarios de mayor demanda", icono: BarChart3, grupo: "metricas", soloAdmin: false },
 
   { ruta: "/camaras", etiqueta: "Cámaras", icono: Camera, grupo: "administracion", soloAdmin: true },
   { ruta: "/calibracion-roi", etiqueta: "Calibración de ROI", icono: Crosshair, grupo: "administracion", soloAdmin: true },

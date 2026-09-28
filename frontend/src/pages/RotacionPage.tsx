@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Layout from "../components/Layout"
+import PestanasMetricas from "../components/PestanasMetricas"
 import Boton from "../components/ui/Boton"
 import { ArrowDownUp, Clock, Download, RefreshCw, Repeat } from "lucide-react"
 import { metricasApi, sectoresApi, configuracionApi, extraerDetalle } from "../services/api"
@@ -137,6 +138,8 @@ export default function RotacionPage() {
       }
     >
       <main style={{ padding: 24 }}>
+        <PestanasMetricas />
+
         <div
           style={{
             display: "flex",

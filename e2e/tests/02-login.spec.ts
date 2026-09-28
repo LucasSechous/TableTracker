@@ -6,6 +6,7 @@ import {
   getSubmitButton,
   gotoDashboardAuthed,
   getLogoutButton,
+  getMenuButton,
   abrirMenuLateral,
 } from "../fixtures/ui-helpers";
 
@@ -68,7 +69,9 @@ test("2.4 la sesión persiste al recargar la página tras un login exitoso", asy
 
   await page.reload();
 
-  await expect(getLogoutButton(page)).toBeVisible();
+  // Misma razon que en 1.1: la marca de sesion activa es el encabezado, no un boton de
+  // adentro del drawer cerrado.
+  await expect(getMenuButton(page)).toBeVisible();
   await expect(page).toHaveURL(/\/$/);
 });
 

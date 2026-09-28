@@ -153,7 +153,7 @@ export default function HistorialPage() {
 
   return (
     <Layout>
-      <main style={{ padding: 24 }}>
+      <main className="app-main">
         <div
           style={{
             display: "flex",
@@ -258,7 +258,10 @@ export default function HistorialPage() {
         )}
 
         {!loading && !error && (
-          <div style={{ backgroundColor: "#fff", border: "1px solid #e0e0e0", borderRadius: 8, overflow: "hidden" }}>
+          // overflowX en vez de overflow:hidden, como ya hacian Rotacion, Ocupacion diaria y
+          // Demanda: con hidden, las columnas que no entran en una pantalla angosta no se
+          // recortan con aviso, simplemente no existen para el usuario.
+          <div style={{ backgroundColor: "#fff", border: "1px solid #e0e0e0", borderRadius: 8, overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
               <thead>
                 <tr style={{ backgroundColor: "#fafafa", textAlign: "left" }}>

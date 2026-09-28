@@ -172,7 +172,7 @@ export default function CamarasPage() {
         ) : undefined
       }
     >
-      <main style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, maxWidth: 900 }}>
+      <main className="app-main" style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 900 }}>
         {cargandoInicial && <p style={{ fontSize: 14, color: "#888" }}>Cargando cámaras...</p>}
         {errorInicial && <p style={estiloError}>{errorInicial}</p>}
 

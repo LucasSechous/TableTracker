@@ -117,7 +117,11 @@ export default function SalonCanvas({
     // preflight de Tailwind aplica border-box, así que este ancho ya incluye el borde de 2px
     // del canvas. Sigue a localSize (y no a anchoSalon) para no descolgarse mientras se
     // arrastra el resize.
-    <div style={{ width: localSize.ancho }}>
+    // maxWidth 100%: el salon tiene un ancho fijo en pixeles (sale de la configuracion,
+    // tipicamente 1200) y en una pantalla angosta desbordaria el <main> y haria scrollear
+    // horizontalmente la pagina ENTERA, encabezado fijo incluido. Con el techo, la columna
+    // se achica y el que scrollea es el canvas, unos nodos mas abajo.
+    <div style={{ width: localSize.ancho, maxWidth: "100%" }}>
       <div
         style={{
           display: "flex",
@@ -197,52 +201,58 @@ export default function SalonCanvas({
         {filtroEstado && <div style={{ flexShrink: 0, marginLeft: "auto" }}>{filtroEstado}</div>}
       </div>
 
-      <div
-        style={{
-          position: "relative",
-          width: localSize.ancho,
-          height: localSize.alto,
-          backgroundColor: "#f0f0f0",
-          border: "2px solid #ccc",
-          borderRadius: 8,
-          overflow: "hidden",
-        }}
-      >
-        {sectoresVisibles.map((sector) => (
-          <SectorBloque
-            key={sector.id}
-            sector={sector}
-            modo={modo}
-            anchoSalon={localSize.ancho}
-            altoSalon={localSize.alto}
-            umbralLimpiezaMinutos={umbralLimpiezaMinutos}
-            onMesaClick={(mesa) => setMesaSeleccionadaId(mesa.id)}
-            onMesaPosicionChange={onMesaPosicionChange}
-            onSectorDrag={onSectorPosicionChange}
-            onSectorResize={onSectorResize}
-            onSectorActualizado={onSectorActualizado}
-            onSectorEliminado={onSectorEliminado}
-            onMesaEliminada={onMesaEliminada}
-          />
-        ))}
+      {/* El canvas conserva su tamano real y es este envoltorio el que scrollea: un salon
+          es un plano a escala, y encogerlo para que entre en el ancho disponible dejaria
+          las mesas demasiado chicas para tocarlas con el dedo. Arriba del breakpoint el
+          contenido entra justo y la barra no aparece, asi que en escritorio no cambia nada. */}
+      <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+        <div
+          style={{
+            position: "relative",
+            width: localSize.ancho,
+            height: localSize.alto,
+            backgroundColor: "#f0f0f0",
+            border: "2px solid #ccc",
+            borderRadius: 8,
+            overflow: "hidden",
+          }}
+        >
+          {sectoresVisibles.map((sector) => (
+            <SectorBloque
+              key={sector.id}
+              sector={sector}
+              modo={modo}
+              anchoSalon={localSize.ancho}
+              altoSalon={localSize.alto}
+              umbralLimpiezaMinutos={umbralLimpiezaMinutos}
+              onMesaClick={(mesa) => setMesaSeleccionadaId(mesa.id)}
+              onMesaPosicionChange={onMesaPosicionChange}
+              onSectorDrag={onSectorPosicionChange}
+              onSectorResize={onSectorResize}
+              onSectorActualizado={onSectorActualizado}
+              onSectorEliminado={onSectorEliminado}
+              onMesaEliminada={onMesaEliminada}
+            />
+          ))}
 
-        {puedeRedimensionar && (
-          <div
-            onMouseDown={handleResizeMouseDown}
-            title="Redimensionar salón"
-            style={{
-              position: "absolute",
-              right: 0,
-              bottom: 0,
-              width: 14,
-              height: 14,
-              cursor: "nwse-resize",
-              backgroundColor: "#1976d2",
-              borderTopLeftRadius: 4,
-              zIndex: 4,
-            }}
-          />
-        )}
+          {puedeRedimensionar && (
+            <div
+              onMouseDown={handleResizeMouseDown}
+              title="Redimensionar salón"
+              style={{
+                position: "absolute",
+                right: 0,
+                bottom: 0,
+                width: 14,
+                height: 14,
+                cursor: "nwse-resize",
+                backgroundColor: "#1976d2",
+                borderTopLeftRadius: 4,
+                zIndex: 4,
+              }}
+            />
+          )}
+        </div>
       </div>
 
       <PanelMesa

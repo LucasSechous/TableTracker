@@ -133,7 +133,7 @@ export default function DemandaPage() {
         </Boton>
       }
     >
-      <main style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, maxWidth: 1000 }}>
+      <main className="app-main" style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 1000 }}>
         <PestanasMetricas />
 
         <div style={{ ...estiloTarjeta, display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>

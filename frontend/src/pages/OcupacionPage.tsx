@@ -83,7 +83,7 @@ export default function OcupacionPage() {
         </Boton>
       }
     >
-      <main style={{ padding: 24 }}>
+      <main className="app-main">
         <PestanasMetricas />
 
         {fueraDeHorario && ocupacion?.hora_apertura && ocupacion?.hora_cierre && (

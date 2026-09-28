@@ -45,6 +45,7 @@ export default function Layout({ children, acciones, titulo }: Props) {
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
       <header
+        className="app-header"
         style={{
           position: "fixed",
           top: 0,
@@ -54,7 +55,6 @@ export default function Layout({ children, acciones, titulo }: Props) {
           height: ALTURA_HEADER,
           backgroundColor: "#fff",
           boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-          padding: "0 24px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",

@@ -148,7 +148,7 @@ export default function OcupacionDiariaPage() {
         </Boton>
       }
     >
-      <main style={{ padding: 24 }}>
+      <main className="app-main">
         <PestanasMetricas />
 
         <div

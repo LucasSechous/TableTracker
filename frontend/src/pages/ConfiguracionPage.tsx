@@ -347,7 +347,7 @@ export default function ConfiguracionPage() {
 
   return (
     <Layout>
-      <main style={{ padding: 24, maxWidth: 640 }}>
+      <main className="app-main" style={{ maxWidth: 640 }}>
         {loading && <p style={{ fontSize: 14, color: "#888" }}>Cargando configuración...</p>}
 
         {error && (

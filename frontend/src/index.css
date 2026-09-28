@@ -1,1 +1,44 @@
 @import "tailwindcss";
+
+/* Reglas responsive de la aplicación (T26-209).
+ *
+ * Por qué existe este archivo y no está todo inline como el resto: un objeto style de React
+ * no admite media queries. Mientras cada pantalla escribía su padding a mano, la aplicación
+ * no podía adaptarse a un ancho de celular ni aunque se quisiera — y no había ni una media
+ * query en todo el proyecto.
+ *
+ * La regla que gobierna todo lo de acá: POR ENCIMA DEL BREAKPOINT NADA CAMBIA. Los valores
+ * de las reglas base son exactamente los que estaban inline, así que en un monitor la
+ * aplicación se ve idéntica a antes; lo que agregan las media queries solo se activa por
+ * debajo de 640px. El escritorio queda intacto por construcción y no por cuidado manual,
+ * que es lo que hace este cambio seguro a esta altura del proyecto.
+ *
+ * Cuidado al tocar esto: un estilo inline le gana a cualquier regla de acá. Si una pantalla
+ * vuelve a poner `padding` en su style, esta hoja deja de tener efecto sobre ella en
+ * silencio, sin romper nada y sin avisar.
+ */
+
+/* 640px: el ancho a partir del cual la aplicación deja de ser una pantalla de escritorio.
+ * Coincide con el breakpoint `sm` de Tailwind, para que cuando el resto migre a clases
+ * (T26-209, punto 3) no convivan dos criterios distintos de "esto es un celular". */
+
+/* El <main> de las diez pantallas. 24px es el valor que tenían todas inline. */
+.app-main {
+  padding: 24px;
+}
+
+/* El encabezado fijo que monta Layout. */
+.app-header {
+  padding: 0 24px;
+}
+
+@media (max-width: 640px) {
+  /* En un celular, 24px por lado se comen un 13% del ancho útil. */
+  .app-main {
+    padding: 16px;
+  }
+
+  .app-header {
+    padding: 0 12px;
+  }
+}

@@ -432,7 +432,7 @@ export default function DashboardPage() {
         />
       )}
 
-      <main style={{ padding: 24, paddingBottom: modo === "edicion" ? 96 : 24 }}>
+      <main className="app-main" style={{ paddingBottom: modo === "edicion" ? 96 : undefined }}>
         {loading && (
           <p style={{ fontSize: 14, color: "#888" }}>Cargando salón...</p>
         )}
@@ -518,6 +518,9 @@ export default function DashboardPage() {
               // configuración y no del localSize de SalonCanvas —que es el que manda durante
               // un resize— porque este aviso solo existe en monitoreo, donde no se redimensiona.
               width: configuracion.ancho_salon,
+              // El salon puede ser mas ancho que la pantalla: sin este techo el aviso
+              // desborda el viewport en un celular y arrastra la pagina entera con el.
+              maxWidth: "100%",
               fontSize: 14,
               fontWeight: 600,
               color: COLOR_OCUPACION_ALTA,

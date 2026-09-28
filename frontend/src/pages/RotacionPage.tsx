@@ -137,7 +137,7 @@ export default function RotacionPage() {
         </Boton>
       }
     >
-      <main style={{ padding: 24 }}>
+      <main className="app-main">
         <PestanasMetricas />
 
         <div

@@ -123,17 +123,12 @@ export default function SalonCanvas({
     // se achica y el que scrollea es el canvas, unos nodos mas abajo.
     <div style={{ width: localSize.ancho, maxWidth: "100%" }}>
       <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 16,
-          marginBottom: 12,
-        }}
+        className="flex flex-wrap gap-[16px] mb-[12px]"
       >
         {Object.entries(COLOR_POR_ESTADO).map(([estado, color]) => {
           const Icono = ICONO_POR_ESTADO[estado]
           return (
-          <div key={estado} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div key={estado} className="flex items-center gap-[6px]">
             {/* La muestra de la leyenda lleva el mismo icono que la mesa, y no solo el
                 color: es lo que permite aprender la correspondencia icono-estado mirando
                 acá, y lo que hace que la leyenda siga sirviendo en blanco y negro. */}
@@ -143,7 +138,7 @@ export default function SalonCanvas({
                 height: 18,
                 borderRadius: 3,
                 backgroundColor: color,
-                color: "var(--blanco)",
+                color: "var(--color-blanco)",
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -152,7 +147,7 @@ export default function SalonCanvas({
             >
               {Icono && <Icono size={12} aria-hidden />}
             </span>
-            <span style={{ fontSize: 13, color: "var(--slate-600)", fontWeight: 500 }}>
+            <span className="text-[13px] text-slate-600 font-medium">
               {ETIQUETA_POR_ESTADO[estado] ?? estado}
             </span>
           </div>
@@ -164,13 +159,7 @@ export default function SalonCanvas({
           para que en pantallas angostas el de estado baje entero a la línea de abajo en vez
           de comerse el ancho de los tabs. */}
       <div
-        style={{
-          display: "flex",
-          alignItems: "flex-end",
-          gap: 16,
-          flexWrap: "wrap",
-          marginBottom: 16,
-        }}
+        className="flex items-end gap-[16px] flex-wrap mb-[16px]"
       >
         <div
           style={{
@@ -198,21 +187,21 @@ export default function SalonCanvas({
             </button>
           ))}
         </div>
-        {filtroEstado && <div style={{ flexShrink: 0, marginLeft: "auto" }}>{filtroEstado}</div>}
+        {filtroEstado && <div className="shrink-0 ml-auto">{filtroEstado}</div>}
       </div>
 
       {/* El canvas conserva su tamano real y es este envoltorio el que scrollea: un salon
           es un plano a escala, y encogerlo para que entre en el ancho disponible dejaria
           las mesas demasiado chicas para tocarlas con el dedo. Arriba del breakpoint el
           contenido entra justo y la barra no aparece, asi que en escritorio no cambia nada. */}
-      <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+      <div className="overflow-x-auto max-w-[100%]">
         <div
           style={{
             position: "relative",
             width: localSize.ancho,
             height: localSize.alto,
             backgroundColor: "#f0f0f0",
-            border: "2px solid var(--gris-250)",
+            border: "2px solid var(--color-gris-250)",
             borderRadius: 8,
             overflow: "hidden",
           }}
@@ -246,7 +235,7 @@ export default function SalonCanvas({
                 width: 14,
                 height: 14,
                 cursor: "nwse-resize",
-                backgroundColor: "var(--marca)",
+                backgroundColor: "var(--color-marca)",
                 borderTopLeftRadius: 4,
                 zIndex: 4,
               }}
@@ -270,9 +259,9 @@ function estiloTab(activo: boolean): CSSProperties {
     padding: "10px 18px",
     minHeight: 44,
     borderRadius: 8,
-    border: activo ? "2px solid var(--marca)" : "2px solid var(--slate-300)",
-    backgroundColor: activo ? "var(--marca)" : "var(--blanco)",
-    color: activo ? "var(--blanco)" : "var(--slate-500)",
+    border: activo ? "2px solid var(--color-marca)" : "2px solid var(--color-slate-300)",
+    backgroundColor: activo ? "var(--color-marca)" : "var(--color-blanco)",
+    color: activo ? "var(--color-blanco)" : "var(--color-slate-500)",
     fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",

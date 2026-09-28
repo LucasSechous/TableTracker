@@ -36,25 +36,25 @@ const INTERVALO_SNAPSHOT_MS = 4000;
 const estiloSelect: React.CSSProperties = {
   padding: "6px 10px",
   fontSize: 13,
-  border: "1px solid var(--gris-250)",
+  border: "1px solid var(--color-gris-250)",
   borderRadius: 6,
-  backgroundColor: "var(--blanco)",
+  backgroundColor: "var(--color-blanco)",
 };
 
 const estiloError: React.CSSProperties = {
   fontSize: 13,
-  color: "var(--error)",
-  backgroundColor: "var(--error-fondo)",
-  border: "1px solid var(--error-borde)",
+  color: "var(--color-error)",
+  backgroundColor: "var(--color-error-fondo)",
+  border: "1px solid var(--color-error-borde)",
   borderRadius: 6,
   padding: "8px 12px",
 };
 
 const estiloExito: React.CSSProperties = {
   fontSize: 13,
-  color: "var(--exito)",
-  backgroundColor: "var(--exito-fondo)",
-  border: "1px solid var(--exito-borde)",
+  color: "var(--color-exito)",
+  backgroundColor: "var(--color-exito-fondo)",
+  border: "1px solid var(--color-exito-borde)",
   borderRadius: 6,
   padding: "8px 12px",
 };
@@ -290,14 +290,14 @@ export default function CalibracionRoiPage() {
 
   return (
     <Layout>
-      <main className="app-main" style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 900 }}>
-        {cargandoInicial && <p style={{ fontSize: 14, color: "var(--gris-400)" }}>Cargando cámaras y mesas...</p>}
+      <main className="app-main flex flex-col gap-[16px] max-w-[900px]">
+        {cargandoInicial && <p className="text-[14px] text-gris-400">Cargando cámaras y mesas...</p>}
         {errorInicial && <p style={estiloError}>{errorInicial}</p>}
 
         {!cargandoInicial && !errorInicial && (
           <>
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
-              <label style={{ fontSize: 13, color: "var(--gris-600)", display: "flex", flexDirection: "column", gap: 4 }}>
+            <div className="flex gap-[16px] flex-wrap items-center">
+              <label className="text-[13px] text-gris-600 flex flex-col gap-[4px]">
                 Cámara
                 <select
                   value={camaraId}
@@ -314,7 +314,7 @@ export default function CalibracionRoiPage() {
               </label>
 
               {camaraId !== "" && (
-                <label style={{ fontSize: 13, color: "var(--gris-600)", display: "flex", flexDirection: "column", gap: 4 }}>
+                <label className="text-[13px] text-gris-600 flex flex-col gap-[4px]">
                   Mesa
                   <select
                     value={mesaId}
@@ -344,7 +344,7 @@ export default function CalibracionRoiPage() {
                   {/* Deshabilitado por el toggle, no por estar cargando: sin esto el botón
                       apagado se ve roto en vez de intencional. */}
                   {mostrarDetecciones && (
-                    <span style={{ fontSize: 11, color: "var(--gris-400)" }}>Se actualiza solo cada 4s</span>
+                    <span className="text-[11px] text-gris-400">Se actualiza solo cada 4s</span>
                   )}
                 </div>
               )}
@@ -353,7 +353,7 @@ export default function CalibracionRoiPage() {
                 <label
                   style={{
                     fontSize: 13,
-                    color: "var(--gris-600)",
+                    color: "var(--color-gris-600)",
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
@@ -374,17 +374,17 @@ export default function CalibracionRoiPage() {
             </div>
 
             {camaras.length === 0 && (
-              <p style={{ fontSize: 13, color: "var(--gris-500)" }}>No hay cámaras activas dadas de alta todavía.</p>
+              <p className="text-[13px] text-gris-500">No hay cámaras activas dadas de alta todavía.</p>
             )}
 
             {errorRois && <p style={estiloError}>{errorRois}</p>}
 
             {camaraId !== "" && mesaId === "" && (
-              <p style={{ fontSize: 13, color: "var(--gris-500)" }}>Elegí una mesa para poder dibujar su zona.</p>
+              <p className="text-[13px] text-gris-500">Elegí una mesa para poder dibujar su zona.</p>
             )}
 
             {camaraId !== "" && snapshotToken === 0 && !snapshotLoading && (
-              <p style={{ fontSize: 13, color: "var(--gris-500)" }}>
+              <p className="text-[13px] text-gris-500">
                 Apretá "Actualizar frame" para traer una imagen actual de la cámara.
               </p>
             )}
@@ -394,7 +394,7 @@ export default function CalibracionRoiPage() {
             )}
 
             {mostrarDetecciones && snapshotSrc && (
-              <p style={{ fontSize: 12, color: errorDeteccion ? "var(--error)" : "var(--gris-400)" }}>
+              <p style={{ fontSize: 12, color: errorDeteccion ? "var(--color-error)" : "var(--color-gris-400)" }}>
                 {errorDeteccion ??
                   (deteccionActual
                     ? `Detección en vivo: ${deteccionActual.detections.length} objeto(s) en el último frame de vision-module.`
@@ -405,7 +405,7 @@ export default function CalibracionRoiPage() {
             {snapshotSrc && mesaId !== "" && (
               <>
                 {roiEnEdicion && (
-                  <p style={{ fontSize: 13, color: "var(--marca)" }}>
+                  <p className="text-[13px] text-marca">
                     Editando la zona ya guardada de esta mesa: arrastrá un vértice para moverlo, doble click
                     para borrarlo.
                   </p>
@@ -427,8 +427,8 @@ export default function CalibracionRoiPage() {
                   deteccionActual={mostrarDetecciones ? deteccionActual : null}
                 />
 
-                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 13, color: "var(--gris-600)" }}>
+                <div className="flex items-center gap-[12px] flex-wrap">
+                  <span className="text-[13px] text-gris-600">
                     {draftPoints.length} punto{draftPoints.length === 1 ? "" : "s"} (mínimo 3)
                   </span>
                   {roiEnEdicion ? (

@@ -347,8 +347,8 @@ export default function ConfiguracionPage() {
 
   return (
     <Layout>
-      <main className="app-main" style={{ maxWidth: 640 }}>
-        {loading && <p style={{ fontSize: 14, color: "var(--gris-400)" }}>Cargando configuración...</p>}
+      <main className="app-main max-w-[640px]">
+        {loading && <p className="text-[14px] text-gris-400">Cargando configuración...</p>}
 
         {error && (
           <p data-testid="configuracion-error" style={estiloError}>
@@ -370,15 +370,7 @@ export default function ConfiguracionPage() {
 
         {!loading && form && (
           <div
-            style={{
-              backgroundColor: "var(--blanco)",
-              border: "1px solid var(--gris-200)",
-              borderRadius: 8,
-              padding: 20,
-              display: "flex",
-              flexDirection: "column",
-              gap: 18,
-            }}
+            className="bg-blanco border border-gris-200 rounded-[8px] p-[20px] flex flex-col gap-[18px]"
           >
             <Campo
               etiqueta="Nombre del establecimiento"
@@ -409,10 +401,10 @@ export default function ConfiguracionPage() {
               />
             </Campo>
 
-            <div style={{ height: 1, backgroundColor: "var(--slate-200)" }} />
+            <div className="h-[1px] bg-slate-200" />
 
-            <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-              <div style={{ flex: "1 1 160px" }}>
+            <div className="flex gap-[14px] flex-wrap">
+              <div className="flex-[1_1_160px]">
                 <Campo etiqueta="Hora de apertura">
                   <input
                     type="time"
@@ -423,7 +415,7 @@ export default function ConfiguracionPage() {
                   />
                 </Campo>
               </div>
-              <div style={{ flex: "1 1 160px" }}>
+              <div className="flex-[1_1_160px]">
                 <Campo etiqueta="Hora de cierre">
                   <input
                     type="time"
@@ -436,7 +428,7 @@ export default function ConfiguracionPage() {
               </div>
             </div>
 
-            <p style={{ margin: 0, fontSize: 12, color: "var(--slate-400)", lineHeight: 1.5 }}>
+            <p className="m-[0px] text-[12px] text-slate-400 leading-[1.5]">
               {form.horaApertura && form.horaCierre
                 ? `Las métricas de rotación cuentan solo lo que pasa entre las ${form.horaApertura} y las ${form.horaCierre}.` +
                   (form.horaCierre < form.horaApertura ? " El cierre después de medianoche está contemplado." : "")
@@ -478,7 +470,7 @@ export default function ConfiguracionPage() {
               />
             </Campo>
 
-            <div style={{ height: 1, backgroundColor: "var(--slate-200)" }} />
+            <div className="h-[1px] bg-slate-200" />
 
             <div>
               <h2 style={estiloTituloSeccion}>Detección automática</h2>
@@ -520,7 +512,7 @@ export default function ConfiguracionPage() {
               />
             </Campo>
 
-            <div style={{ height: 1, backgroundColor: "var(--slate-200)" }} />
+            <div className="h-[1px] bg-slate-200" />
 
             <Campo
               etiqueta="Ancho del salón (px)"
@@ -550,12 +542,12 @@ export default function ConfiguracionPage() {
               />
             </Campo>
 
-            <p style={{ margin: 0, fontSize: 12, color: "var(--slate-400)", lineHeight: 1.5 }}>
+            <p className="m-[0px] text-[12px] text-slate-400 leading-[1.5]">
               El tamaño del salón también se puede ajustar arrastrando su borde inferior derecho
               desde el modo edición del panel principal.
             </p>
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div className="flex gap-[10px] flex-wrap">
               <Boton
                 variante="primario"
                 data-testid="configuracion-guardar"
@@ -597,19 +589,19 @@ export default function ConfiguracionPage() {
           )}
 
           {!errorResumen && resumen === null && (
-            <p style={{ margin: 0, fontSize: 13, color: "var(--gris-400)" }}>Cargando resumen...</p>
+            <p className="m-[0px] text-[13px] text-gris-400">Cargando resumen...</p>
           )}
 
           {resumen && (
             <>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
+              <div className="flex flex-wrap gap-[20px]">
                 <Conteo testid="configuracion-resumen-sectores" etiqueta="Sectores" valor={resumen.sectores} />
                 <Conteo testid="configuracion-resumen-mesas" etiqueta="Mesas" valor={resumen.mesas} />
                 <Conteo testid="configuracion-resumen-camaras" etiqueta="Cámaras" valor={resumen.camaras} />
                 <Conteo testid="configuracion-resumen-rois" etiqueta="ROIs" valor={resumen.rois} />
               </div>
 
-              <div style={{ height: 1, backgroundColor: "var(--slate-200)" }} />
+              <div className="h-[1px] bg-slate-200" />
 
               {/* Orden deliberado: de lo que deja más ciego el sistema a lo que menos. Una mesa
                   sin ROI nunca se detecta; un sector sin cámara son todas sus mesas a la vez. */}
@@ -643,9 +635,9 @@ export default function ConfiguracionPage() {
               {resumen.mesasSinRoi === 0 && resumen.sectoresSinCamara === 0 && resumen.camarasSinRoi === 0 && (
                 <div
                   data-testid="configuracion-sin-huecos"
-                  style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#1b5e20" }}
+                  className="flex items-center gap-[8px] text-[13px] text-[#1b5e20]"
                 >
-                  <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
+                  <CheckCircle2 size={16} className="shrink-0" />
                   No falta nada por configurar: todas las mesas tienen ROI y todos los sectores
                   tienen cámara.
                 </div>
@@ -679,14 +671,14 @@ export default function ConfiguracionPage() {
           )}
 
           {!errorEstados && estados === null && (
-            <p style={{ margin: 0, fontSize: 13, color: "var(--gris-400)" }}>Cargando estados...</p>
+            <p className="m-[0px] text-[13px] text-gris-400">Cargando estados...</p>
           )}
 
           {estados?.map((estado) => (
             <div
               key={estado.valor}
               data-testid={`configuracion-estado-${estado.valor}`}
-              style={{ display: "flex", alignItems: "center", gap: 10 }}
+              className="flex items-center gap-[10px]"
             >
               <span
                 style={{
@@ -696,11 +688,11 @@ export default function ConfiguracionPage() {
                   flexShrink: 0,
                   // El gris cubre un estado que exista en el backend pero todavía no en la
                   // paleta: se prefiere una fila sin color a una fila que no se dibuja.
-                  backgroundColor: COLOR_POR_ESTADO[estado.valor] ?? "var(--gris-desconocido)",
+                  backgroundColor: COLOR_POR_ESTADO[estado.valor] ?? "var(--color-gris-desconocido)",
                 }}
               />
-              <span style={{ fontSize: 14, fontWeight: 600, color: "var(--slate-700)" }}>{estado.etiqueta}</span>
-              <code style={{ fontSize: 12, color: "var(--slate-400)" }}>{estado.valor}</code>
+              <span className="text-[14px] font-semibold text-slate-700">{estado.etiqueta}</span>
+              <code className="text-[12px] text-slate-400">{estado.valor}</code>
             </div>
           ))}
         </section>
@@ -712,8 +704,8 @@ export default function ConfiguracionPage() {
 function Conteo({ testid, etiqueta, valor }: { testid: string; etiqueta: string; valor: number }) {
   return (
     <div data-testid={testid}>
-      <div style={{ fontSize: 22, fontWeight: 700, color: "var(--slate-900)", lineHeight: 1.2 }}>{valor}</div>
-      <div style={{ fontSize: 12, color: "var(--slate-400)" }}>{etiqueta}</div>
+      <div className="text-[22px] font-bold text-slate-900 leading-[1.2]">{valor}</div>
+      <div className="text-[12px] text-slate-400">{etiqueta}</div>
     </div>
   )
 }
@@ -734,22 +726,15 @@ function Hueco({
   return (
     <div
       data-testid={testid}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        flexWrap: "wrap",
-        gap: 10,
-        padding: "10px 14px",
-        borderRadius: 6,
-        backgroundColor: "var(--aviso-fondo)",
-        border: "1px solid var(--aviso-borde)",
-      }}
+      className="flex items-center justify-between flex-wrap gap-[10px] py-[10px] px-[14px] rounded-[6px] bg-aviso-fondo border border-aviso-borde"
     >
-      <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--aviso)" }}>
-        <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+      <span className="flex items-center gap-[8px] text-[13px] text-aviso">
+        <AlertTriangle size={16} className="shrink-0" />
         {texto}
       </span>
+      {/* Va por style y no por className: Boton arma su aspecto con un objeto inline, que
+          le gana a cualquier clase. Aceptar className seria ofrecer un control que no
+          funciona, y por eso el componente lo excluye de sus props. */}
       <Boton onClick={onAccion} style={{ minHeight: 36 }}>
         {accion}
       </Boton>
@@ -769,10 +754,10 @@ function Campo({
   children: React.ReactNode
 }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--slate-700)" }}>{etiqueta}</span>
+    <label className="flex flex-col gap-[6px]">
+      <span className="text-[13px] font-semibold text-slate-700">{etiqueta}</span>
       {children}
-      {ayuda && <span style={{ fontSize: 12, color: "var(--slate-400)", lineHeight: 1.4 }}>{ayuda}</span>}
+      {ayuda && <span className="text-[12px] text-slate-400 leading-[1.4]">{ayuda}</span>}
     </label>
   )
 }
@@ -780,8 +765,8 @@ function Campo({
 // Mismo recuadro blanco que la tarjeta del formulario, para que las secciones de solo
 // lectura que se agregan debajo no parezcan de otra pantalla.
 const estiloTarjeta: React.CSSProperties = {
-  backgroundColor: "var(--blanco)",
-  border: "1px solid var(--gris-200)",
+  backgroundColor: "var(--color-blanco)",
+  border: "1px solid var(--color-gris-200)",
   borderRadius: 8,
   padding: 20,
   marginTop: 20,
@@ -793,14 +778,14 @@ const estiloTarjeta: React.CSSProperties = {
 const estiloTituloSeccion: React.CSSProperties = {
   fontSize: 15,
   fontWeight: 700,
-  color: "var(--slate-900)",
+  color: "var(--color-slate-900)",
   margin: "0 0 4px",
 }
 
 const estiloAyudaSeccion: React.CSSProperties = {
   margin: 0,
   fontSize: 12,
-  color: "var(--slate-400)",
+  color: "var(--color-slate-400)",
   lineHeight: 1.5,
 }
 
@@ -808,10 +793,10 @@ const estiloInput: React.CSSProperties = {
   minHeight: 44,
   padding: "0 12px",
   borderRadius: 6,
-  border: "1px solid var(--gris-250)",
+  border: "1px solid var(--color-gris-250)",
   fontSize: 14,
   fontFamily: "inherit",
-  color: "var(--slate-900)",
+  color: "var(--color-slate-900)",
   width: "100%",
   boxSizing: "border-box",
 }
@@ -821,9 +806,9 @@ const estiloInput: React.CSSProperties = {
 
 const estiloError: React.CSSProperties = {
   fontSize: 14,
-  color: "var(--error)",
-  backgroundColor: "var(--error-fondo)",
-  border: "1px solid var(--error-borde)",
+  color: "var(--color-error)",
+  backgroundColor: "var(--color-error-fondo)",
+  border: "1px solid var(--color-error-borde)",
   borderRadius: 6,
   padding: "10px 16px",
   marginTop: 0,
@@ -832,8 +817,8 @@ const estiloError: React.CSSProperties = {
 const estiloExito: React.CSSProperties = {
   fontSize: 14,
   color: "#1b5e20",
-  backgroundColor: "var(--exito-fondo)",
-  border: "1px solid var(--exito-borde)",
+  backgroundColor: "var(--color-exito-fondo)",
+  border: "1px solid var(--color-exito-borde)",
   borderRadius: 6,
   padding: "10px 16px",
   marginTop: 0,
@@ -841,9 +826,9 @@ const estiloExito: React.CSSProperties = {
 
 const estiloAviso: React.CSSProperties = {
   fontSize: 13,
-  color: "var(--aviso)",
-  backgroundColor: "var(--aviso-fondo)",
-  border: "1px solid var(--aviso-borde)",
+  color: "var(--color-aviso)",
+  backgroundColor: "var(--color-aviso-fondo)",
+  border: "1px solid var(--color-aviso-borde)",
   borderRadius: 6,
   padding: "10px 16px",
   marginTop: 0,

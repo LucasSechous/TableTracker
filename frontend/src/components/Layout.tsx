@@ -43,7 +43,7 @@ export default function Layout({ children, acciones, titulo }: Props) {
   const seccion = seccionDe(pathname)
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "var(--gris-75)" }}>
+    <div className="min-h-[100vh] bg-gris-75">
       <header
         className="app-header"
         style={{
@@ -53,7 +53,7 @@ export default function Layout({ children, acciones, titulo }: Props) {
           right: 0,
           zIndex: 150,
           height: ALTURA_HEADER,
-          backgroundColor: "var(--blanco)",
+          backgroundColor: "var(--color-blanco)",
           boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
           display: "flex",
           alignItems: "center",
@@ -62,61 +62,30 @@ export default function Layout({ children, acciones, titulo }: Props) {
           boxSizing: "border-box",
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+        <div className="flex flex-col gap-[1px] min-w-[0px]">
           {/* La marca es el camino de vuelta al salón desde cualquier lado, que es lo que
               hacía el botón "Volver al salón" de cada pantalla. Sigue estando además como
               primera entrada del menú: acá es el atajo, allá el destino explícito. */}
           <button
             onClick={() => navigate("/")}
-            style={{
-              border: "none",
-              background: "none",
-              padding: 0,
-              fontFamily: "inherit",
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: 0.5,
-              color: "var(--slate-400)",
-              cursor: "pointer",
-              textAlign: "left",
-            }}
+            className="border-0 bg-[none] p-[0px] font-[inherit] text-[11px] font-bold tracking-[0.5px] text-slate-400 cursor-pointer text-left"
           >
             TABLETRACKER
           </button>
           <h1
-            style={{
-              fontSize: 18,
-              fontWeight: 700,
-              color: "var(--gris-900)",
-              margin: 0,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
+            className="text-[18px] font-bold text-gris-900 m-[0px] overflow-hidden text-ellipsis whitespace-nowrap"
           >
             {titulo ?? seccion.etiqueta}
           </h1>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <div className="flex items-center gap-[8px] shrink-0">
           {acciones}
           <button
             onClick={() => setMenuAbierto(true)}
             aria-label="Abrir menú"
             aria-expanded={menuAbierto}
-            style={{
-              width: 44,
-              height: 44,
-              flexShrink: 0,
-              border: "none",
-              borderRadius: 10,
-              backgroundColor: "var(--slate-100)",
-              color: "var(--gris-900)",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
+            className="w-[44px] h-[44px] shrink-0 border-0 rounded-[10px] bg-slate-100 text-gris-900 cursor-pointer flex items-center justify-center"
           >
             <Menu size={20} aria-hidden />
           </button>

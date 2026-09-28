@@ -89,36 +89,18 @@ export default function OcupacionPage() {
         {fueraDeHorario && ocupacion?.hora_apertura && ocupacion?.hora_cierre && (
           <p
             data-testid="ocupacion-fuera-de-horario"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 13,
-              color: "var(--aviso)",
-              backgroundColor: "var(--aviso-fondo)",
-              border: "1px solid var(--aviso-borde)",
-              borderRadius: 6,
-              padding: "10px 16px",
-              marginTop: 0,
-            }}
+            className="flex items-center gap-[8px] text-[13px] text-aviso bg-aviso-fondo border border-aviso-borde rounded-[6px] py-[10px] px-[16px] mt-[0px]"
           >
-            <MoonStar size={15} style={{ flexShrink: 0 }} />
+            <MoonStar size={15} className="shrink-0" />
             {`El local está cerrado ahora (servicio de ${sinSegundos(ocupacion.hora_apertura)} a ${sinSegundos(ocupacion.hora_cierre)}). Estos números son del momento actual, no del último servicio.`}
           </p>
         )}
 
-        {loading && <p style={{ fontSize: 14, color: "var(--gris-400)" }}>Cargando métricas...</p>}
+        {loading && <p className="text-[14px] text-gris-400">Cargando métricas...</p>}
 
         {error && (
           <p
-            style={{
-              fontSize: 14,
-              color: "var(--error)",
-              backgroundColor: "var(--error-fondo)",
-              border: "1px solid var(--error-borde)",
-              borderRadius: 6,
-              padding: "10px 16px",
-            }}
+            className="text-[14px] text-error bg-error-fondo border border-error-borde rounded-[6px] py-[10px] px-[16px]"
           >
             {error}
           </p>
@@ -130,23 +112,13 @@ export default function OcupacionPage() {
         {!loading && !error && salonSinMesas && (
           <div
             data-testid="ocupacion-empty"
-            style={{
-              backgroundColor: "var(--blanco)",
-              border: "1px dashed var(--slate-300)",
-              borderRadius: 8,
-              padding: "40px 24px",
-              textAlign: "center",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 10,
-            }}
+            className="bg-blanco border border-dashed border-slate-300 rounded-[8px] py-[40px] px-[24px] text-center flex flex-col items-center gap-[10px]"
           >
-            <LayoutGrid size={30} style={{ color: "var(--slate-400)" }} />
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--slate-900)", margin: 0 }}>
+            <LayoutGrid size={30} className="text-slate-400" />
+            <h2 className="text-[16px] font-bold text-slate-900 m-[0px]">
               Todavía no hay mesas activas
             </h2>
-            <p style={{ fontSize: 14, color: "var(--slate-500)", margin: 0, maxWidth: 460, lineHeight: 1.5 }}>
+            <p className="text-[14px] text-slate-500 m-[0px] max-w-[460px] leading-[1.5]">
               Sin mesas cargadas no hay ocupación que medir. Agregá mesas desde el modo edición
               del panel principal y las métricas aparecen acá.
             </p>
@@ -159,38 +131,17 @@ export default function OcupacionPage() {
         {!loading && !error && ocupacion && conteo && !salonSinMesas && (
           <>
             <div
-              style={{
-                backgroundColor: "var(--blanco)",
-                border: "1px solid var(--gris-200)",
-                borderRadius: 8,
-                padding: 20,
-                marginBottom: 24,
-              }}
+              className="bg-blanco border border-gris-200 rounded-[8px] p-[20px] mb-[24px]"
             >
               <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  letterSpacing: 0.5,
-                  textTransform: "uppercase",
-                  color: "var(--slate-500)",
-                }}
+                className="flex items-center gap-[8px] text-[12px] font-bold tracking-[0.5px] uppercase text-slate-500"
               >
                 <PieChart size={16} />
                 Ocupación general
               </div>
 
               <div
-                style={{
-                  display: "flex",
-                  alignItems: "baseline",
-                  flexWrap: "wrap",
-                  gap: 12,
-                  marginTop: 10,
-                }}
+                className="flex items-baseline flex-wrap gap-[12px] mt-[10px]"
               >
                 <span
                   data-testid="ocupacion-porcentaje"
@@ -203,19 +154,13 @@ export default function OcupacionPage() {
                 >
                   {ocupacion.porcentaje_ocupacion}%
                 </span>
-                <span data-testid="ocupacion-resumen" style={{ fontSize: 14, color: "var(--slate-600)" }}>
+                <span data-testid="ocupacion-resumen" className="text-[14px] text-slate-600">
                   {conteo.ocupada} de {ocupacion.total_mesas} mesas ocupadas
                 </span>
               </div>
 
               <div
-                style={{
-                  marginTop: 16,
-                  height: 10,
-                  borderRadius: 5,
-                  backgroundColor: "var(--slate-200)",
-                  overflow: "hidden",
-                }}
+                className="mt-[16px] h-[10px] rounded-[5px] bg-slate-200 overflow-hidden"
               >
                 <div
                   data-testid="ocupacion-barra"
@@ -231,7 +176,7 @@ export default function OcupacionPage() {
                   justamente el dato que se puede leer mal. */}
               <p
                 data-testid="ocupacion-nota-porcentaje"
-                style={{ margin: "14px 0 0", fontSize: 13, color: "var(--slate-500)", lineHeight: 1.5 }}
+                className="mt-[14px] mx-[0] mb-[0] text-[13px] text-slate-500 leading-[1.5]"
               >
                 El porcentaje cuenta <strong>solo las mesas ocupadas</strong>. Las reservadas no
                 suman: la mesa sigue físicamente libre hasta que alguien se sienta.
@@ -239,24 +184,17 @@ export default function OcupacionPage() {
             </div>
 
             <div
-              style={{
-                display: "flex",
-                alignItems: "baseline",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: 8,
-                marginBottom: 12,
-              }}
+              className="flex items-baseline justify-between flex-wrap gap-[8px] mb-[12px]"
             >
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--slate-900)", margin: 0 }}>
+              <h2 className="text-[15px] font-bold text-slate-900 m-[0px]">
                 Mesas por estado
               </h2>
-              <span data-testid="ocupacion-total" style={{ fontSize: 13, color: "var(--slate-500)" }}>
+              <span data-testid="ocupacion-total" className="text-[13px] text-slate-500">
                 {`${ocupacion.total_mesas} ${ocupacion.total_mesas === 1 ? "mesa activa" : "mesas activas"} en total`}
               </span>
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+            <div className="flex flex-wrap gap-[16px]">
               {ESTADOS.map((estado) => (
                 <div
                   key={estado}
@@ -268,8 +206,8 @@ export default function OcupacionPage() {
                   style={{
                     flex: "1 1 200px",
                     minWidth: 180,
-                    backgroundColor: "var(--blanco)",
-                    border: "1px solid var(--gris-200)",
+                    backgroundColor: "var(--color-blanco)",
+                    border: "1px solid var(--color-gris-200)",
                     // El color vive en el borde izquierdo y en el número (tono 700 de
                     // BORDE_POR_ESTADO, legible como texto); pintar la card entera del color
                     // del estado la volvería ilegible con los rojos y verdes saturados.
@@ -278,7 +216,7 @@ export default function OcupacionPage() {
                     padding: 16,
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div className="flex items-center gap-[8px]">
                     <span
                       data-testid={`ocupacion-swatch-${estado}`}
                       style={{
@@ -291,7 +229,7 @@ export default function OcupacionPage() {
                     />
                     <span
                       data-testid={`ocupacion-etiqueta-${estado}`}
-                      style={{ fontSize: 13, fontWeight: 600, color: "var(--slate-600)" }}
+                      className="text-[13px] font-semibold text-slate-600"
                     >
                       {ETIQUETA_POR_ESTADO[estado]}
                     </span>
@@ -315,7 +253,7 @@ export default function OcupacionPage() {
                   {estado === "reservada" && (
                     <div
                       data-testid="ocupacion-nota-reservada"
-                      style={{ marginTop: 6, fontSize: 12, color: "var(--slate-500)" }}
+                      className="mt-[6px] text-[12px] text-slate-500"
                     >
                       No suman al % de ocupación
                     </div>

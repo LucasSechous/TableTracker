@@ -159,7 +159,7 @@ export default function SectorBloque({
           top: localPos.y,
           width: localSize.ancho,
           height: localSize.alto,
-          border: "2px solid var(--gris-350)",
+          border: "2px solid var(--color-gris-350)",
           backgroundColor: "rgba(255,255,255,0.85)",
           borderRadius: 6,
           boxSizing: "border-box",
@@ -169,37 +169,18 @@ export default function SectorBloque({
         onMouseDown={handleMouseDown}
       >
         <div
-          style={{
-            position: "absolute",
-            top: 6,
-            left: 8,
-            fontWeight: "bold",
-            fontSize: 12,
-            color: "var(--gris-600)",
-            pointerEvents: "none",
-          }}
+          className="absolute top-[6px] left-[8px] font-bold text-[12px] text-gris-600 pointer-events-none"
         >
           {sector.nombre}
         </div>
 
         {modo === "edicion" && puedeEditar && (
-          <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 4, zIndex: 3 }}>
+          <div className="absolute top-[4px] right-[4px] flex gap-[4px] z-[3]">
             <button
               onMouseDown={(e) => e.stopPropagation()}
               onClick={() => setModalEditarAbierto(true)}
               title="Editar sector"
-              style={{
-                width: 20,
-                height: 20,
-                padding: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                border: "1px solid var(--gris-250)",
-                borderRadius: 4,
-                backgroundColor: "var(--blanco)",
-                cursor: "pointer",
-              }}
+              className="w-[20px] h-[20px] p-[0px] flex items-center justify-center border border-gris-250 rounded-[4px] bg-blanco cursor-pointer"
             >
               <Pencil size={12} />
             </button>
@@ -218,9 +199,9 @@ export default function SectorBloque({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                border: "1px solid var(--gris-250)",
+                border: "1px solid var(--color-gris-250)",
                 borderRadius: 4,
-                backgroundColor: "var(--blanco)",
+                backgroundColor: "var(--color-blanco)",
                 cursor: eliminando ? "default" : "pointer",
                 opacity: eliminando ? 0.6 : 1,
               }}
@@ -257,7 +238,7 @@ export default function SectorBloque({
               width: 12,
               height: 12,
               cursor: "nwse-resize",
-              backgroundColor: "var(--gris-350)",
+              backgroundColor: "var(--color-gris-350)",
               borderTopLeftRadius: 4,
               zIndex: 3,
             }}

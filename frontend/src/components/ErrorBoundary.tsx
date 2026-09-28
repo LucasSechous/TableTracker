@@ -40,48 +40,34 @@ export default class ErrorBoundary extends Component<Props, State> {
 
     return (
       <div
-        style={{
-          minHeight: "100vh",
-          backgroundColor: "var(--gris-75)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 24,
-        }}
+        className="min-h-[100vh] bg-gris-75 flex items-center justify-center p-[24px]"
       >
         <div
-          style={{
-            backgroundColor: "var(--blanco)",
-            border: "1px solid var(--gris-200)",
-            borderRadius: 8,
-            padding: 24,
-            maxWidth: 520,
-            width: "100%",
-          }}
+          className="bg-blanco border border-gris-200 rounded-[8px] p-[24px] max-w-[520px] w-full"
         >
-          <h1 style={{ fontSize: 18, fontWeight: 700, color: "var(--gris-900)", margin: "0 0 8px" }}>
+          <h1 className="text-[18px] font-bold text-gris-900 mt-[0] mx-[0] mb-[8px]">
             Se rompió esta pantalla
           </h1>
-          <p style={{ fontSize: 14, color: "var(--slate-600)", lineHeight: 1.5, margin: "0 0 16px" }}>
+          <p className="text-[14px] text-slate-600 leading-[1.5] mt-[0] mx-[0] mb-[16px]">
             Hubo un error inesperado al dibujar la página. Los datos no se perdieron: podés
             recargar y seguir trabajando.
           </p>
 
           {/* El mensaje crudo se muestra plegado: no le sirve a un mozo, pero es lo primero
               que se necesita para reportar el problema o depurarlo. */}
-          <details style={{ marginBottom: 16 }}>
-            <summary style={{ fontSize: 13, color: "var(--slate-500)", cursor: "pointer" }}>
+          <details className="mb-[16px]">
+            <summary className="text-[13px] text-slate-500 cursor-pointer">
               Detalle técnico
             </summary>
             <pre
               style={{
                 marginTop: 8,
                 padding: 12,
-                backgroundColor: "var(--slate-50)",
-                border: "1px solid var(--slate-200)",
+                backgroundColor: "var(--color-slate-50)",
+                border: "1px solid var(--color-slate-200)",
                 borderRadius: 6,
                 fontSize: 12,
-                color: "var(--slate-700)",
+                color: "var(--color-slate-700)",
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word",
                 maxHeight: 200,
@@ -92,7 +78,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             </pre>
           </details>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div className="flex gap-[10px] flex-wrap">
             {/* Recarga completa a propósito: después de un error de render el estado en
                 memoria quedó a medio camino y no es confiable para seguir usándolo. */}
             <button onClick={() => window.location.reload()} style={estiloBotonPrimario}>
@@ -117,19 +103,19 @@ const estiloBoton: React.CSSProperties = {
   minHeight: 44,
   padding: "0 16px",
   borderRadius: 6,
-  border: "1px solid var(--marca)",
+  border: "1px solid var(--color-marca)",
   fontSize: 13,
   fontWeight: 500,
   fontFamily: "inherit",
   cursor: "pointer",
-  backgroundColor: "var(--blanco)",
-  color: "var(--marca)",
+  backgroundColor: "var(--color-blanco)",
+  color: "var(--color-marca)",
 }
 
 const estiloBotonPrimario: React.CSSProperties = {
   ...estiloBoton,
   border: "none",
-  backgroundColor: "var(--marca)",
-  color: "var(--blanco)",
+  backgroundColor: "var(--color-marca)",
+  color: "var(--color-blanco)",
   fontWeight: 600,
 }

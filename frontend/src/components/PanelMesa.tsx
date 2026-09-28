@@ -108,7 +108,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
           bottom: 0,
           width: "100%",
           maxWidth: 380,
-          backgroundColor: "var(--blanco)",
+          backgroundColor: "var(--color-blanco)",
           zIndex: 201,
           transform: abierto ? "translateX(0)" : "translateX(100%)",
           transition: "transform 0.25s ease",
@@ -120,44 +120,23 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
         {mesa && (
           <>
             <div
-              style={{
-                padding: 20,
-                borderBottom: "2px solid var(--slate-200)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-              }}
+              className="p-[20px] border-b-2 border-b-slate-200 flex items-center justify-between gap-[12px]"
             >
-              <div style={{ fontSize: 18, fontWeight: 700 }}>
+              <div className="text-[18px] font-bold">
                 Mesa {mesa.numero} · {mesa.sector.nombre}
               </div>
               <button
                 data-testid="panel-mesa-cerrar"
                 onClick={onClose}
                 aria-label="Cerrar"
-                style={{
-                  width: 44,
-                  height: 44,
-                  flexShrink: 0,
-                  border: "none",
-                  background: "var(--slate-100)",
-                  borderRadius: 10,
-                  fontSize: 22,
-                  lineHeight: 1,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "var(--slate-500)",
-                }}
+                className="w-[44px] h-[44px] shrink-0 border-0 bg-slate-100 rounded-[10px] text-[22px] leading-[1] cursor-pointer flex items-center justify-center text-slate-500"
               >
                 ×
               </button>
             </div>
 
-            <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-              <div style={{ marginBottom: 24 }}>
+            <div className="flex-[1] overflow-y-auto p-[20px]">
+              <div className="mb-[24px]">
                 <div style={etiquetaStyle}>Estado actual</div>
                 <div
                   style={{
@@ -168,7 +147,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                     borderRadius: 8,
                     fontWeight: 600,
                     fontSize: 14,
-                    backgroundColor: `${COLOR_POR_ESTADO[mesa.estado] ?? "var(--gris-desconocido)"}20`,
+                    backgroundColor: `${COLOR_POR_ESTADO[mesa.estado] ?? "var(--color-gris-desconocido)"}20`,
                     color: COLOR_POR_ESTADO[mesa.estado] ?? "#616161",
                   }}
                 >
@@ -177,7 +156,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                       width: 12,
                       height: 12,
                       borderRadius: 3,
-                      backgroundColor: COLOR_POR_ESTADO[mesa.estado] ?? "var(--gris-desconocido)",
+                      backgroundColor: COLOR_POR_ESTADO[mesa.estado] ?? "var(--color-gris-desconocido)",
                       flexShrink: 0,
                     }}
                   />
@@ -185,9 +164,9 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                 </div>
               </div>
 
-              <div style={{ marginBottom: 24 }}>
+              <div className="mb-[24px]">
                 <div style={etiquetaStyle}>Tiempo en este estado</div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: "var(--slate-900)" }}>
+                <div className="text-[16px] font-semibold text-slate-900">
                   {desde ? formatearTranscurrido(desde) : "Calculando..."}
                 </div>
               </div>
@@ -205,7 +184,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                     borderRadius: 8,
                     border: "none",
                     backgroundColor: "#4caf50",
-                    color: "var(--blanco)",
+                    color: "var(--color-blanco)",
                     fontSize: 14,
                     fontWeight: 700,
                     cursor: accionando ? "default" : "pointer",
@@ -225,17 +204,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                   <button
                     data-testid="panel-mesa-toggle-correccion"
                     onClick={() => setExpandido((v) => !v)}
-                    style={{
-                      minHeight: 44,
-                      padding: "8px 14px",
-                      borderRadius: 8,
-                      border: "1px solid var(--slate-300)",
-                      backgroundColor: "var(--blanco)",
-                      color: "var(--slate-600)",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
+                    className="min-h-[44px] py-[8px] px-[14px] rounded-[8px] border border-slate-300 bg-blanco text-slate-600 text-[13px] font-semibold cursor-pointer"
                   >
                     {expandido ? "Ocultar corrección manual" : "Corregir estado manualmente"}
                   </button>
@@ -244,13 +213,13 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                       que la ejercitan necesitan poder llegar sin depender del texto. */}
 
                   {expandido && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+                    <div className="flex flex-col gap-[8px] mt-[12px]">
                       {/* PATCH /mesas/{id}/reserva pide encargado o recepcion (T26-195). */}
                       {mesa.estado !== "reservada" && puedeReservar(rol) && (
                         <button
                           disabled={accionando}
                           onClick={() => ejecutarAccion(() => mesasApi.marcarReservada(mesa.id))}
-                          style={estiloBotonAccion("var(--slate-300)", accionando)}
+                          style={estiloBotonAccion("var(--color-slate-300)", accionando)}
                         >
                           Marcar como reservada
                         </button>
@@ -268,7 +237,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                               setExpandido(false)
                             }}
                             style={estiloBotonAccion(
-                              COLOR_POR_ESTADO[estado] ?? "var(--slate-300)",
+                              COLOR_POR_ESTADO[estado] ?? "var(--color-slate-300)",
                               accionando || estado === mesa.estado
                             )}
                           >
@@ -277,7 +246,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                                 width: 10,
                                 height: 10,
                                 borderRadius: 3,
-                                backgroundColor: COLOR_POR_ESTADO[estado] ?? "var(--gris-desconocido)",
+                                backgroundColor: COLOR_POR_ESTADO[estado] ?? "var(--color-gris-desconocido)",
                                 display: "inline-block",
                                 marginRight: 8,
                                 flexShrink: 0,
@@ -301,7 +270,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
 const etiquetaStyle: CSSProperties = {
   fontSize: 12,
   fontWeight: 600,
-  color: "var(--slate-400)",
+  color: "var(--color-slate-400)",
   textTransform: "uppercase",
   letterSpacing: 0.5,
   marginBottom: 8,
@@ -313,8 +282,8 @@ function estiloBotonAccion(colorBorde: string, deshabilitado: boolean): CSSPrope
     padding: "8px 14px",
     borderRadius: 8,
     border: `1px solid ${colorBorde}`,
-    backgroundColor: "var(--blanco)",
-    color: "var(--slate-700)",
+    backgroundColor: "var(--color-blanco)",
+    color: "var(--color-slate-700)",
     fontSize: 13,
     fontWeight: 600,
     cursor: deshabilitado ? "default" : "pointer",

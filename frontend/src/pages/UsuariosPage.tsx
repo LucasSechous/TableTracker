@@ -29,16 +29,16 @@ const ROLES = ["admin", "encargado", "mozo", "recepcion", "limpieza", "vision_mo
 const estiloSelect: React.CSSProperties = {
   padding: "6px 10px",
   fontSize: 13,
-  border: "1px solid var(--gris-250)",
+  border: "1px solid var(--color-gris-250)",
   borderRadius: 6,
-  backgroundColor: "var(--blanco)",
+  backgroundColor: "var(--color-blanco)",
 }
 
 const estiloError: React.CSSProperties = {
   fontSize: 13,
-  color: "var(--error)",
-  backgroundColor: "var(--error-fondo)",
-  border: "1px solid var(--error-borde)",
+  color: "var(--color-error)",
+  backgroundColor: "var(--color-error-fondo)",
+  border: "1px solid var(--color-error-borde)",
   borderRadius: 6,
   padding: "8px 12px",
 }
@@ -111,13 +111,13 @@ export default function UsuariosPage() {
 
   return (
     <Layout>
-      <main className="app-main" style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 900 }}>
-        {cargandoInicial && <p style={{ fontSize: 14, color: "var(--gris-400)" }}>Cargando usuarios...</p>}
+      <main className="app-main flex flex-col gap-[16px] max-w-[900px]">
+        {cargandoInicial && <p className="text-[14px] text-gris-400">Cargando usuarios...</p>}
         {errorInicial && <p style={estiloError}>{errorInicial}</p>}
 
         {!cargandoInicial && !errorInicial && (
           <>
-            <label style={{ fontSize: 13, color: "var(--gris-600)", display: "flex", alignItems: "center", gap: 8 }}>
+            <label className="text-[13px] text-gris-600 flex items-center gap-[8px]">
               <input
                 type="checkbox"
                 checked={incluirInactivos}
@@ -127,10 +127,10 @@ export default function UsuariosPage() {
             </label>
 
             {usuarios.length === 0 && (
-              <p style={{ fontSize: 13, color: "var(--gris-500)" }}>No hay usuarios con este filtro.</p>
+              <p className="text-[13px] text-gris-500">No hay usuarios con este filtro.</p>
             )}
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className="flex flex-col gap-[12px]">
               {usuarios.map((usuario) => {
                 // Mientras useAuth() resuelve la sesión, user es null y esto da false: el
                 // botón arranca habilitado y se deshabilita al confirmarse cuál es la cuenta
@@ -150,8 +150,8 @@ export default function UsuariosPage() {
                     // texto, que engancha el nodo más interno y no la tarjeta.
                     data-testid={`usuario-fila-${usuario.id}`}
                     style={{
-                      backgroundColor: "var(--blanco)",
-                      border: "1px solid var(--gris-150)",
+                      backgroundColor: "var(--color-blanco)",
+                      border: "1px solid var(--color-gris-150)",
                       borderRadius: 8,
                       padding: 16,
                       display: "flex",
@@ -161,37 +161,31 @@ export default function UsuariosPage() {
                     }}
                   >
                     <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        flexWrap: "wrap",
-                        gap: 12,
-                      }}
+                      className="flex justify-between items-center flex-wrap gap-[12px]"
                     >
                       <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--gris-900)", display: "flex", alignItems: "center", gap: 6 }}>
+                        <div className="text-[14px] font-bold text-gris-900 flex items-center gap-[6px]">
                           {usuario.nombre}
                           {esUnoMismo && (
-                            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--slate-400)" }}>(vos)</span>
+                            <span className="text-[11px] font-medium text-slate-400">(vos)</span>
                           )}
                           {usuario.es_cuenta_servicio && (
                             <span
                               title="Cuenta de servicio del módulo de visión: si se desactiva, la detección se detiene."
-                              style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: "var(--aviso)" }}
+                              className="flex items-center gap-[4px] text-[11px] font-semibold text-aviso"
                             >
                               <ShieldAlert size={13} />
                               cuenta de servicio
                             </span>
                           )}
                           {!usuario.activo && (
-                            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--error)" }}>· inactivo</span>
+                            <span className="text-[11px] font-semibold text-error">· inactivo</span>
                           )}
                         </div>
-                        <div style={{ fontSize: 12, color: "var(--gris-400)" }}>{usuario.email}</div>
+                        <div className="text-[12px] text-gris-400">{usuario.email}</div>
                       </div>
 
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                      <div className="flex gap-[8px] flex-wrap items-center">
                         <select
                           value={usuario.rol}
                           disabled={esUnoMismo || guardando[usuario.id]}

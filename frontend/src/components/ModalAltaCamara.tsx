@@ -85,32 +85,23 @@ export default function ModalAltaCamara({ sectores, onClose, onCamaraCreada }: M
       onCancelar={onClose}
     >
       {!haySectores ? (
-        <p style={{ fontSize: 13, color: "var(--gris-500)", margin: "0 0 20px" }}>
+        <p className="text-[13px] text-gris-500 mt-[0] mx-[0] mb-[20px]">
           No hay sectores creados todavía. Creá un sector primero.
         </p>
       ) : (
         <>
-          <label style={{ display: "block", fontSize: 13, color: "var(--gris-600)", marginBottom: 12 }}>
+          <label className="block text-[13px] text-gris-600 mb-[12px]">
             Nombre
             <input
               type="text"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               autoFocus
-              style={{
-                display: "block",
-                width: "100%",
-                boxSizing: "border-box",
-                marginTop: 4,
-                padding: 8,
-                fontSize: 14,
-                border: "1px solid var(--gris-250)",
-                borderRadius: 6,
-              }}
+              className="block w-full box-border mt-[4px] p-[8px] text-[14px] border border-gris-250 rounded-[6px]"
             />
           </label>
 
-          <label style={{ display: "block", fontSize: 13, color: "var(--gris-600)", marginBottom: 12 }}>
+          <label className="block text-[13px] text-gris-600 mb-[12px]">
             URL RTSP
             <input
               type="text"
@@ -124,29 +115,19 @@ export default function ModalAltaCamara({ sectores, onClose, onCamaraCreada }: M
                 marginTop: 4,
                 padding: 8,
                 fontSize: 14,
-                border: "1px solid var(--gris-250)",
+                border: "1px solid var(--color-gris-250)",
                 borderRadius: 6,
                 fontFamily: "monospace",
               }}
             />
           </label>
 
-          <label style={{ display: "block", fontSize: 13, color: "var(--gris-600)", marginBottom: 20 }}>
+          <label className="block text-[13px] text-gris-600 mb-[20px]">
             Sector
             <select
               value={sectorId}
               onChange={(e) => setSectorId(e.target.value === "" ? "" : Number(e.target.value))}
-              style={{
-                display: "block",
-                width: "100%",
-                boxSizing: "border-box",
-                marginTop: 4,
-                padding: 8,
-                fontSize: 14,
-                border: "1px solid var(--gris-250)",
-                borderRadius: 6,
-                backgroundColor: "var(--blanco)",
-              }}
+              className="block w-full box-border mt-[4px] p-[8px] text-[14px] border border-gris-250 rounded-[6px] bg-blanco"
             >
               {sectores.map((s) => (
                 <option key={s.id} value={s.id}>

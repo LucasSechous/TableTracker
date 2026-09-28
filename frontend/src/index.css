@@ -36,60 +36,60 @@
  *     borde suave              --gris-200    --slate-200
  *     fondo de realce          --gris-75     --slate-100
  */
-:root {
+@theme {
   /* Base */
-  --blanco: #fff;
+  --color-blanco: #fff;
 
   /* Grises neutros */
-  --gris-900: #1a1a1a;
-  --gris-700: #444;
-  --gris-600: #555;
-  --gris-500: #666;
-  --gris-400: #888;
-  --gris-350: #999;
-  --gris-250: #ccc;
-  --gris-200: #e0e0e0;
-  --gris-150: #eee;
-  --gris-75: #f5f5f5;
-  --gris-50: #fafafa;
+  --color-gris-900: #1a1a1a;
+  --color-gris-700: #444;
+  --color-gris-600: #555;
+  --color-gris-500: #666;
+  --color-gris-400: #888;
+  --color-gris-350: #999;
+  --color-gris-250: #ccc;
+  --color-gris-200: #e0e0e0;
+  --color-gris-150: #eee;
+  --color-gris-75: #f5f5f5;
+  --color-gris-50: #fafafa;
   /* Gris de relleno cuando un estado no se reconoce (MesaVisual). */
-  --gris-desconocido: #9e9e9e;
+  --color-gris-desconocido: #9e9e9e;
 
   /* Slate */
-  --slate-900: #1e293b;
-  --slate-700: #334155;
-  --slate-600: #475569;
-  --slate-500: #64748b;
-  --slate-400: #94a3b8;
-  --slate-300: #cbd5e1;
-  --slate-200: #e2e8f0;
-  --slate-100: #f1f5f9;
-  --slate-50: #f8fafc;
+  --color-slate-900: #1e293b;
+  --color-slate-700: #334155;
+  --color-slate-600: #475569;
+  --color-slate-500: #64748b;
+  --color-slate-400: #94a3b8;
+  --color-slate-300: #cbd5e1;
+  --color-slate-200: #e2e8f0;
+  --color-slate-100: #f1f5f9;
+  --color-slate-50: #f8fafc;
 
   /* Marca: el azul de las acciones */
-  --marca: #1976d2;
-  --marca-fuerte: #1d4ed8;
-  --marca-tenue: #eff6ff;
+  --color-marca: #1976d2;
+  --color-marca-fuerte: #1d4ed8;
+  --color-marca-tenue: #eff6ff;
 
   /* Error */
-  --error: #c62828;
-  --error-fondo: #ffebee;
-  --error-borde: #ef9a9a;
+  --color-error: #c62828;
+  --color-error-fondo: #ffebee;
+  --color-error-borde: #ef9a9a;
 
   /* Éxito */
-  --exito: #2e7d32;
-  --exito-fondo: #e8f5e9;
-  --exito-borde: #a5d6a7;
+  --color-exito: #2e7d32;
+  --color-exito-fondo: #e8f5e9;
+  --color-exito-borde: #a5d6a7;
 
   /* Aviso ámbar suave: el de los mensajes informativos */
-  --aviso: #8a6d0b;
-  --aviso-fondo: #fff8e1;
-  --aviso-borde: #ffe082;
+  --color-aviso: #8a6d0b;
+  --color-aviso-fondo: #fff8e1;
+  --color-aviso-borde: #ffe082;
 
   /* Aviso ámbar fuerte: el de las condiciones que piden atención */
-  --aviso-fuerte: #b45309;
-  --aviso-fuerte-fondo: #fffbeb;
-  --aviso-fuerte-borde: #fcd34d;
+  --color-aviso-fuerte: #b45309;
+  --color-aviso-fuerte-fondo: #fffbeb;
+  --color-aviso-fuerte-borde: #fcd34d;
 }
 
 /* Reglas responsive de la aplicación (T26-209).

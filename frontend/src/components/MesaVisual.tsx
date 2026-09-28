@@ -155,7 +155,7 @@ export default function MesaVisual({
           // el estado no cambió. Lo que se refuerza es el borde, que es la capa que
           // puede señalar una condición sin pisar la lectura del estado.
           border: `${atrasada || dudosa ? 3 : 2}px solid ${colorBorde}`,
-          backgroundColor: COLOR_POR_ESTADO[mesa.estado] ?? "var(--gris-desconocido)",
+          backgroundColor: COLOR_POR_ESTADO[mesa.estado] ?? "var(--color-gris-desconocido)",
           boxSizing: "border-box",
           display: "flex",
           alignItems: "center",
@@ -181,7 +181,7 @@ export default function MesaVisual({
           <Icono
             size={13}
             aria-hidden
-            style={{ position: "absolute", bottom: 3, opacity: 0.85, pointerEvents: "none" }}
+            className="absolute bottom-[3px] opacity-[0.85] pointer-events-none"
           />
         )}
       </div>
@@ -199,7 +199,7 @@ export default function MesaVisual({
             padding: "0 5px",
             borderRadius: 9,
             backgroundColor: COLOR_LIMPIEZA_DEMORADA,
-            color: "var(--blanco)",
+            color: "var(--color-blanco)",
             fontSize: 10,
             fontWeight: 700,
             display: "flex",
@@ -234,7 +234,7 @@ export default function MesaVisual({
             padding: "0 5px",
             borderRadius: 9,
             backgroundColor: COLOR_ESTADO_DUDOSO,
-            color: "var(--blanco)",
+            color: "var(--color-blanco)",
             fontSize: 11,
             fontWeight: 700,
             display: "flex",
@@ -271,9 +271,9 @@ export default function MesaVisual({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            border: "1px solid var(--gris-250)",
+            border: "1px solid var(--color-gris-250)",
             borderRadius: 4,
-            backgroundColor: "var(--blanco)",
+            backgroundColor: "var(--color-blanco)",
             cursor: eliminando ? "default" : "pointer",
             opacity: eliminando ? 0.6 : 1,
             zIndex: 3,

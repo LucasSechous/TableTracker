@@ -19,11 +19,11 @@ export default function AdminRoute({ children }: { children: JSX.Element }) {
   const { rol, loading } = useAuth();
 
   if (loading) {
-    return <p style={{ padding: 24, fontSize: 14, color: "var(--gris-400)" }}>Verificando permisos...</p>;
+    return <p className="p-[24px] text-[14px] text-gris-400">Verificando permisos...</p>;
   }
   if (!esAdmin(rol)) {
     return (
-      <p style={{ padding: 24, fontSize: 14, color: "var(--error)" }}>
+      <p className="p-[24px] text-[14px] text-error">
         Esta pantalla es solo para administradores.
       </p>
     );

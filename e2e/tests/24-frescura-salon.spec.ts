@@ -28,6 +28,12 @@ test("24.1 el salón dice qué tan viejo es el dato que muestra", async ({ page,
   const indicador = page.getByTestId(INDICADOR);
   await expect(indicador).toBeVisible();
   await expect(indicador).toContainText("Actualizado hace");
+
+  // La edad se dice por tramos de diez segundos y como cota ("menos de 20 segundos"), no
+  // con el número exacto: un contador que corre de a un segundo invita a mirarlo, y entre
+  // 4 y 7 segundos no hay ninguna decisión distinta que tomar. Se afirma el formato porque
+  // es lo que distingue este cartel de un cronómetro.
+  await expect(indicador).toContainText(/menos de \d+0 segundos/);
 });
 
 test("24.2 si el salón deja de recibir datos, el indicador lo avisa", async ({ page, token }) => {

@@ -65,20 +65,20 @@ const BASE: CSSProperties = {
 // nuevo: lo que tiene que comunicar es "esto responde", no otra categoría.
 const VARIANTES: Record<VarianteBoton, { normal: CSSProperties; hover: CSSProperties }> = {
   primario: {
-    normal: { border: "none", backgroundColor: "var(--marca)", color: "var(--blanco)", fontWeight: 600 },
+    normal: { border: "none", backgroundColor: "var(--color-marca)", color: "var(--color-blanco)", fontWeight: 600 },
     hover: { backgroundColor: "#1565c0" },
   },
   secundario: {
-    normal: { border: "1px solid var(--marca)", backgroundColor: "var(--blanco)", color: "var(--marca)" },
+    normal: { border: "1px solid var(--color-marca)", backgroundColor: "var(--color-blanco)", color: "var(--color-marca)" },
     hover: { backgroundColor: "#e3f2fd" },
   },
   neutro: {
-    normal: { border: "1px solid var(--gris-250)", backgroundColor: "var(--blanco)", color: "var(--gris-700)" },
-    hover: { backgroundColor: "var(--gris-75)", borderColor: "var(--gris-350)" },
+    normal: { border: "1px solid var(--color-gris-250)", backgroundColor: "var(--color-blanco)", color: "var(--color-gris-700)" },
+    hover: { backgroundColor: "var(--color-gris-75)", borderColor: "var(--color-gris-350)" },
   },
   peligro: {
-    normal: { border: "1px solid var(--error)", backgroundColor: "var(--blanco)", color: "var(--error)" },
-    hover: { backgroundColor: "var(--error-fondo)" },
+    normal: { border: "1px solid var(--color-error)", backgroundColor: "var(--color-blanco)", color: "var(--color-error)" },
+    hover: { backgroundColor: "var(--color-error-fondo)" },
   },
 }
 

@@ -141,17 +141,7 @@ export default function RotacionPage() {
         <PestanasMetricas />
 
         <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "flex-end",
-            gap: 16,
-            backgroundColor: "var(--blanco)",
-            border: "1px solid var(--gris-200)",
-            borderRadius: 8,
-            padding: 16,
-            marginBottom: 20,
-          }}
+          className="flex flex-wrap items-end gap-[16px] bg-blanco border border-gris-200 rounded-[8px] p-[16px] mb-[20px]"
         >
           <RangoFechas
             desde={filtros.desde}
@@ -166,7 +156,7 @@ export default function RotacionPage() {
               data-testid="rotacion-filtro-sector"
               value={filtros.sectorId}
               onChange={(e) => setFiltros((prev) => ({ ...prev, sectorId: e.target.value }))}
-              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid var(--gris-250)", minWidth: 160 }}
+              className="py-[6px] px-[8px] rounded-[6px] border border-gris-250 min-w-[160px]"
             >
               <option value="">Todos los sectores</option>
               {sectores.map((s) => (
@@ -195,19 +185,12 @@ export default function RotacionPage() {
           </Boton>
         </div>
 
-        {loading && <p style={{ fontSize: 14, color: "var(--gris-400)" }}>Cargando rotación...</p>}
+        {loading && <p className="text-[14px] text-gris-400">Cargando rotación...</p>}
 
         {error && (
           <p
             data-testid="rotacion-error"
-            style={{
-              fontSize: 14,
-              color: "var(--error)",
-              backgroundColor: "var(--error-fondo)",
-              border: "1px solid var(--error-borde)",
-              borderRadius: 6,
-              padding: "10px 16px",
-            }}
+            className="text-[14px] text-error bg-error-fondo border border-error-borde rounded-[6px] py-[10px] px-[16px]"
           >
             {error}
           </p>
@@ -217,14 +200,7 @@ export default function RotacionPage() {
           <>
             <div
               data-testid="rotacion-resumen"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginBottom: 12,
-                fontSize: 13,
-                color: "var(--slate-500)",
-              }}
+              className="flex items-center gap-[8px] mb-[12px] text-[13px] text-slate-500"
             >
               <Repeat size={15} />
               {`${totalRotaciones} ${totalRotaciones === 1 ? "rotación" : "rotaciones"} en ${filas.length} ${filas.length === 1 ? "mesa" : "mesas"}`}
@@ -235,7 +211,7 @@ export default function RotacionPage() {
                 justamente la que faltaba antes del ticket. */}
             <div
               data-testid="rotacion-horario"
-              style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 12, color: "var(--slate-400)" }}
+              className="flex items-center gap-[8px] mb-[12px] text-[12px] text-slate-400"
             >
               <Clock size={13} />
               {config?.hora_apertura && config?.hora_cierre
@@ -243,10 +219,10 @@ export default function RotacionPage() {
                 : "Cuenta las 24 horas del día. Cargá el horario de servicio en Configuración para acotarlo al servicio real."}
             </div>
 
-            <div style={{ backgroundColor: "var(--blanco)", border: "1px solid var(--gris-200)", borderRadius: 8, overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+            <div className="bg-blanco border border-gris-200 rounded-[8px] overflow-x-auto">
+              <table className="w-full border-collapse text-[14px]">
                 <thead>
-                  <tr style={{ backgroundColor: "var(--gris-50)", textAlign: "left" }}>
+                  <tr className="bg-gris-50 text-left">
                     <ColumnaOrdenable etiqueta="Mesa" propia="numero" activa={columna} direccion={direccion} onOrdenar={handleOrdenar} />
                     <ColumnaOrdenable etiqueta="Sector" propia="sector" activa={columna} direccion={direccion} onOrdenar={handleOrdenar} />
                     <ColumnaOrdenable etiqueta="Rotaciones" propia="rotaciones" activa={columna} direccion={direccion} onOrdenar={handleOrdenar} />
@@ -255,43 +231,43 @@ export default function RotacionPage() {
                 <tbody>
                   {sinMesas && (
                     <tr>
-                      <td data-testid="rotacion-vacio" colSpan={3} style={{ padding: 16, color: "var(--gris-400)", textAlign: "center" }}>
+                      <td data-testid="rotacion-vacio" colSpan={3} className="p-[16px] text-gris-400 text-center">
                         No hay mesas activas para estos filtros.
                       </td>
                     </tr>
                   )}
                   {sinRotaciones && (
                     <tr>
-                      <td data-testid="rotacion-sin-rotaciones" colSpan={3} style={{ padding: 16, color: "var(--gris-400)", textAlign: "center" }}>
+                      <td data-testid="rotacion-sin-rotaciones" colSpan={3} className="p-[16px] text-gris-400 text-center">
                         Ninguna mesa rotó en el período elegido.
                       </td>
                     </tr>
                   )}
                   {!sinRotaciones &&
                     filasOrdenadas.map((fila) => (
-                      <tr key={fila.mesa_id} data-testid={`rotacion-fila-${fila.mesa_id}`} style={{ borderTop: "1px solid var(--gris-150)" }}>
-                        <td data-testid={`rotacion-numero-${fila.mesa_id}`} style={{ padding: "10px 16px" }}>
+                      <tr key={fila.mesa_id} data-testid={`rotacion-fila-${fila.mesa_id}`} className="border-t border-t-gris-150">
+                        <td data-testid={`rotacion-numero-${fila.mesa_id}`} className="py-[10px] px-[16px]">
                           Mesa {fila.numero}
                         </td>
-                        <td data-testid={`rotacion-sector-${fila.mesa_id}`} style={{ padding: "10px 16px", color: "var(--slate-600)" }}>
+                        <td data-testid={`rotacion-sector-${fila.mesa_id}`} className="py-[10px] px-[16px] text-slate-600">
                           {nombreSector(fila.sector_id)}
                         </td>
-                        <td style={{ padding: "10px 16px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <td className="py-[10px] px-[16px]">
+                          <div className="flex items-center gap-[10px]">
                             <span
                               data-testid={`rotacion-cantidad-${fila.mesa_id}`}
-                              style={{ fontWeight: 700, minWidth: 24, color: "var(--slate-900)" }}
+                              className="font-bold min-w-[24px] text-slate-900"
                             >
                               {fila.rotaciones}
                             </span>
                             {/* Barra proporcional a la mesa que más rotó: hace comparable el
                                 ranking sin necesidad de leer todos los números. */}
-                            <div style={{ flex: 1, maxWidth: 220, height: 8, borderRadius: 4, backgroundColor: "var(--slate-200)", overflow: "hidden" }}>
+                            <div className="flex-[1] max-w-[220px] h-[8px] rounded-[4px] bg-slate-200 overflow-hidden">
                               <div
                                 style={{
                                   width: maxRotaciones > 0 ? `${(fila.rotaciones / maxRotaciones) * 100}%` : "0%",
                                   height: "100%",
-                                  backgroundColor: "var(--marca)",
+                                  backgroundColor: "var(--color-marca)",
                                 }}
                               />
                             </div>
@@ -320,7 +296,7 @@ interface ColumnaProps {
 function ColumnaOrdenable({ etiqueta, propia, activa, direccion, onOrdenar }: ColumnaProps) {
   const esActiva = propia === activa
   return (
-    <th style={{ padding: 0, color: "var(--gris-500)", fontWeight: 600 }}>
+    <th className="p-[0px] text-gris-500 font-semibold">
       <button
         data-testid={`rotacion-ordenar-${propia}`}
         onClick={() => onOrdenar(propia)}
@@ -338,14 +314,14 @@ function ColumnaOrdenable({ etiqueta, propia, activa, direccion, onOrdenar }: Co
           background: "none",
           font: "inherit",
           fontWeight: 600,
-          color: esActiva ? "var(--marca)" : "var(--gris-500)",
+          color: esActiva ? "var(--color-marca)" : "var(--color-gris-500)",
           cursor: "pointer",
           textAlign: "left",
         }}
       >
         {etiqueta}
         <ArrowDownUp size={13} style={{ opacity: esActiva ? 1 : 0.35 }} />
-        {esActiva && <span style={{ fontSize: 11 }}>{direccion === "asc" ? "▲" : "▼"}</span>}
+        {esActiva && <span className="text-[11px]">{direccion === "asc" ? "▲" : "▼"}</span>}
       </button>
     </th>
   )

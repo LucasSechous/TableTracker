@@ -26,25 +26,25 @@ interface EstadoTest {
 const estiloSelect: React.CSSProperties = {
   padding: "6px 10px",
   fontSize: 13,
-  border: "1px solid var(--gris-250)",
+  border: "1px solid var(--color-gris-250)",
   borderRadius: 6,
-  backgroundColor: "var(--blanco)",
+  backgroundColor: "var(--color-blanco)",
 }
 
 const estiloError: React.CSSProperties = {
   fontSize: 13,
-  color: "var(--error)",
-  backgroundColor: "var(--error-fondo)",
-  border: "1px solid var(--error-borde)",
+  color: "var(--color-error)",
+  backgroundColor: "var(--color-error-fondo)",
+  border: "1px solid var(--color-error-borde)",
   borderRadius: 6,
   padding: "8px 12px",
 }
 
 const estiloExito: React.CSSProperties = {
   fontSize: 13,
-  color: "var(--exito)",
-  backgroundColor: "var(--exito-fondo)",
-  border: "1px solid var(--exito-borde)",
+  color: "var(--color-exito)",
+  backgroundColor: "var(--color-exito-fondo)",
+  border: "1px solid var(--color-exito-borde)",
   borderRadius: 6,
   padding: "8px 12px",
 }
@@ -172,14 +172,14 @@ export default function CamarasPage() {
         ) : undefined
       }
     >
-      <main className="app-main" style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 900 }}>
-        {cargandoInicial && <p style={{ fontSize: 14, color: "var(--gris-400)" }}>Cargando cámaras...</p>}
+      <main className="app-main flex flex-col gap-[16px] max-w-[900px]">
+        {cargandoInicial && <p className="text-[14px] text-gris-400">Cargando cámaras...</p>}
         {errorInicial && <p style={estiloError}>{errorInicial}</p>}
 
         {!cargandoInicial && !errorInicial && (
           <>
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
-              <label style={{ fontSize: 13, color: "var(--gris-600)", display: "flex", flexDirection: "column", gap: 4 }}>
+            <div className="flex gap-[16px] flex-wrap items-end">
+              <label className="text-[13px] text-gris-600 flex flex-col gap-[4px]">
                 Sector
                 <select
                   value={sectorFiltro}
@@ -199,42 +199,28 @@ export default function CamarasPage() {
             {errorCamaras && <p style={estiloError}>{errorCamaras}</p>}
 
             {camaras.length === 0 && (
-              <p style={{ fontSize: 13, color: "var(--gris-500)" }}>No hay cámaras dadas de alta con este filtro.</p>
+              <p className="text-[13px] text-gris-500">No hay cámaras dadas de alta con este filtro.</p>
             )}
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className="flex flex-col gap-[12px]">
               {camaras.map((camara) => {
                 const test = testsPorCamara[camara.id]
                 return (
                   <div
                     key={camara.id}
-                    style={{
-                      backgroundColor: "var(--blanco)",
-                      border: "1px solid var(--gris-150)",
-                      borderRadius: 8,
-                      padding: 16,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 8,
-                    }}
+                    className="bg-blanco border border-gris-150 rounded-[8px] p-[16px] flex flex-col gap-[8px]"
                   >
                     <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        flexWrap: "wrap",
-                        gap: 12,
-                      }}
+                      className="flex justify-between items-center flex-wrap gap-[12px]"
                     >
                       <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--gris-900)" }}>{camara.nombre}</div>
-                        <div style={{ fontSize: 12, color: "var(--gris-400)" }}>
+                        <div className="text-[14px] font-bold text-gris-900">{camara.nombre}</div>
+                        <div className="text-[12px] text-gris-400">
                           {camara.sector.nombre} · <span style={{ fontFamily: "monospace" }}>{camara.rtsp_url}</span>
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <div className="flex gap-[8px] flex-wrap">
                         <Boton
                           onClick={() => handleProbarConexion(camara.id)}
                           cargando={test?.probando}
@@ -259,7 +245,7 @@ export default function CamarasPage() {
                         con key={intento} para que volver a probar reinicie la conexión en vez
                         de reusar la anterior, que puede haber quedado cortada. */}
                     {test?.resultado && (
-                      <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                      <div className="flex gap-[12px] items-start flex-wrap">
                         <p style={{ ...(test.resultado.ok ? estiloExito : estiloError), flex: 1, minWidth: 240 }}>
                           {test.resultado.mensaje}
                         </p>

@@ -26,25 +26,25 @@ interface EstadoTest {
 const estiloSelect: React.CSSProperties = {
   padding: "6px 10px",
   fontSize: 13,
-  border: "1px solid #ccc",
+  border: "1px solid var(--gris-250)",
   borderRadius: 6,
-  backgroundColor: "#fff",
+  backgroundColor: "var(--blanco)",
 }
 
 const estiloError: React.CSSProperties = {
   fontSize: 13,
-  color: "#c62828",
-  backgroundColor: "#ffebee",
-  border: "1px solid #ef9a9a",
+  color: "var(--error)",
+  backgroundColor: "var(--error-fondo)",
+  border: "1px solid var(--error-borde)",
   borderRadius: 6,
   padding: "8px 12px",
 }
 
 const estiloExito: React.CSSProperties = {
   fontSize: 13,
-  color: "#2e7d32",
-  backgroundColor: "#e8f5e9",
-  border: "1px solid #a5d6a7",
+  color: "var(--exito)",
+  backgroundColor: "var(--exito-fondo)",
+  border: "1px solid var(--exito-borde)",
   borderRadius: 6,
   padding: "8px 12px",
 }
@@ -173,13 +173,13 @@ export default function CamarasPage() {
       }
     >
       <main className="app-main" style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 900 }}>
-        {cargandoInicial && <p style={{ fontSize: 14, color: "#888" }}>Cargando cámaras...</p>}
+        {cargandoInicial && <p style={{ fontSize: 14, color: "var(--gris-400)" }}>Cargando cámaras...</p>}
         {errorInicial && <p style={estiloError}>{errorInicial}</p>}
 
         {!cargandoInicial && !errorInicial && (
           <>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
-              <label style={{ fontSize: 13, color: "#555", display: "flex", flexDirection: "column", gap: 4 }}>
+              <label style={{ fontSize: 13, color: "var(--gris-600)", display: "flex", flexDirection: "column", gap: 4 }}>
                 Sector
                 <select
                   value={sectorFiltro}
@@ -199,7 +199,7 @@ export default function CamarasPage() {
             {errorCamaras && <p style={estiloError}>{errorCamaras}</p>}
 
             {camaras.length === 0 && (
-              <p style={{ fontSize: 13, color: "#666" }}>No hay cámaras dadas de alta con este filtro.</p>
+              <p style={{ fontSize: 13, color: "var(--gris-500)" }}>No hay cámaras dadas de alta con este filtro.</p>
             )}
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -209,8 +209,8 @@ export default function CamarasPage() {
                   <div
                     key={camara.id}
                     style={{
-                      backgroundColor: "#fff",
-                      border: "1px solid #eee",
+                      backgroundColor: "var(--blanco)",
+                      border: "1px solid var(--gris-150)",
                       borderRadius: 8,
                       padding: 16,
                       display: "flex",
@@ -228,8 +228,8 @@ export default function CamarasPage() {
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>{camara.nombre}</div>
-                        <div style={{ fontSize: 12, color: "#888" }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--gris-900)" }}>{camara.nombre}</div>
+                        <div style={{ fontSize: 12, color: "var(--gris-400)" }}>
                           {camara.sector.nombre} · <span style={{ fontFamily: "monospace" }}>{camara.rtsp_url}</span>
                         </div>
                       </div>

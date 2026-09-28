@@ -160,8 +160,8 @@ export default function HistorialPage() {
             flexWrap: "wrap",
             alignItems: "flex-end",
             gap: 16,
-            backgroundColor: "#fff",
-            border: "1px solid #e0e0e0",
+            backgroundColor: "var(--blanco)",
+            border: "1px solid var(--gris-200)",
             borderRadius: 8,
             padding: 16,
             marginBottom: 20,
@@ -172,7 +172,7 @@ export default function HistorialPage() {
             <select
               value={mesaId}
               onChange={(e) => setMesaId(e.target.value)}
-              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", minWidth: 160 }}
+              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid var(--gris-250)", minWidth: 160 }}
             >
               <option value="">Todas las mesas</option>
               {mesas.map((m) => (
@@ -195,7 +195,7 @@ export default function HistorialPage() {
             <select
               value={orden}
               onChange={(e) => handleOrdenChange(e.target.value as "asc" | "desc")}
-              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", minWidth: 160 }}
+              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid var(--gris-250)", minWidth: 160 }}
             >
               <option value="desc">Más reciente primero</option>
               <option value="asc">Más antiguo primero</option>
@@ -224,15 +224,15 @@ export default function HistorialPage() {
           </Boton>
         </div>
 
-        {loading && <p style={{ fontSize: 14, color: "#888" }}>Cargando historial...</p>}
+        {loading && <p style={{ fontSize: 14, color: "var(--gris-400)" }}>Cargando historial...</p>}
 
         {error && (
           <p
             style={{
               fontSize: 14,
-              color: "#c62828",
-              backgroundColor: "#ffebee",
-              border: "1px solid #ef9a9a",
+              color: "var(--error)",
+              backgroundColor: "var(--error-fondo)",
+              border: "1px solid var(--error-borde)",
               borderRadius: 6,
               padding: "10px 16px",
             }}
@@ -246,9 +246,9 @@ export default function HistorialPage() {
             data-testid="historial-truncado"
             style={{
               fontSize: 13,
-              color: "#8a6d0b",
-              backgroundColor: "#fff8e1",
-              border: "1px solid #ffe082",
+              color: "var(--aviso)",
+              backgroundColor: "var(--aviso-fondo)",
+              border: "1px solid var(--aviso-borde)",
               borderRadius: 6,
               padding: "10px 16px",
             }}
@@ -261,31 +261,31 @@ export default function HistorialPage() {
           // overflowX en vez de overflow:hidden, como ya hacian Rotacion, Ocupacion diaria y
           // Demanda: con hidden, las columnas que no entran en una pantalla angosta no se
           // recortan con aviso, simplemente no existen para el usuario.
-          <div style={{ backgroundColor: "#fff", border: "1px solid #e0e0e0", borderRadius: 8, overflowX: "auto" }}>
+          <div style={{ backgroundColor: "var(--blanco)", border: "1px solid var(--gris-200)", borderRadius: 8, overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
               <thead>
-                <tr style={{ backgroundColor: "#fafafa", textAlign: "left" }}>
-                  <th style={{ padding: "10px 16px", color: "#666", fontWeight: 600 }}>Mesa</th>
-                  <th style={{ padding: "10px 16px", color: "#666", fontWeight: 600 }}>Estado</th>
-                  <th style={{ padding: "10px 16px", color: "#666", fontWeight: 600 }}>Origen</th>
-                  <th style={{ padding: "10px 16px", color: "#666", fontWeight: 600 }}>Fecha</th>
+                <tr style={{ backgroundColor: "var(--gris-50)", textAlign: "left" }}>
+                  <th style={{ padding: "10px 16px", color: "var(--gris-500)", fontWeight: 600 }}>Mesa</th>
+                  <th style={{ padding: "10px 16px", color: "var(--gris-500)", fontWeight: 600 }}>Estado</th>
+                  <th style={{ padding: "10px 16px", color: "var(--gris-500)", fontWeight: 600 }}>Origen</th>
+                  <th style={{ padding: "10px 16px", color: "var(--gris-500)", fontWeight: 600 }}>Fecha</th>
                 </tr>
               </thead>
               <tbody>
                 {historial.length === 0 && (
                   <tr>
-                    <td colSpan={4} style={{ padding: "16px", color: "#888", textAlign: "center" }}>
+                    <td colSpan={4} style={{ padding: "16px", color: "var(--gris-400)", textAlign: "center" }}>
                       No hay registros de historial para estos filtros.
                     </td>
                   </tr>
                 )}
                 {historial.map((h) => (
-                  <tr key={h.id} style={{ borderTop: "1px solid #eee" }}>
+                  <tr key={h.id} style={{ borderTop: "1px solid var(--gris-150)" }}>
                     <td style={{ padding: "10px 16px" }}>{h.mesa_id}</td>
                     <td style={{ padding: "10px 16px" }}>{ETIQUETA_POR_ESTADO[h.estado] ?? h.estado}</td>
                     <td
                       data-testid={`historial-origen-${h.id}`}
-                      style={{ padding: "10px 16px", color: h.origen_cambio === null ? "#94a3b8" : "#475569" }}
+                      style={{ padding: "10px 16px", color: h.origen_cambio === null ? "var(--slate-400)" : "var(--slate-600)" }}
                     >
                       {etiquetaOrigen(h.origen_cambio)}
                     </td>

@@ -143,7 +143,7 @@ export default function SalonCanvas({
                 height: 18,
                 borderRadius: 3,
                 backgroundColor: color,
-                color: "#fff",
+                color: "var(--blanco)",
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -152,7 +152,7 @@ export default function SalonCanvas({
             >
               {Icono && <Icono size={12} aria-hidden />}
             </span>
-            <span style={{ fontSize: 13, color: "#475569", fontWeight: 500 }}>
+            <span style={{ fontSize: 13, color: "var(--slate-600)", fontWeight: 500 }}>
               {ETIQUETA_POR_ESTADO[estado] ?? estado}
             </span>
           </div>
@@ -212,7 +212,7 @@ export default function SalonCanvas({
             width: localSize.ancho,
             height: localSize.alto,
             backgroundColor: "#f0f0f0",
-            border: "2px solid #ccc",
+            border: "2px solid var(--gris-250)",
             borderRadius: 8,
             overflow: "hidden",
           }}
@@ -246,7 +246,7 @@ export default function SalonCanvas({
                 width: 14,
                 height: 14,
                 cursor: "nwse-resize",
-                backgroundColor: "#1976d2",
+                backgroundColor: "var(--marca)",
                 borderTopLeftRadius: 4,
                 zIndex: 4,
               }}
@@ -270,9 +270,9 @@ function estiloTab(activo: boolean): CSSProperties {
     padding: "10px 18px",
     minHeight: 44,
     borderRadius: 8,
-    border: activo ? "2px solid #1976d2" : "2px solid #cbd5e1",
-    backgroundColor: activo ? "#1976d2" : "#fff",
-    color: activo ? "#fff" : "#64748b",
+    border: activo ? "2px solid var(--marca)" : "2px solid var(--slate-300)",
+    backgroundColor: activo ? "var(--marca)" : "var(--blanco)",
+    color: activo ? "var(--blanco)" : "var(--slate-500)",
     fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",

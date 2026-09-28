@@ -43,7 +43,7 @@ export default function Layout({ children, acciones, titulo }: Props) {
   const seccion = seccionDe(pathname)
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "var(--gris-75)" }}>
       <header
         className="app-header"
         style={{
@@ -53,7 +53,7 @@ export default function Layout({ children, acciones, titulo }: Props) {
           right: 0,
           zIndex: 150,
           height: ALTURA_HEADER,
-          backgroundColor: "#fff",
+          backgroundColor: "var(--blanco)",
           boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
           display: "flex",
           alignItems: "center",
@@ -76,7 +76,7 @@ export default function Layout({ children, acciones, titulo }: Props) {
               fontSize: 11,
               fontWeight: 700,
               letterSpacing: 0.5,
-              color: "#94a3b8",
+              color: "var(--slate-400)",
               cursor: "pointer",
               textAlign: "left",
             }}
@@ -87,7 +87,7 @@ export default function Layout({ children, acciones, titulo }: Props) {
             style={{
               fontSize: 18,
               fontWeight: 700,
-              color: "#1a1a1a",
+              color: "var(--gris-900)",
               margin: 0,
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -110,8 +110,8 @@ export default function Layout({ children, acciones, titulo }: Props) {
               flexShrink: 0,
               border: "none",
               borderRadius: 10,
-              backgroundColor: "#f1f5f9",
-              color: "#1a1a1a",
+              backgroundColor: "var(--slate-100)",
+              color: "var(--gris-900)",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",

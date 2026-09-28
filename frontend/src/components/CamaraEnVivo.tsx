@@ -36,7 +36,7 @@ const estiloMarco: React.CSSProperties = {
   width: ANCHO,
   height: Math.round((ANCHO * 9) / 16),
   borderRadius: 6,
-  border: "1px solid #e0e0e0",
+  border: "1px solid var(--gris-200)",
   backgroundColor: "#111",
   display: "flex",
   alignItems: "center",
@@ -129,10 +129,10 @@ export default function CamaraEnVivo({ camaraId, nombre }: Props) {
   if (error) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0, width: ANCHO }}>
-        <div style={{ ...estiloMarco, color: "#ef6c00", borderColor: "#ffcc80", backgroundColor: "#fff8e1" }}>
+        <div style={{ ...estiloMarco, color: "#ef6c00", borderColor: "#ffcc80", backgroundColor: "var(--aviso-fondo)" }}>
           Respondió, pero no se pudo ver en vivo
         </div>
-        <span style={{ fontSize: 11, color: "#888" }}>{error}</span>
+        <span style={{ fontSize: 11, color: "var(--gris-400)" }}>{error}</span>
       </div>
     );
   }
@@ -143,12 +143,12 @@ export default function CamaraEnVivo({ camaraId, nombre }: Props) {
         <img
           src={src}
           alt={`Vista en vivo de ${nombre}`}
-          style={{ width: ANCHO, borderRadius: 6, border: "1px solid #a5d6a7", display: "block" }}
+          style={{ width: ANCHO, borderRadius: 6, border: "1px solid var(--exito-borde)", display: "block" }}
         />
       ) : (
         <div style={estiloMarco}>Conectando con la cámara...</div>
       )}
-      <span style={{ fontSize: 11, color: "#888" }}>
+      <span style={{ fontSize: 11, color: "var(--gris-400)" }}>
         {src ? `En vivo · ${frames} ${frames === 1 ? "frame" : "frames"}` : "Abriendo el stream"}
       </span>
     </div>

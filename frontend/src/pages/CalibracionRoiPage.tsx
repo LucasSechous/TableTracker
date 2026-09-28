@@ -36,25 +36,25 @@ const INTERVALO_SNAPSHOT_MS = 4000;
 const estiloSelect: React.CSSProperties = {
   padding: "6px 10px",
   fontSize: 13,
-  border: "1px solid #ccc",
+  border: "1px solid var(--gris-250)",
   borderRadius: 6,
-  backgroundColor: "#fff",
+  backgroundColor: "var(--blanco)",
 };
 
 const estiloError: React.CSSProperties = {
   fontSize: 13,
-  color: "#c62828",
-  backgroundColor: "#ffebee",
-  border: "1px solid #ef9a9a",
+  color: "var(--error)",
+  backgroundColor: "var(--error-fondo)",
+  border: "1px solid var(--error-borde)",
   borderRadius: 6,
   padding: "8px 12px",
 };
 
 const estiloExito: React.CSSProperties = {
   fontSize: 13,
-  color: "#2e7d32",
-  backgroundColor: "#e8f5e9",
-  border: "1px solid #a5d6a7",
+  color: "var(--exito)",
+  backgroundColor: "var(--exito-fondo)",
+  border: "1px solid var(--exito-borde)",
   borderRadius: 6,
   padding: "8px 12px",
 };
@@ -291,13 +291,13 @@ export default function CalibracionRoiPage() {
   return (
     <Layout>
       <main className="app-main" style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 900 }}>
-        {cargandoInicial && <p style={{ fontSize: 14, color: "#888" }}>Cargando cámaras y mesas...</p>}
+        {cargandoInicial && <p style={{ fontSize: 14, color: "var(--gris-400)" }}>Cargando cámaras y mesas...</p>}
         {errorInicial && <p style={estiloError}>{errorInicial}</p>}
 
         {!cargandoInicial && !errorInicial && (
           <>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
-              <label style={{ fontSize: 13, color: "#555", display: "flex", flexDirection: "column", gap: 4 }}>
+              <label style={{ fontSize: 13, color: "var(--gris-600)", display: "flex", flexDirection: "column", gap: 4 }}>
                 Cámara
                 <select
                   value={camaraId}
@@ -314,7 +314,7 @@ export default function CalibracionRoiPage() {
               </label>
 
               {camaraId !== "" && (
-                <label style={{ fontSize: 13, color: "#555", display: "flex", flexDirection: "column", gap: 4 }}>
+                <label style={{ fontSize: 13, color: "var(--gris-600)", display: "flex", flexDirection: "column", gap: 4 }}>
                   Mesa
                   <select
                     value={mesaId}
@@ -344,7 +344,7 @@ export default function CalibracionRoiPage() {
                   {/* Deshabilitado por el toggle, no por estar cargando: sin esto el botón
                       apagado se ve roto en vez de intencional. */}
                   {mostrarDetecciones && (
-                    <span style={{ fontSize: 11, color: "#888" }}>Se actualiza solo cada 4s</span>
+                    <span style={{ fontSize: 11, color: "var(--gris-400)" }}>Se actualiza solo cada 4s</span>
                   )}
                 </div>
               )}
@@ -353,7 +353,7 @@ export default function CalibracionRoiPage() {
                 <label
                   style={{
                     fontSize: 13,
-                    color: "#555",
+                    color: "var(--gris-600)",
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
@@ -374,17 +374,17 @@ export default function CalibracionRoiPage() {
             </div>
 
             {camaras.length === 0 && (
-              <p style={{ fontSize: 13, color: "#666" }}>No hay cámaras activas dadas de alta todavía.</p>
+              <p style={{ fontSize: 13, color: "var(--gris-500)" }}>No hay cámaras activas dadas de alta todavía.</p>
             )}
 
             {errorRois && <p style={estiloError}>{errorRois}</p>}
 
             {camaraId !== "" && mesaId === "" && (
-              <p style={{ fontSize: 13, color: "#666" }}>Elegí una mesa para poder dibujar su zona.</p>
+              <p style={{ fontSize: 13, color: "var(--gris-500)" }}>Elegí una mesa para poder dibujar su zona.</p>
             )}
 
             {camaraId !== "" && snapshotToken === 0 && !snapshotLoading && (
-              <p style={{ fontSize: 13, color: "#666" }}>
+              <p style={{ fontSize: 13, color: "var(--gris-500)" }}>
                 Apretá "Actualizar frame" para traer una imagen actual de la cámara.
               </p>
             )}
@@ -394,7 +394,7 @@ export default function CalibracionRoiPage() {
             )}
 
             {mostrarDetecciones && snapshotSrc && (
-              <p style={{ fontSize: 12, color: errorDeteccion ? "#c62828" : "#888" }}>
+              <p style={{ fontSize: 12, color: errorDeteccion ? "var(--error)" : "var(--gris-400)" }}>
                 {errorDeteccion ??
                   (deteccionActual
                     ? `Detección en vivo: ${deteccionActual.detections.length} objeto(s) en el último frame de vision-module.`
@@ -405,7 +405,7 @@ export default function CalibracionRoiPage() {
             {snapshotSrc && mesaId !== "" && (
               <>
                 {roiEnEdicion && (
-                  <p style={{ fontSize: 13, color: "#1976d2" }}>
+                  <p style={{ fontSize: 13, color: "var(--marca)" }}>
                     Editando la zona ya guardada de esta mesa: arrastrá un vértice para moverlo, doble click
                     para borrarlo.
                   </p>
@@ -428,7 +428,7 @@ export default function CalibracionRoiPage() {
                 />
 
                 <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 13, color: "#555" }}>
+                  <span style={{ fontSize: 13, color: "var(--gris-600)" }}>
                     {draftPoints.length} punto{draftPoints.length === 1 ? "" : "s"} (mínimo 3)
                   </span>
                   {roiEnEdicion ? (

@@ -91,7 +91,7 @@ export default function ModalEditarCamara({
       onConfirmar={handleConfirmar}
       onCancelar={onClose}
     >
-      <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 12 }}>
+      <label style={{ display: "block", fontSize: 13, color: "var(--gris-600)", marginBottom: 12 }}>
         Nombre
         <input
           type="text"
@@ -105,13 +105,13 @@ export default function ModalEditarCamara({
             marginTop: 4,
             padding: 8,
             fontSize: 14,
-            border: "1px solid #ccc",
+            border: "1px solid var(--gris-250)",
             borderRadius: 6,
           }}
         />
       </label>
 
-      <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 4 }}>
+      <label style={{ display: "block", fontSize: 13, color: "var(--gris-600)", marginBottom: 4 }}>
         URL RTSP
         <input
           type="text"
@@ -124,19 +124,19 @@ export default function ModalEditarCamara({
             marginTop: 4,
             padding: 8,
             fontSize: 14,
-            border: "1px solid #ccc",
+            border: "1px solid var(--gris-250)",
             borderRadius: 6,
             fontFamily: "monospace",
           }}
         />
       </label>
-      <p style={{ fontSize: 12, color: "#888", margin: "0 0 16px" }}>
+      <p style={{ fontSize: 12, color: "var(--gris-400)", margin: "0 0 16px" }}>
         {rtspUrlModificada
           ? "Se va a guardar la URL nueva."
           : "La contraseña está oculta (***). Dejá el campo así para no tocar la URL, o escribí la URL completa con la contraseña real para cambiarla."}
       </p>
 
-      <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 20 }}>
+      <label style={{ display: "block", fontSize: 13, color: "var(--gris-600)", marginBottom: 20 }}>
         Sector
         <select
           value={sectorId}
@@ -148,9 +148,9 @@ export default function ModalEditarCamara({
             marginTop: 4,
             padding: 8,
             fontSize: 14,
-            border: "1px solid #ccc",
+            border: "1px solid var(--gris-250)",
             borderRadius: 6,
-            backgroundColor: "#fff",
+            backgroundColor: "var(--blanco)",
           }}
         >
           {sectores.map((s) => (

@@ -324,7 +324,7 @@ export default function DashboardPage() {
             data-testid="dashboard-filtro-estado"
             value={estadoFiltro}
             onChange={(e) => setEstadoFiltro(e.target.value)}
-            style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", minWidth: 200 }}
+            style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid var(--gris-250)", minWidth: 200 }}
           >
             <option value={SIN_FILTRO}>Todos los estados</option>
             {OPCIONES_ESTADO.map(([valor, etiqueta]) => (
@@ -341,7 +341,7 @@ export default function DashboardPage() {
         {estadoFiltro !== SIN_FILTRO && (
           <span
             data-testid="dashboard-filtro-aviso"
-            style={{ fontSize: 13, color: "#1d4ed8", paddingBottom: 6 }}
+            style={{ fontSize: 13, color: "var(--marca-fuerte)", paddingBottom: 6 }}
           >
             Mostrando solo mesas en «{ETIQUETA_POR_ESTADO[estadoFiltro]}».{" "}
             <button
@@ -351,7 +351,7 @@ export default function DashboardPage() {
                 border: "none",
                 background: "none",
                 padding: 0,
-                color: "#1d4ed8",
+                color: "var(--marca-fuerte)",
                 fontSize: 13,
                 fontWeight: 600,
                 textDecoration: "underline",
@@ -408,9 +408,9 @@ export default function DashboardPage() {
             justifyContent: "center",
             gap: 8,
             padding: "8px 16px",
-            backgroundColor: "#eff6ff",
+            backgroundColor: "var(--marca-tenue)",
             borderBottom: "1px solid #bfdbfe",
-            color: "#1d4ed8",
+            color: "var(--marca-fuerte)",
             fontSize: 13,
             fontWeight: 700,
           }}
@@ -426,7 +426,7 @@ export default function DashboardPage() {
             position: "fixed",
             inset: 0,
             zIndex: 300,
-            border: "4px solid #1d4ed8",
+            border: "4px solid var(--marca-fuerte)",
             pointerEvents: "none",
           }}
         />
@@ -434,15 +434,15 @@ export default function DashboardPage() {
 
       <main className="app-main" style={{ paddingBottom: modo === "edicion" ? 96 : undefined }}>
         {loading && (
-          <p style={{ fontSize: 14, color: "#888" }}>Cargando salón...</p>
+          <p style={{ fontSize: 14, color: "var(--gris-400)" }}>Cargando salón...</p>
         )}
         {error && (
           <p
             style={{
               fontSize: 14,
-              color: "#c62828",
-              backgroundColor: "#ffebee",
-              border: "1px solid #ef9a9a",
+              color: "var(--error)",
+              backgroundColor: "var(--error-fondo)",
+              border: "1px solid var(--error-borde)",
               borderRadius: 6,
               padding: "10px 16px",
             }}
@@ -468,9 +468,9 @@ export default function DashboardPage() {
               justifyContent: "space-between",
               gap: 12,
               fontSize: 14,
-              color: "#c62828",
-              backgroundColor: "#ffebee",
-              border: "1px solid #ef9a9a",
+              color: "var(--error)",
+              backgroundColor: "var(--error-fondo)",
+              border: "1px solid var(--error-borde)",
               borderRadius: 6,
               padding: "10px 16px",
             }}
@@ -483,7 +483,7 @@ export default function DashboardPage() {
               style={{
                 border: "none",
                 background: "none",
-                color: "#c62828",
+                color: "var(--error)",
                 fontSize: 18,
                 lineHeight: 1,
                 cursor: "pointer",
@@ -524,11 +524,11 @@ export default function DashboardPage() {
               fontSize: 14,
               fontWeight: 600,
               color: COLOR_OCUPACION_ALTA,
-              backgroundColor: "#fffbeb",
+              backgroundColor: "var(--aviso-fuerte-fondo)",
               // Borde izquierdo grueso, el mismo recurso con el que T26-173 refuerza el
               // borde de una mesa atrasada: marca la condición sin depender solo del color,
               // que por sí solo no se lee en un monitor lavado ni con daltonismo.
-              border: "1px solid #fcd34d",
+              border: "1px solid var(--aviso-fuerte-borde)",
               borderLeft: `4px solid ${COLOR_OCUPACION_ALTA}`,
               borderRadius: 6,
               padding: "10px 16px",
@@ -581,8 +581,8 @@ export default function DashboardPage() {
             justifyContent: "center",
             gap: 10,
             padding: "12px 16px",
-            backgroundColor: "#fff",
-            borderTop: "2px solid #e2e8f0",
+            backgroundColor: "var(--blanco)",
+            borderTop: "2px solid var(--slate-200)",
             boxShadow: "0 -4px 12px rgba(0,0,0,0.08)",
           }}
         >
@@ -621,8 +621,8 @@ const editExitBtnStyle: React.CSSProperties = {
   padding: "0 18px",
   borderRadius: 8,
   border: "none",
-  backgroundColor: "#1a1a1a",
-  color: "#fff",
+  backgroundColor: "var(--gris-900)",
+  color: "var(--blanco)",
   fontSize: 14,
   fontWeight: 600,
 }

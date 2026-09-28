@@ -49,7 +49,7 @@ export default function ModalEditarSector({ sector, onClose, onSectorActualizado
       onConfirmar={handleConfirmar}
       onCancelar={onClose}
     >
-      <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 12 }}>
+      <label style={{ display: "block", fontSize: 13, color: "var(--gris-600)", marginBottom: 12 }}>
         Nombre
         <input
           type="text"
@@ -63,13 +63,13 @@ export default function ModalEditarSector({ sector, onClose, onSectorActualizado
             marginTop: 4,
             padding: 8,
             fontSize: 14,
-            border: "1px solid #ccc",
+            border: "1px solid var(--gris-250)",
             borderRadius: 6,
           }}
         />
       </label>
 
-      <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 20 }}>
+      <label style={{ display: "block", fontSize: 13, color: "var(--gris-600)", marginBottom: 20 }}>
         Descripción (opcional)
         <textarea
           value={descripcion}
@@ -81,7 +81,7 @@ export default function ModalEditarSector({ sector, onClose, onSectorActualizado
             marginTop: 4,
             padding: 8,
             fontSize: 14,
-            border: "1px solid #ccc",
+            border: "1px solid var(--gris-250)",
             borderRadius: 6,
             minHeight: 60,
             resize: "vertical",

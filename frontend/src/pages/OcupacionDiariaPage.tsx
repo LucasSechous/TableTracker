@@ -157,8 +157,8 @@ export default function OcupacionDiariaPage() {
             flexWrap: "wrap",
             alignItems: "flex-end",
             gap: 16,
-            backgroundColor: "#fff",
-            border: "1px solid #e0e0e0",
+            backgroundColor: "var(--blanco)",
+            border: "1px solid var(--gris-200)",
             borderRadius: 8,
             padding: 16,
             marginBottom: 20,
@@ -181,7 +181,7 @@ export default function OcupacionDiariaPage() {
               data-testid="ocupacion-diaria-filtro-sector"
               value={filtros.sectorId}
               onChange={(e) => setFiltros((prev) => ({ ...prev, sectorId: e.target.value }))}
-              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", minWidth: 160 }}
+              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid var(--gris-250)", minWidth: 160 }}
             >
               <option value="">Todos los sectores</option>
               {sectores.map((s) => (
@@ -210,16 +210,16 @@ export default function OcupacionDiariaPage() {
           </Boton>
         </div>
 
-        {loading && <p style={{ fontSize: 14, color: "#888" }}>Cargando reporte...</p>}
+        {loading && <p style={{ fontSize: 14, color: "var(--gris-400)" }}>Cargando reporte...</p>}
 
         {error && (
           <p
             data-testid="ocupacion-diaria-error"
             style={{
               fontSize: 14,
-              color: "#c62828",
-              backgroundColor: "#ffebee",
-              border: "1px solid #ef9a9a",
+              color: "var(--error)",
+              backgroundColor: "var(--error-fondo)",
+              border: "1px solid var(--error-borde)",
               borderRadius: 6,
               padding: "10px 16px",
             }}
@@ -232,7 +232,7 @@ export default function OcupacionDiariaPage() {
           <>
             <div
               data-testid="ocupacion-diaria-horario"
-              style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, fontSize: 12, color: "#94a3b8" }}
+              style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, fontSize: 12, color: "var(--slate-400)" }}
             >
               <Clock size={13} />
               {`Día operativo: de ${new Date(reporte.inicio).toLocaleString()} a ${new Date(reporte.fin).toLocaleString()}.`}
@@ -242,15 +242,15 @@ export default function OcupacionDiariaPage() {
               <div
                 data-testid="ocupacion-diaria-vacio"
                 style={{
-                  backgroundColor: "#fff",
-                  border: "1px dashed #cbd5e1",
+                  backgroundColor: "var(--blanco)",
+                  border: "1px dashed var(--slate-300)",
                   borderRadius: 8,
                   padding: "40px 24px",
                   textAlign: "center",
-                  color: "#64748b",
+                  color: "var(--slate-500)",
                 }}
               >
-                <Calendar size={30} color="#94a3b8" style={{ marginBottom: 10 }} />
+                <Calendar size={30} style={{ color: "var(--slate-400)", marginBottom: 10 }} />
                 <p style={{ margin: 0, fontSize: 14 }}>
                   No hay datos de ocupación para esta fecha.
                 </p>
@@ -259,8 +259,8 @@ export default function OcupacionDiariaPage() {
               <>
                 <div
                   style={{
-                    backgroundColor: "#fff",
-                    border: "1px solid #e0e0e0",
+                    backgroundColor: "var(--blanco)",
+                    border: "1px solid var(--gris-200)",
                     borderRadius: 8,
                     padding: 20,
                     marginBottom: 24,
@@ -275,7 +275,7 @@ export default function OcupacionDiariaPage() {
                       fontWeight: 700,
                       letterSpacing: 0.5,
                       textTransform: "uppercase",
-                      color: "#64748b",
+                      color: "var(--slate-500)",
                     }}
                   >
                     <PieChart size={16} />
@@ -289,12 +289,12 @@ export default function OcupacionDiariaPage() {
                     >
                       {reporte.porcentaje_ocupacion}%
                     </span>
-                    <span style={{ fontSize: 14, color: "#475569" }}>
+                    <span style={{ fontSize: 14, color: "var(--slate-600)" }}>
                       {`${reporte.total_mesas} ${reporte.total_mesas === 1 ? "mesa" : "mesas"} con datos ese día`}
                     </span>
                   </div>
 
-                  <div style={{ marginTop: 16, height: 10, borderRadius: 5, backgroundColor: "#e2e8f0", overflow: "hidden" }}>
+                  <div style={{ marginTop: 16, height: 10, borderRadius: 5, backgroundColor: "var(--slate-200)", overflow: "hidden" }}>
                     <div
                       style={{
                         width: `${reporte.porcentaje_ocupacion}%`,
@@ -312,13 +312,13 @@ export default function OcupacionDiariaPage() {
                         style={{
                           flex: "1 1 160px",
                           minWidth: 150,
-                          border: "1px solid #e0e0e0",
+                          border: "1px solid var(--gris-200)",
                           borderLeft: `6px solid ${COLOR_POR_ESTADO[estado]}`,
                           borderRadius: 8,
                           padding: 12,
                         }}
                       >
-                        <div style={{ fontSize: 12, color: "#64748b" }}>{ETIQUETA_POR_ESTADO[estado]}</div>
+                        <div style={{ fontSize: 12, color: "var(--slate-500)" }}>{ETIQUETA_POR_ESTADO[estado]}</div>
                         <div style={{ fontSize: 20, fontWeight: 700, color: BORDE_POR_ESTADO[estado] }}>
                           {formatearMinutos(reporte.minutos_por_estado[estado])}
                         </div>
@@ -327,10 +327,10 @@ export default function OcupacionDiariaPage() {
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: "#fff", border: "1px solid #e0e0e0", borderRadius: 8, overflowX: "auto" }}>
+                <div style={{ backgroundColor: "var(--blanco)", border: "1px solid var(--gris-200)", borderRadius: 8, overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                     <thead>
-                      <tr style={{ backgroundColor: "#fafafa", textAlign: "left" }}>
+                      <tr style={{ backgroundColor: "var(--gris-50)", textAlign: "left" }}>
                         <th style={celdaEncabezado}>Mesa</th>
                         <th style={celdaEncabezado}>Sector</th>
                         <th style={celdaEncabezado}>% Ocupación</th>
@@ -342,18 +342,18 @@ export default function OcupacionDiariaPage() {
                     </thead>
                     <tbody>
                       {filasOrdenadas.map((fila) => (
-                        <tr key={fila.mesa_id} data-testid={`ocupacion-diaria-fila-${fila.mesa_id}`} style={{ borderTop: "1px solid #eee" }}>
+                        <tr key={fila.mesa_id} data-testid={`ocupacion-diaria-fila-${fila.mesa_id}`} style={{ borderTop: "1px solid var(--gris-150)" }}>
                           <td style={{ padding: "10px 16px" }}>Mesa {fila.numero}</td>
-                          <td style={{ padding: "10px 16px", color: "#475569" }}>{nombreSector(fila.sector_id)}</td>
+                          <td style={{ padding: "10px 16px", color: "var(--slate-600)" }}>{nombreSector(fila.sector_id)}</td>
                           <td data-testid={`ocupacion-diaria-porcentaje-${fila.mesa_id}`} style={{ padding: "10px 16px", fontWeight: 700 }}>
                             {fila.porcentaje_ocupacion}%
                           </td>
-                          <td style={{ padding: "10px 16px", color: "#475569" }}>{formatearMinutos(fila.minutos_por_estado.libre)}</td>
-                          <td style={{ padding: "10px 16px", color: "#475569" }}>{formatearMinutos(fila.minutos_por_estado.ocupada)}</td>
-                          <td style={{ padding: "10px 16px", color: "#475569" }}>
+                          <td style={{ padding: "10px 16px", color: "var(--slate-600)" }}>{formatearMinutos(fila.minutos_por_estado.libre)}</td>
+                          <td style={{ padding: "10px 16px", color: "var(--slate-600)" }}>{formatearMinutos(fila.minutos_por_estado.ocupada)}</td>
+                          <td style={{ padding: "10px 16px", color: "var(--slate-600)" }}>
                             {formatearMinutos(fila.minutos_por_estado.pendiente_limpieza)}
                           </td>
-                          <td style={{ padding: "10px 16px", color: "#475569" }}>{formatearMinutos(fila.minutos_por_estado.reservada)}</td>
+                          <td style={{ padding: "10px 16px", color: "var(--slate-600)" }}>{formatearMinutos(fila.minutos_por_estado.reservada)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -370,7 +370,7 @@ export default function OcupacionDiariaPage() {
 
 const celdaEncabezado: React.CSSProperties = {
   padding: "12px 16px",
-  color: "#666",
+  color: "var(--gris-500)",
   fontWeight: 600,
 }
 

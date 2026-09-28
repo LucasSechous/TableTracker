@@ -87,7 +87,7 @@ export default function MenuLateral({ abierto, onClose }: Props) {
           bottom: 0,
           width: "100%",
           maxWidth: 300,
-          backgroundColor: "#fff",
+          backgroundColor: "var(--blanco)",
           zIndex: 201,
           transform: abierto ? "translateX(0)" : "translateX(100%)",
           transition: "transform 0.25s ease",
@@ -99,7 +99,7 @@ export default function MenuLateral({ abierto, onClose }: Props) {
         <div
           style={{
             padding: 20,
-            borderBottom: "2px solid #e2e8f0",
+            borderBottom: "2px solid var(--slate-200)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -107,10 +107,13 @@ export default function MenuLateral({ abierto, onClose }: Props) {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-            <User size={20} color="#1e293b" />
+            {/* El color va por CSS y no por la prop `color`: lucide la vuelca en el atributo
+                stroke, y var() no se resuelve en un atributo de presentacion de SVG.
+                Sin la prop, lucide usa currentColor, que si lo resuelve. */}
+            <User size={20} style={{ color: "var(--slate-900)" }} />
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "#1e293b" }}>{user?.nombre ?? ""}</div>
-              <div style={{ fontSize: 12, color: "#94a3b8", textTransform: "capitalize" }}>{rol ?? ""}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "var(--slate-900)" }}>{user?.nombre ?? ""}</div>
+              <div style={{ fontSize: 12, color: "var(--slate-400)", textTransform: "capitalize" }}>{rol ?? ""}</div>
             </div>
           </div>
           <button
@@ -121,7 +124,7 @@ export default function MenuLateral({ abierto, onClose }: Props) {
               height: 44,
               flexShrink: 0,
               border: "none",
-              background: "#f1f5f9",
+              background: "var(--slate-100)",
               borderRadius: 10,
               fontSize: 22,
               lineHeight: 1,
@@ -129,7 +132,7 @@ export default function MenuLateral({ abierto, onClose }: Props) {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#64748b",
+              color: "var(--slate-500)",
             }}
           >
             ×
@@ -152,7 +155,7 @@ export default function MenuLateral({ abierto, onClose }: Props) {
                     fontWeight: 700,
                     letterSpacing: 0.5,
                     textTransform: "uppercase",
-                    color: "#94a3b8",
+                    color: "var(--slate-400)",
                   }}
                 >
                   {TITULO_GRUPO[grupo]}
@@ -181,7 +184,7 @@ export default function MenuLateral({ abierto, onClose }: Props) {
             )
           })}
 
-          <div style={{ height: 1, background: "#e2e8f0", margin: "8px 20px", marginTop: "auto" }} />
+          <div style={{ height: 1, background: "var(--slate-200)", margin: "8px 20px", marginTop: "auto" }} />
 
           <button onClick={salir} style={{ ...itemStyle, color: "#ef4444" }}>
             <LogOut size={18} aria-hidden />
@@ -206,7 +209,7 @@ const itemStyle: CSSProperties = {
   fontSize: 14,
   fontWeight: 600,
   fontFamily: "inherit",
-  color: "#334155",
+  color: "var(--slate-700)",
   cursor: "pointer",
   textAlign: "left",
 }
@@ -215,7 +218,7 @@ const itemStyle: CSSProperties = {
 // de la izquierda. La barra es la que sobrevive en escala de grises y para quien no
 // distingue el azul del gris.
 const itemActivoStyle: CSSProperties = {
-  backgroundColor: "#eff6ff",
-  color: "#1d4ed8",
-  borderLeft: "3px solid #1d4ed8",
+  backgroundColor: "var(--marca-tenue)",
+  color: "var(--marca-fuerte)",
+  borderLeft: "3px solid var(--marca-fuerte)",
 }

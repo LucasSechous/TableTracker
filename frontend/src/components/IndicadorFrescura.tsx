@@ -49,7 +49,7 @@ export default function IndicadorFrescura({ ultimoExito, intervaloMs, pausado = 
     return (
       <span
         data-testid="indicador-frescura"
-        style={{ ...base, color: "#94a3b8" }}
+        style={{ ...base, color: "var(--slate-400)" }}
         title="El salón no se actualiza mientras se edita la disposición"
       >
         Actualización en pausa
@@ -59,7 +59,7 @@ export default function IndicadorFrescura({ ultimoExito, intervaloMs, pausado = 
 
   if (ultimoExito === null) {
     return (
-      <span data-testid="indicador-frescura" style={{ ...base, color: "#94a3b8" }}>
+      <span data-testid="indicador-frescura" style={{ ...base, color: "var(--slate-400)" }}>
         Conectando…
       </span>
     )
@@ -71,7 +71,7 @@ export default function IndicadorFrescura({ ultimoExito, intervaloMs, pausado = 
   return (
     <span
       data-testid="indicador-frescura"
-      style={{ ...base, color: vencido ? "#b45309" : "#94a3b8" }}
+      style={{ ...base, color: vencido ? "var(--aviso-fuerte)" : "var(--slate-400)" }}
       title={
         vencido
           ? "El salón dejó de recibir datos. Lo que se ve puede no reflejar el estado real de las mesas."

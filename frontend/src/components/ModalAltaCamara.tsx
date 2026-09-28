@@ -85,12 +85,12 @@ export default function ModalAltaCamara({ sectores, onClose, onCamaraCreada }: M
       onCancelar={onClose}
     >
       {!haySectores ? (
-        <p style={{ fontSize: 13, color: "#666", margin: "0 0 20px" }}>
+        <p style={{ fontSize: 13, color: "var(--gris-500)", margin: "0 0 20px" }}>
           No hay sectores creados todavía. Creá un sector primero.
         </p>
       ) : (
         <>
-          <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 12 }}>
+          <label style={{ display: "block", fontSize: 13, color: "var(--gris-600)", marginBottom: 12 }}>
             Nombre
             <input
               type="text"
@@ -104,13 +104,13 @@ export default function ModalAltaCamara({ sectores, onClose, onCamaraCreada }: M
                 marginTop: 4,
                 padding: 8,
                 fontSize: 14,
-                border: "1px solid #ccc",
+                border: "1px solid var(--gris-250)",
                 borderRadius: 6,
               }}
             />
           </label>
 
-          <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 12 }}>
+          <label style={{ display: "block", fontSize: 13, color: "var(--gris-600)", marginBottom: 12 }}>
             URL RTSP
             <input
               type="text"
@@ -124,14 +124,14 @@ export default function ModalAltaCamara({ sectores, onClose, onCamaraCreada }: M
                 marginTop: 4,
                 padding: 8,
                 fontSize: 14,
-                border: "1px solid #ccc",
+                border: "1px solid var(--gris-250)",
                 borderRadius: 6,
                 fontFamily: "monospace",
               }}
             />
           </label>
 
-          <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 20 }}>
+          <label style={{ display: "block", fontSize: 13, color: "var(--gris-600)", marginBottom: 20 }}>
             Sector
             <select
               value={sectorId}
@@ -143,9 +143,9 @@ export default function ModalAltaCamara({ sectores, onClose, onCamaraCreada }: M
                 marginTop: 4,
                 padding: 8,
                 fontSize: 14,
-                border: "1px solid #ccc",
+                border: "1px solid var(--gris-250)",
                 borderRadius: 6,
-                backgroundColor: "#fff",
+                backgroundColor: "var(--blanco)",
               }}
             >
               {sectores.map((s) => (

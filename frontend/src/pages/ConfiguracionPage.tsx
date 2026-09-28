@@ -348,7 +348,7 @@ export default function ConfiguracionPage() {
   return (
     <Layout>
       <main className="app-main" style={{ maxWidth: 640 }}>
-        {loading && <p style={{ fontSize: 14, color: "#888" }}>Cargando configuración...</p>}
+        {loading && <p style={{ fontSize: 14, color: "var(--gris-400)" }}>Cargando configuración...</p>}
 
         {error && (
           <p data-testid="configuracion-error" style={estiloError}>
@@ -371,8 +371,8 @@ export default function ConfiguracionPage() {
         {!loading && form && (
           <div
             style={{
-              backgroundColor: "#fff",
-              border: "1px solid #e0e0e0",
+              backgroundColor: "var(--blanco)",
+              border: "1px solid var(--gris-200)",
               borderRadius: 8,
               padding: 20,
               display: "flex",
@@ -409,7 +409,7 @@ export default function ConfiguracionPage() {
               />
             </Campo>
 
-            <div style={{ height: 1, backgroundColor: "#e2e8f0" }} />
+            <div style={{ height: 1, backgroundColor: "var(--slate-200)" }} />
 
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
               <div style={{ flex: "1 1 160px" }}>
@@ -436,7 +436,7 @@ export default function ConfiguracionPage() {
               </div>
             </div>
 
-            <p style={{ margin: 0, fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--slate-400)", lineHeight: 1.5 }}>
               {form.horaApertura && form.horaCierre
                 ? `Las métricas de rotación cuentan solo lo que pasa entre las ${form.horaApertura} y las ${form.horaCierre}.` +
                   (form.horaCierre < form.horaApertura ? " El cierre después de medianoche está contemplado." : "")
@@ -478,7 +478,7 @@ export default function ConfiguracionPage() {
               />
             </Campo>
 
-            <div style={{ height: 1, backgroundColor: "#e2e8f0" }} />
+            <div style={{ height: 1, backgroundColor: "var(--slate-200)" }} />
 
             <div>
               <h2 style={estiloTituloSeccion}>Detección automática</h2>
@@ -520,7 +520,7 @@ export default function ConfiguracionPage() {
               />
             </Campo>
 
-            <div style={{ height: 1, backgroundColor: "#e2e8f0" }} />
+            <div style={{ height: 1, backgroundColor: "var(--slate-200)" }} />
 
             <Campo
               etiqueta="Ancho del salón (px)"
@@ -550,7 +550,7 @@ export default function ConfiguracionPage() {
               />
             </Campo>
 
-            <p style={{ margin: 0, fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--slate-400)", lineHeight: 1.5 }}>
               El tamaño del salón también se puede ajustar arrastrando su borde inferior derecho
               desde el modo edición del panel principal.
             </p>
@@ -597,7 +597,7 @@ export default function ConfiguracionPage() {
           )}
 
           {!errorResumen && resumen === null && (
-            <p style={{ margin: 0, fontSize: 13, color: "#888" }}>Cargando resumen...</p>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--gris-400)" }}>Cargando resumen...</p>
           )}
 
           {resumen && (
@@ -609,7 +609,7 @@ export default function ConfiguracionPage() {
                 <Conteo testid="configuracion-resumen-rois" etiqueta="ROIs" valor={resumen.rois} />
               </div>
 
-              <div style={{ height: 1, backgroundColor: "#e2e8f0" }} />
+              <div style={{ height: 1, backgroundColor: "var(--slate-200)" }} />
 
               {/* Orden deliberado: de lo que deja más ciego el sistema a lo que menos. Una mesa
                   sin ROI nunca se detecta; un sector sin cámara son todas sus mesas a la vez. */}
@@ -679,7 +679,7 @@ export default function ConfiguracionPage() {
           )}
 
           {!errorEstados && estados === null && (
-            <p style={{ margin: 0, fontSize: 13, color: "#888" }}>Cargando estados...</p>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--gris-400)" }}>Cargando estados...</p>
           )}
 
           {estados?.map((estado) => (
@@ -696,11 +696,11 @@ export default function ConfiguracionPage() {
                   flexShrink: 0,
                   // El gris cubre un estado que exista en el backend pero todavía no en la
                   // paleta: se prefiere una fila sin color a una fila que no se dibuja.
-                  backgroundColor: COLOR_POR_ESTADO[estado.valor] ?? "#9e9e9e",
+                  backgroundColor: COLOR_POR_ESTADO[estado.valor] ?? "var(--gris-desconocido)",
                 }}
               />
-              <span style={{ fontSize: 14, fontWeight: 600, color: "#334155" }}>{estado.etiqueta}</span>
-              <code style={{ fontSize: 12, color: "#94a3b8" }}>{estado.valor}</code>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "var(--slate-700)" }}>{estado.etiqueta}</span>
+              <code style={{ fontSize: 12, color: "var(--slate-400)" }}>{estado.valor}</code>
             </div>
           ))}
         </section>
@@ -712,8 +712,8 @@ export default function ConfiguracionPage() {
 function Conteo({ testid, etiqueta, valor }: { testid: string; etiqueta: string; valor: number }) {
   return (
     <div data-testid={testid}>
-      <div style={{ fontSize: 22, fontWeight: 700, color: "#1e293b", lineHeight: 1.2 }}>{valor}</div>
-      <div style={{ fontSize: 12, color: "#94a3b8" }}>{etiqueta}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: "var(--slate-900)", lineHeight: 1.2 }}>{valor}</div>
+      <div style={{ fontSize: 12, color: "var(--slate-400)" }}>{etiqueta}</div>
     </div>
   )
 }
@@ -742,11 +742,11 @@ function Hueco({
         gap: 10,
         padding: "10px 14px",
         borderRadius: 6,
-        backgroundColor: "#fff8e1",
-        border: "1px solid #ffe082",
+        backgroundColor: "var(--aviso-fondo)",
+        border: "1px solid var(--aviso-borde)",
       }}
     >
-      <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#8a6d0b" }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--aviso)" }}>
         <AlertTriangle size={16} style={{ flexShrink: 0 }} />
         {texto}
       </span>
@@ -770,9 +770,9 @@ function Campo({
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <span style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>{etiqueta}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--slate-700)" }}>{etiqueta}</span>
       {children}
-      {ayuda && <span style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.4 }}>{ayuda}</span>}
+      {ayuda && <span style={{ fontSize: 12, color: "var(--slate-400)", lineHeight: 1.4 }}>{ayuda}</span>}
     </label>
   )
 }
@@ -780,8 +780,8 @@ function Campo({
 // Mismo recuadro blanco que la tarjeta del formulario, para que las secciones de solo
 // lectura que se agregan debajo no parezcan de otra pantalla.
 const estiloTarjeta: React.CSSProperties = {
-  backgroundColor: "#fff",
-  border: "1px solid #e0e0e0",
+  backgroundColor: "var(--blanco)",
+  border: "1px solid var(--gris-200)",
   borderRadius: 8,
   padding: 20,
   marginTop: 20,
@@ -793,14 +793,14 @@ const estiloTarjeta: React.CSSProperties = {
 const estiloTituloSeccion: React.CSSProperties = {
   fontSize: 15,
   fontWeight: 700,
-  color: "#1e293b",
+  color: "var(--slate-900)",
   margin: "0 0 4px",
 }
 
 const estiloAyudaSeccion: React.CSSProperties = {
   margin: 0,
   fontSize: 12,
-  color: "#94a3b8",
+  color: "var(--slate-400)",
   lineHeight: 1.5,
 }
 
@@ -808,10 +808,10 @@ const estiloInput: React.CSSProperties = {
   minHeight: 44,
   padding: "0 12px",
   borderRadius: 6,
-  border: "1px solid #ccc",
+  border: "1px solid var(--gris-250)",
   fontSize: 14,
   fontFamily: "inherit",
-  color: "#1e293b",
+  color: "var(--slate-900)",
   width: "100%",
   boxSizing: "border-box",
 }
@@ -821,9 +821,9 @@ const estiloInput: React.CSSProperties = {
 
 const estiloError: React.CSSProperties = {
   fontSize: 14,
-  color: "#c62828",
-  backgroundColor: "#ffebee",
-  border: "1px solid #ef9a9a",
+  color: "var(--error)",
+  backgroundColor: "var(--error-fondo)",
+  border: "1px solid var(--error-borde)",
   borderRadius: 6,
   padding: "10px 16px",
   marginTop: 0,
@@ -832,8 +832,8 @@ const estiloError: React.CSSProperties = {
 const estiloExito: React.CSSProperties = {
   fontSize: 14,
   color: "#1b5e20",
-  backgroundColor: "#e8f5e9",
-  border: "1px solid #a5d6a7",
+  backgroundColor: "var(--exito-fondo)",
+  border: "1px solid var(--exito-borde)",
   borderRadius: 6,
   padding: "10px 16px",
   marginTop: 0,
@@ -841,9 +841,9 @@ const estiloExito: React.CSSProperties = {
 
 const estiloAviso: React.CSSProperties = {
   fontSize: 13,
-  color: "#8a6d0b",
-  backgroundColor: "#fff8e1",
-  border: "1px solid #ffe082",
+  color: "var(--aviso)",
+  backgroundColor: "var(--aviso-fondo)",
+  border: "1px solid var(--aviso-borde)",
   borderRadius: 6,
   padding: "10px 16px",
   marginTop: 0,

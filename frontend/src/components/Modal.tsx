@@ -79,23 +79,23 @@ export default function Modal({
       <div
         data-testid="modal"
         style={{
-          backgroundColor: "#fff",
+          backgroundColor: "var(--blanco)",
           borderRadius: 8,
           padding: 24,
           width: ancho,
           boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
         }}
       >
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1a1a1a", margin: "0 0 16px" }}>{titulo}</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--gris-900)", margin: "0 0 16px" }}>{titulo}</h2>
 
         {error && (
           <p
             data-testid="modal-error"
             style={{
               fontSize: 13,
-              color: "#c62828",
-              backgroundColor: "#ffebee",
-              border: "1px solid #ef9a9a",
+              color: "var(--error)",
+              backgroundColor: "var(--error-fondo)",
+              border: "1px solid var(--error-borde)",
               borderRadius: 6,
               padding: "8px 12px",
               margin: "0 0 12px",
@@ -115,11 +115,11 @@ export default function Modal({
             style={{
               padding: "6px 14px",
               borderRadius: 6,
-              border: "1px solid #ccc",
+              border: "1px solid var(--gris-250)",
               fontSize: 13,
               cursor: ocupado ? "default" : "pointer",
-              backgroundColor: "#fff",
-              color: "#555",
+              backgroundColor: "var(--blanco)",
+              color: "var(--gris-600)",
               fontWeight: 500,
             }}
           >
@@ -135,8 +135,8 @@ export default function Modal({
               border: "none",
               fontSize: 13,
               cursor: primarioBloqueado ? "default" : "pointer",
-              backgroundColor: peligroso ? "#c62828" : "#1976d2",
-              color: "#fff",
+              backgroundColor: peligroso ? "var(--error)" : "var(--marca)",
+              color: "var(--blanco)",
               fontWeight: 500,
               opacity: primarioBloqueado ? 0.6 : 1,
             }}

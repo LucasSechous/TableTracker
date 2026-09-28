@@ -146,8 +146,8 @@ export default function RotacionPage() {
             flexWrap: "wrap",
             alignItems: "flex-end",
             gap: 16,
-            backgroundColor: "#fff",
-            border: "1px solid #e0e0e0",
+            backgroundColor: "var(--blanco)",
+            border: "1px solid var(--gris-200)",
             borderRadius: 8,
             padding: 16,
             marginBottom: 20,
@@ -166,7 +166,7 @@ export default function RotacionPage() {
               data-testid="rotacion-filtro-sector"
               value={filtros.sectorId}
               onChange={(e) => setFiltros((prev) => ({ ...prev, sectorId: e.target.value }))}
-              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", minWidth: 160 }}
+              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid var(--gris-250)", minWidth: 160 }}
             >
               <option value="">Todos los sectores</option>
               {sectores.map((s) => (
@@ -195,16 +195,16 @@ export default function RotacionPage() {
           </Boton>
         </div>
 
-        {loading && <p style={{ fontSize: 14, color: "#888" }}>Cargando rotación...</p>}
+        {loading && <p style={{ fontSize: 14, color: "var(--gris-400)" }}>Cargando rotación...</p>}
 
         {error && (
           <p
             data-testid="rotacion-error"
             style={{
               fontSize: 14,
-              color: "#c62828",
-              backgroundColor: "#ffebee",
-              border: "1px solid #ef9a9a",
+              color: "var(--error)",
+              backgroundColor: "var(--error-fondo)",
+              border: "1px solid var(--error-borde)",
               borderRadius: 6,
               padding: "10px 16px",
             }}
@@ -223,7 +223,7 @@ export default function RotacionPage() {
                 gap: 8,
                 marginBottom: 12,
                 fontSize: 13,
-                color: "#64748b",
+                color: "var(--slate-500)",
               }}
             >
               <Repeat size={15} />
@@ -235,7 +235,7 @@ export default function RotacionPage() {
                 justamente la que faltaba antes del ticket. */}
             <div
               data-testid="rotacion-horario"
-              style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 12, color: "#94a3b8" }}
+              style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 12, color: "var(--slate-400)" }}
             >
               <Clock size={13} />
               {config?.hora_apertura && config?.hora_cierre
@@ -243,10 +243,10 @@ export default function RotacionPage() {
                 : "Cuenta las 24 horas del día. Cargá el horario de servicio en Configuración para acotarlo al servicio real."}
             </div>
 
-            <div style={{ backgroundColor: "#fff", border: "1px solid #e0e0e0", borderRadius: 8, overflowX: "auto" }}>
+            <div style={{ backgroundColor: "var(--blanco)", border: "1px solid var(--gris-200)", borderRadius: 8, overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                 <thead>
-                  <tr style={{ backgroundColor: "#fafafa", textAlign: "left" }}>
+                  <tr style={{ backgroundColor: "var(--gris-50)", textAlign: "left" }}>
                     <ColumnaOrdenable etiqueta="Mesa" propia="numero" activa={columna} direccion={direccion} onOrdenar={handleOrdenar} />
                     <ColumnaOrdenable etiqueta="Sector" propia="sector" activa={columna} direccion={direccion} onOrdenar={handleOrdenar} />
                     <ColumnaOrdenable etiqueta="Rotaciones" propia="rotaciones" activa={columna} direccion={direccion} onOrdenar={handleOrdenar} />
@@ -255,43 +255,43 @@ export default function RotacionPage() {
                 <tbody>
                   {sinMesas && (
                     <tr>
-                      <td data-testid="rotacion-vacio" colSpan={3} style={{ padding: 16, color: "#888", textAlign: "center" }}>
+                      <td data-testid="rotacion-vacio" colSpan={3} style={{ padding: 16, color: "var(--gris-400)", textAlign: "center" }}>
                         No hay mesas activas para estos filtros.
                       </td>
                     </tr>
                   )}
                   {sinRotaciones && (
                     <tr>
-                      <td data-testid="rotacion-sin-rotaciones" colSpan={3} style={{ padding: 16, color: "#888", textAlign: "center" }}>
+                      <td data-testid="rotacion-sin-rotaciones" colSpan={3} style={{ padding: 16, color: "var(--gris-400)", textAlign: "center" }}>
                         Ninguna mesa rotó en el período elegido.
                       </td>
                     </tr>
                   )}
                   {!sinRotaciones &&
                     filasOrdenadas.map((fila) => (
-                      <tr key={fila.mesa_id} data-testid={`rotacion-fila-${fila.mesa_id}`} style={{ borderTop: "1px solid #eee" }}>
+                      <tr key={fila.mesa_id} data-testid={`rotacion-fila-${fila.mesa_id}`} style={{ borderTop: "1px solid var(--gris-150)" }}>
                         <td data-testid={`rotacion-numero-${fila.mesa_id}`} style={{ padding: "10px 16px" }}>
                           Mesa {fila.numero}
                         </td>
-                        <td data-testid={`rotacion-sector-${fila.mesa_id}`} style={{ padding: "10px 16px", color: "#475569" }}>
+                        <td data-testid={`rotacion-sector-${fila.mesa_id}`} style={{ padding: "10px 16px", color: "var(--slate-600)" }}>
                           {nombreSector(fila.sector_id)}
                         </td>
                         <td style={{ padding: "10px 16px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                             <span
                               data-testid={`rotacion-cantidad-${fila.mesa_id}`}
-                              style={{ fontWeight: 700, minWidth: 24, color: "#1e293b" }}
+                              style={{ fontWeight: 700, minWidth: 24, color: "var(--slate-900)" }}
                             >
                               {fila.rotaciones}
                             </span>
                             {/* Barra proporcional a la mesa que más rotó: hace comparable el
                                 ranking sin necesidad de leer todos los números. */}
-                            <div style={{ flex: 1, maxWidth: 220, height: 8, borderRadius: 4, backgroundColor: "#e2e8f0", overflow: "hidden" }}>
+                            <div style={{ flex: 1, maxWidth: 220, height: 8, borderRadius: 4, backgroundColor: "var(--slate-200)", overflow: "hidden" }}>
                               <div
                                 style={{
                                   width: maxRotaciones > 0 ? `${(fila.rotaciones / maxRotaciones) * 100}%` : "0%",
                                   height: "100%",
-                                  backgroundColor: "#1976d2",
+                                  backgroundColor: "var(--marca)",
                                 }}
                               />
                             </div>
@@ -320,7 +320,7 @@ interface ColumnaProps {
 function ColumnaOrdenable({ etiqueta, propia, activa, direccion, onOrdenar }: ColumnaProps) {
   const esActiva = propia === activa
   return (
-    <th style={{ padding: 0, color: "#666", fontWeight: 600 }}>
+    <th style={{ padding: 0, color: "var(--gris-500)", fontWeight: 600 }}>
       <button
         data-testid={`rotacion-ordenar-${propia}`}
         onClick={() => onOrdenar(propia)}
@@ -338,7 +338,7 @@ function ColumnaOrdenable({ etiqueta, propia, activa, direccion, onOrdenar }: Co
           background: "none",
           font: "inherit",
           fontWeight: 600,
-          color: esActiva ? "#1976d2" : "#666",
+          color: esActiva ? "var(--marca)" : "var(--gris-500)",
           cursor: "pointer",
           textAlign: "left",
         }}

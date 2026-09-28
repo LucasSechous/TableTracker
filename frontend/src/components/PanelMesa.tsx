@@ -108,7 +108,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
           bottom: 0,
           width: "100%",
           maxWidth: 380,
-          backgroundColor: "#fff",
+          backgroundColor: "var(--blanco)",
           zIndex: 201,
           transform: abierto ? "translateX(0)" : "translateX(100%)",
           transition: "transform 0.25s ease",
@@ -122,7 +122,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
             <div
               style={{
                 padding: 20,
-                borderBottom: "2px solid #e2e8f0",
+                borderBottom: "2px solid var(--slate-200)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
@@ -141,7 +141,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                   height: 44,
                   flexShrink: 0,
                   border: "none",
-                  background: "#f1f5f9",
+                  background: "var(--slate-100)",
                   borderRadius: 10,
                   fontSize: 22,
                   lineHeight: 1,
@@ -149,7 +149,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "#64748b",
+                  color: "var(--slate-500)",
                 }}
               >
                 ×
@@ -168,7 +168,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                     borderRadius: 8,
                     fontWeight: 600,
                     fontSize: 14,
-                    backgroundColor: `${COLOR_POR_ESTADO[mesa.estado] ?? "#9e9e9e"}20`,
+                    backgroundColor: `${COLOR_POR_ESTADO[mesa.estado] ?? "var(--gris-desconocido)"}20`,
                     color: COLOR_POR_ESTADO[mesa.estado] ?? "#616161",
                   }}
                 >
@@ -177,7 +177,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                       width: 12,
                       height: 12,
                       borderRadius: 3,
-                      backgroundColor: COLOR_POR_ESTADO[mesa.estado] ?? "#9e9e9e",
+                      backgroundColor: COLOR_POR_ESTADO[mesa.estado] ?? "var(--gris-desconocido)",
                       flexShrink: 0,
                     }}
                   />
@@ -187,7 +187,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
 
               <div style={{ marginBottom: 24 }}>
                 <div style={etiquetaStyle}>Tiempo en este estado</div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: "#1e293b" }}>
+                <div style={{ fontSize: 16, fontWeight: 600, color: "var(--slate-900)" }}>
                   {desde ? formatearTranscurrido(desde) : "Calculando..."}
                 </div>
               </div>
@@ -205,7 +205,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                     borderRadius: 8,
                     border: "none",
                     backgroundColor: "#4caf50",
-                    color: "#fff",
+                    color: "var(--blanco)",
                     fontSize: 14,
                     fontWeight: 700,
                     cursor: accionando ? "default" : "pointer",
@@ -229,9 +229,9 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                       minHeight: 44,
                       padding: "8px 14px",
                       borderRadius: 8,
-                      border: "1px solid #cbd5e1",
-                      backgroundColor: "#fff",
-                      color: "#475569",
+                      border: "1px solid var(--slate-300)",
+                      backgroundColor: "var(--blanco)",
+                      color: "var(--slate-600)",
                       fontSize: 13,
                       fontWeight: 600,
                       cursor: "pointer",
@@ -250,7 +250,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                         <button
                           disabled={accionando}
                           onClick={() => ejecutarAccion(() => mesasApi.marcarReservada(mesa.id))}
-                          style={estiloBotonAccion("#cbd5e1", accionando)}
+                          style={estiloBotonAccion("var(--slate-300)", accionando)}
                         >
                           Marcar como reservada
                         </button>
@@ -268,7 +268,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                               setExpandido(false)
                             }}
                             style={estiloBotonAccion(
-                              COLOR_POR_ESTADO[estado] ?? "#cbd5e1",
+                              COLOR_POR_ESTADO[estado] ?? "var(--slate-300)",
                               accionando || estado === mesa.estado
                             )}
                           >
@@ -277,7 +277,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                                 width: 10,
                                 height: 10,
                                 borderRadius: 3,
-                                backgroundColor: COLOR_POR_ESTADO[estado] ?? "#9e9e9e",
+                                backgroundColor: COLOR_POR_ESTADO[estado] ?? "var(--gris-desconocido)",
                                 display: "inline-block",
                                 marginRight: 8,
                                 flexShrink: 0,
@@ -301,7 +301,7 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
 const etiquetaStyle: CSSProperties = {
   fontSize: 12,
   fontWeight: 600,
-  color: "#94a3b8",
+  color: "var(--slate-400)",
   textTransform: "uppercase",
   letterSpacing: 0.5,
   marginBottom: 8,
@@ -313,8 +313,8 @@ function estiloBotonAccion(colorBorde: string, deshabilitado: boolean): CSSPrope
     padding: "8px 14px",
     borderRadius: 8,
     border: `1px solid ${colorBorde}`,
-    backgroundColor: "#fff",
-    color: "#334155",
+    backgroundColor: "var(--blanco)",
+    color: "var(--slate-700)",
     fontSize: 13,
     fontWeight: 600,
     cursor: deshabilitado ? "default" : "pointer",

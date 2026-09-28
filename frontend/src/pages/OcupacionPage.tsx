@@ -94,9 +94,9 @@ export default function OcupacionPage() {
               alignItems: "center",
               gap: 8,
               fontSize: 13,
-              color: "#8a6d0b",
-              backgroundColor: "#fff8e1",
-              border: "1px solid #ffe082",
+              color: "var(--aviso)",
+              backgroundColor: "var(--aviso-fondo)",
+              border: "1px solid var(--aviso-borde)",
               borderRadius: 6,
               padding: "10px 16px",
               marginTop: 0,
@@ -107,15 +107,15 @@ export default function OcupacionPage() {
           </p>
         )}
 
-        {loading && <p style={{ fontSize: 14, color: "#888" }}>Cargando métricas...</p>}
+        {loading && <p style={{ fontSize: 14, color: "var(--gris-400)" }}>Cargando métricas...</p>}
 
         {error && (
           <p
             style={{
               fontSize: 14,
-              color: "#c62828",
-              backgroundColor: "#ffebee",
-              border: "1px solid #ef9a9a",
+              color: "var(--error)",
+              backgroundColor: "var(--error-fondo)",
+              border: "1px solid var(--error-borde)",
               borderRadius: 6,
               padding: "10px 16px",
             }}
@@ -131,8 +131,8 @@ export default function OcupacionPage() {
           <div
             data-testid="ocupacion-empty"
             style={{
-              backgroundColor: "#fff",
-              border: "1px dashed #cbd5e1",
+              backgroundColor: "var(--blanco)",
+              border: "1px dashed var(--slate-300)",
               borderRadius: 8,
               padding: "40px 24px",
               textAlign: "center",
@@ -142,11 +142,11 @@ export default function OcupacionPage() {
               gap: 10,
             }}
           >
-            <LayoutGrid size={30} color="#94a3b8" />
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1e293b", margin: 0 }}>
+            <LayoutGrid size={30} style={{ color: "var(--slate-400)" }} />
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--slate-900)", margin: 0 }}>
               Todavía no hay mesas activas
             </h2>
-            <p style={{ fontSize: 14, color: "#64748b", margin: 0, maxWidth: 460, lineHeight: 1.5 }}>
+            <p style={{ fontSize: 14, color: "var(--slate-500)", margin: 0, maxWidth: 460, lineHeight: 1.5 }}>
               Sin mesas cargadas no hay ocupación que medir. Agregá mesas desde el modo edición
               del panel principal y las métricas aparecen acá.
             </p>
@@ -160,8 +160,8 @@ export default function OcupacionPage() {
           <>
             <div
               style={{
-                backgroundColor: "#fff",
-                border: "1px solid #e0e0e0",
+                backgroundColor: "var(--blanco)",
+                border: "1px solid var(--gris-200)",
                 borderRadius: 8,
                 padding: 20,
                 marginBottom: 24,
@@ -176,7 +176,7 @@ export default function OcupacionPage() {
                   fontWeight: 700,
                   letterSpacing: 0.5,
                   textTransform: "uppercase",
-                  color: "#64748b",
+                  color: "var(--slate-500)",
                 }}
               >
                 <PieChart size={16} />
@@ -203,7 +203,7 @@ export default function OcupacionPage() {
                 >
                   {ocupacion.porcentaje_ocupacion}%
                 </span>
-                <span data-testid="ocupacion-resumen" style={{ fontSize: 14, color: "#475569" }}>
+                <span data-testid="ocupacion-resumen" style={{ fontSize: 14, color: "var(--slate-600)" }}>
                   {conteo.ocupada} de {ocupacion.total_mesas} mesas ocupadas
                 </span>
               </div>
@@ -213,7 +213,7 @@ export default function OcupacionPage() {
                   marginTop: 16,
                   height: 10,
                   borderRadius: 5,
-                  backgroundColor: "#e2e8f0",
+                  backgroundColor: "var(--slate-200)",
                   overflow: "hidden",
                 }}
               >
@@ -231,7 +231,7 @@ export default function OcupacionPage() {
                   justamente el dato que se puede leer mal. */}
               <p
                 data-testid="ocupacion-nota-porcentaje"
-                style={{ margin: "14px 0 0", fontSize: 13, color: "#64748b", lineHeight: 1.5 }}
+                style={{ margin: "14px 0 0", fontSize: 13, color: "var(--slate-500)", lineHeight: 1.5 }}
               >
                 El porcentaje cuenta <strong>solo las mesas ocupadas</strong>. Las reservadas no
                 suman: la mesa sigue físicamente libre hasta que alguien se sienta.
@@ -248,10 +248,10 @@ export default function OcupacionPage() {
                 marginBottom: 12,
               }}
             >
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: "#1e293b", margin: 0 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--slate-900)", margin: 0 }}>
                 Mesas por estado
               </h2>
-              <span data-testid="ocupacion-total" style={{ fontSize: 13, color: "#64748b" }}>
+              <span data-testid="ocupacion-total" style={{ fontSize: 13, color: "var(--slate-500)" }}>
                 {`${ocupacion.total_mesas} ${ocupacion.total_mesas === 1 ? "mesa activa" : "mesas activas"} en total`}
               </span>
             </div>
@@ -268,8 +268,8 @@ export default function OcupacionPage() {
                   style={{
                     flex: "1 1 200px",
                     minWidth: 180,
-                    backgroundColor: "#fff",
-                    border: "1px solid #e0e0e0",
+                    backgroundColor: "var(--blanco)",
+                    border: "1px solid var(--gris-200)",
                     // El color vive en el borde izquierdo y en el número (tono 700 de
                     // BORDE_POR_ESTADO, legible como texto); pintar la card entera del color
                     // del estado la volvería ilegible con los rojos y verdes saturados.
@@ -291,7 +291,7 @@ export default function OcupacionPage() {
                     />
                     <span
                       data-testid={`ocupacion-etiqueta-${estado}`}
-                      style={{ fontSize: 13, fontWeight: 600, color: "#475569" }}
+                      style={{ fontSize: 13, fontWeight: 600, color: "var(--slate-600)" }}
                     >
                       {ETIQUETA_POR_ESTADO[estado]}
                     </span>
@@ -315,7 +315,7 @@ export default function OcupacionPage() {
                   {estado === "reservada" && (
                     <div
                       data-testid="ocupacion-nota-reservada"
-                      style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}
+                      style={{ marginTop: 6, fontSize: 12, color: "var(--slate-500)" }}
                     >
                       No suman al % de ocupación
                     </div>

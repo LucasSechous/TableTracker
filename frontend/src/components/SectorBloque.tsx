@@ -159,7 +159,7 @@ export default function SectorBloque({
           top: localPos.y,
           width: localSize.ancho,
           height: localSize.alto,
-          border: "2px solid #999",
+          border: "2px solid var(--gris-350)",
           backgroundColor: "rgba(255,255,255,0.85)",
           borderRadius: 6,
           boxSizing: "border-box",
@@ -175,7 +175,7 @@ export default function SectorBloque({
             left: 8,
             fontWeight: "bold",
             fontSize: 12,
-            color: "#555",
+            color: "var(--gris-600)",
             pointerEvents: "none",
           }}
         >
@@ -195,9 +195,9 @@ export default function SectorBloque({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                border: "1px solid #ccc",
+                border: "1px solid var(--gris-250)",
                 borderRadius: 4,
-                backgroundColor: "#fff",
+                backgroundColor: "var(--blanco)",
                 cursor: "pointer",
               }}
             >
@@ -218,9 +218,9 @@ export default function SectorBloque({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                border: "1px solid #ccc",
+                border: "1px solid var(--gris-250)",
                 borderRadius: 4,
-                backgroundColor: "#fff",
+                backgroundColor: "var(--blanco)",
                 cursor: eliminando ? "default" : "pointer",
                 opacity: eliminando ? 0.6 : 1,
               }}
@@ -257,7 +257,7 @@ export default function SectorBloque({
               width: 12,
               height: 12,
               cursor: "nwse-resize",
-              backgroundColor: "#999",
+              backgroundColor: "var(--gris-350)",
               borderTopLeftRadius: 4,
               zIndex: 3,
             }}

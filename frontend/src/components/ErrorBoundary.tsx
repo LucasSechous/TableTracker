@@ -42,7 +42,7 @@ export default class ErrorBoundary extends Component<Props, State> {
       <div
         style={{
           minHeight: "100vh",
-          backgroundColor: "#f5f5f5",
+          backgroundColor: "var(--gris-75)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -51,18 +51,18 @@ export default class ErrorBoundary extends Component<Props, State> {
       >
         <div
           style={{
-            backgroundColor: "#fff",
-            border: "1px solid #e0e0e0",
+            backgroundColor: "var(--blanco)",
+            border: "1px solid var(--gris-200)",
             borderRadius: 8,
             padding: 24,
             maxWidth: 520,
             width: "100%",
           }}
         >
-          <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", margin: "0 0 8px" }}>
+          <h1 style={{ fontSize: 18, fontWeight: 700, color: "var(--gris-900)", margin: "0 0 8px" }}>
             Se rompió esta pantalla
           </h1>
-          <p style={{ fontSize: 14, color: "#475569", lineHeight: 1.5, margin: "0 0 16px" }}>
+          <p style={{ fontSize: 14, color: "var(--slate-600)", lineHeight: 1.5, margin: "0 0 16px" }}>
             Hubo un error inesperado al dibujar la página. Los datos no se perdieron: podés
             recargar y seguir trabajando.
           </p>
@@ -70,18 +70,18 @@ export default class ErrorBoundary extends Component<Props, State> {
           {/* El mensaje crudo se muestra plegado: no le sirve a un mozo, pero es lo primero
               que se necesita para reportar el problema o depurarlo. */}
           <details style={{ marginBottom: 16 }}>
-            <summary style={{ fontSize: 13, color: "#64748b", cursor: "pointer" }}>
+            <summary style={{ fontSize: 13, color: "var(--slate-500)", cursor: "pointer" }}>
               Detalle técnico
             </summary>
             <pre
               style={{
                 marginTop: 8,
                 padding: 12,
-                backgroundColor: "#f8fafc",
-                border: "1px solid #e2e8f0",
+                backgroundColor: "var(--slate-50)",
+                border: "1px solid var(--slate-200)",
                 borderRadius: 6,
                 fontSize: 12,
-                color: "#334155",
+                color: "var(--slate-700)",
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word",
                 maxHeight: 200,
@@ -117,19 +117,19 @@ const estiloBoton: React.CSSProperties = {
   minHeight: 44,
   padding: "0 16px",
   borderRadius: 6,
-  border: "1px solid #1976d2",
+  border: "1px solid var(--marca)",
   fontSize: 13,
   fontWeight: 500,
   fontFamily: "inherit",
   cursor: "pointer",
-  backgroundColor: "#fff",
-  color: "#1976d2",
+  backgroundColor: "var(--blanco)",
+  color: "var(--marca)",
 }
 
 const estiloBotonPrimario: React.CSSProperties = {
   ...estiloBoton,
   border: "none",
-  backgroundColor: "#1976d2",
-  color: "#fff",
+  backgroundColor: "var(--marca)",
+  color: "var(--blanco)",
   fontWeight: 600,
 }

@@ -33,7 +33,7 @@ export default function PestanasMetricas() {
         display: "flex",
         flexWrap: "wrap",
         gap: 4,
-        borderBottom: "1px solid #e2e8f0",
+        borderBottom: "1px solid var(--slate-200)",
         marginBottom: 20,
       }}
     >
@@ -71,13 +71,13 @@ const pestana: CSSProperties = {
   fontFamily: "inherit",
   fontSize: 13,
   fontWeight: 600,
-  color: "#64748b",
+  color: "var(--slate-500)",
   cursor: "pointer",
   whiteSpace: "nowrap",
   marginBottom: -1,
 }
 
 const pestanaActiva: CSSProperties = {
-  color: "#1d4ed8",
-  borderBottom: "2px solid #1d4ed8",
+  color: "var(--marca-fuerte)",
+  borderBottom: "2px solid var(--marca-fuerte)",
 }

@@ -38,6 +38,9 @@ interface Props {
 
 export default function Layout({ children, acciones, titulo }: Props) {
   const [menuAbierto, setMenuAbierto] = useState(false)
+  // El logo es un archivo suelto en public/. Si falta, el encabezado no puede quedar
+  // con un icono roto: se cae al nombre escrito, que es como se veía antes.
+  const [logoRoto, setLogoRoto] = useState(false)
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const seccion = seccionDe(pathname)
@@ -62,16 +65,39 @@ export default function Layout({ children, acciones, titulo }: Props) {
           boxSizing: "border-box",
         }}
       >
-        <div className="flex flex-col gap-[1px] min-w-[0px]">
-          {/* La marca es el camino de vuelta al salón desde cualquier lado, que es lo que
-              hacía el botón "Volver al salón" de cada pantalla. Sigue estando además como
-              primera entrada del menú: acá es el atajo, allá el destino explícito. */}
+        {/* Logo a la izquierda y el nombre de la sección a su derecha. Los dos en una fila
+            y no apilados como antes: el logo ya dice el nombre del producto, así que
+            repetirlo arriba del título sería decirlo dos veces.
+
+            La marca es el camino de vuelta al salón desde cualquier lado, que es lo que
+            hacía el botón "Volver al salón" de cada pantalla. Sigue estando además como
+            primera entrada del menú: acá es el atajo, allá el destino explícito. */}
+        <div className="flex items-center gap-[12px] min-w-[0px]">
           <button
             onClick={() => navigate("/")}
-            className="border-0 bg-[none] p-[0px] font-[inherit] text-[11px] font-bold tracking-[0.5px] text-slate-400 cursor-pointer text-left"
+            title="Ir al salón"
+            className="border-0 bg-[none] p-[0px] cursor-pointer shrink-0 flex items-center"
           >
-            TABLETRACKER
+            {logoRoto ? (
+              // Si el archivo del logo no está, en vez de un icono roto se cae al nombre
+              // escrito, que es como se veía antes de tener logo.
+              <span className="text-[13px] font-bold tracking-[0.5px] text-slate-400">TABLETRACKER</span>
+            ) : (
+              <img
+                src="/logo.png"
+                alt="TableTracker"
+                onError={() => setLogoRoto(true)}
+                className="h-[46px] w-auto block"
+              />
+            )}
           </button>
+
+          {/* El separador solo existe cuando hay logo: sin él, el nombre escrito y el
+              título quedarían pegados sin nada que los distinga. */}
+          <span aria-hidden className="text-[20px] text-slate-300 shrink-0 font-[300]">
+            /
+          </span>
+
           <h1
             className="text-[18px] font-bold text-gris-900 m-[0px] overflow-hidden text-ellipsis whitespace-nowrap"
           >

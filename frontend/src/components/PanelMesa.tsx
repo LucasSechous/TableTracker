@@ -41,6 +41,9 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
 
   const [desde, setDesde] = useState<Date | null>(null)
   const [expandido, setExpandido] = useState(false)
+  // Hora tecleada para la reserva, en formato HH:MM del <input type="time">. Vacía
+  // significa reservar sin hora, que sigue siendo válido.
+  const [horaReserva, setHoraReserva] = useState("")
   const [accionando, setAccionando] = useState(false)
   const [, forceTick] = useState(0)
 
@@ -214,15 +217,38 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
 
                   {expandido && (
                     <div className="flex flex-col gap-[8px] mt-[12px]">
-                      {/* PATCH /mesas/{id}/reserva pide encargado o recepcion (T26-195). */}
+                      {/* PATCH /mesas/{id}/reserva pide encargado o recepcion (T26-195).
+
+                          La hora es opcional a propósito. Una hostess normalmente reserva
+                          PARA una hora, y con ella el salón puede mostrar para cuándo es y
+                          avisar cuando se pasó; pero reservar sin decir hora sigue siendo
+                          válido, que es como funcionaba hasta T26-208. Obligarla habría
+                          roto el flujo de quien solo quiere bloquear la mesa. */}
                       {mesa.estado !== "reservada" && puedeReservar(rol) && (
-                        <button
-                          disabled={accionando}
-                          onClick={() => ejecutarAccion(() => mesasApi.marcarReservada(mesa.id))}
-                          style={estiloBotonAccion("var(--color-slate-300)", accionando)}
-                        >
-                          Marcar como reservada
-                        </button>
+                        <div className="flex flex-col gap-[6px]">
+                          <label className="text-[12px] text-slate-500 flex flex-col gap-[4px]">
+                            Hora de la reserva (opcional)
+                            <input
+                              data-testid="panel-mesa-hora-reserva"
+                              type="time"
+                              value={horaReserva}
+                              onChange={(e) => setHoraReserva(e.target.value)}
+                              className="min-h-[44px] py-[6px] px-[10px] rounded-[6px] border border-slate-300 bg-blanco text-[14px] font-[inherit]"
+                            />
+                          </label>
+                          <button
+                            data-testid="panel-mesa-reservar"
+                            disabled={accionando}
+                            onClick={() =>
+                              ejecutarAccion(() =>
+                                mesasApi.marcarReservada(mesa.id, momentoDeHoy(horaReserva))
+                              )
+                            }
+                            style={estiloBotonAccion("var(--color-slate-300)", accionando)}
+                          >
+                            {horaReserva ? `Reservar para las ${horaReserva}` : "Marcar como reservada"}
+                          </button>
+                        </div>
                       )}
                       {/* PATCH /mesas/{id}/estado pide encargado o mozo (T26-195): recepcion
                           y limpieza no corrigen estados a mano. */}
@@ -292,4 +318,26 @@ function estiloBotonAccion(colorBorde: string, deshabilitado: boolean): CSSPrope
     display: "flex",
     alignItems: "center",
   }
+}
+
+/**
+ * Convierte la hora tecleada ("21:00") en un instante ISO absoluto, o null si está vacía.
+ *
+ * Esta función es la razón por la que la reserva no se corre tres horas. El backend guarda
+ * un momento absoluto —no un texto de reloj— y corre en UTC; si se le mandara "21:00"
+ * pelado, lo leería como las 21:00 UTC, o sea las 18:00 de acá. Armando el Date con los
+ * componentes locales, el navegador resuelve el huso del local y toISOString() manda el
+ * instante que corresponde.
+ *
+ * Se asume HOY. Una reserva para mañana necesitaría también la fecha, y el campo de hora
+ * sola es lo que se pidió; si la hora ya pasó, el salón lo muestra como atraso, que es
+ * información correcta y no un error.
+ */
+function momentoDeHoy(hora: string): string | null {
+  if (!hora) return null
+  const [h, m] = hora.split(":").map(Number)
+  if (Number.isNaN(h) || Number.isNaN(m)) return null
+  const momento = new Date()
+  momento.setHours(h, m, 0, 0)
+  return momento.toISOString()
 }

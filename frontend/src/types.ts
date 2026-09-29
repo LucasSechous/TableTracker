@@ -12,6 +12,14 @@ export interface Mesa {
   // Desde cuándo está en este estado, ISO (T26-173). Lo manda el backend denormalizado
   // en la fila: el dashboard pide /mesas cada 3s y no puede pagar un cruce por ciclo.
   estado_desde?: string | null
+  // Para cuándo está reservada la mesa, ISO (T26-208). null si se reservó sin decir
+  // hora, que sigue siendo válido: hasta este ticket el sistema no la pedía, así que
+  // las reservas ya cargadas no la tienen y la pantalla tiene que funcionar igual.
+  reservada_para?: string | null
+  // Hay gente sentada en esta mesa reservada y nadie resolvió todavía si corresponde
+  // ocuparla (T26-208). Lo pone el módulo de visión cuando la detección cae lejos de
+  // la hora reservada; null cuando no hay nada pendiente.
+  ocupacion_detectada_en?: string | null
   // Posible error de detección (T26-188, RF-27): sigue 'ocupada' con el local cerrado y
   // teniendo cobertura de cámara. Lo resuelve el backend, que es el único que sabe la hora
   // de cierre y qué mesas tienen ROI activo; acá NO se recalcula nada.

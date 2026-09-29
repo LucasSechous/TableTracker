@@ -142,6 +142,67 @@ export const ICONO_POR_ESTADO: Record<string, LucideIcon> = {
   reservada: BookmarkCheck,
 }
 
+/**
+ * Cuánto lleva la mesa en su estado, listo para una etiqueta de 60px de ancho (T26-208).
+ *
+ * Bajo la hora se dice en minutos ("45m") y de ahí en más en horas y minutos ("2h 05").
+ * No se usa "125m" ni "2.1h": a partir de la hora lo que se lee de un vistazo es la
+ * magnitud, no el minuto exacto, y un número de tres cifras no entra en la píldora.
+ *
+ * Devuelve null cuando no se sabe desde cuándo, y en ese caso no se dibuja nada: una
+ * etiqueta vacía o un "0m" inventado harían pasar por recién cambiada a una mesa de la
+ * que simplemente no hay dato.
+ */
+export function textoTiempoEnEstado(estadoDesde: string | null | undefined): string | null {
+  const minutos = minutosEnEstado(estadoDesde)
+  if (minutos === null) return null
+  if (minutos < 60) return `${minutos}m`
+  const horas = Math.floor(minutos / 60)
+  return `${horas}h ${String(minutos % 60).padStart(2, "0")}`
+}
+
+/**
+ * Si el estado de una mesa amerita mostrar hace cuánto está así (T26-208).
+ *
+ * Todos menos `libre`. La regla es que el tiempo aparece cuando el estado es algo que
+ * alguien tiene que resolver: cuánto lleva ocupada dice si esperar rotación, cuánto lleva
+ * pendiente es una mesa que no factura, y cuánto lleva reservada es cuánto hace que se
+ * está reteniendo. Que una mesa lleve cuarenta minutos libre no cambia la conducta de
+ * nadie, y como en un salón tranquilo la mayoría está libre, mostrarlo ahí sería ruido
+ * que tapa justo las que importan.
+ */
+export function muestraTiempoEnEstado(estado: string): boolean {
+  return estado !== "libre"
+}
+
+/**
+ * La hora de la reserva como se lee en un reloj de pared (T26-208).
+ *
+ * El backend manda un instante absoluto en UTC; el navegador lo muestra en su propia
+ * zona, que es la del local. Se usa toLocaleTimeString y no un recorte del ISO: cortar
+ * el texto mostraría la hora UTC, tres horas corrida de lo que la hostess escribió.
+ */
+export function horaDeLaReserva(reservadaPara: string | null | undefined): string | null {
+  if (!reservadaPara) return null
+  const momento = new Date(reservadaPara)
+  if (Number.isNaN(momento.getTime())) return null
+  return momento.toLocaleTimeString("es-UY", { hour: "2-digit", minute: "2-digit" })
+}
+
+/**
+ * Minutos que pasaron desde la hora reservada, o null si todavía no llegó (T26-208).
+ *
+ * Devuelve null también cuando falta la hora: sin ella no hay atraso que calcular, y
+ * tratar esa ausencia como cero pondría en rojo a toda reserva sin hora.
+ */
+export function minutosDeAtrasoDeReserva(reservadaPara: string | null | undefined): number | null {
+  if (!reservadaPara) return null
+  const momento = new Date(reservadaPara)
+  if (Number.isNaN(momento.getTime())) return null
+  const minutos = Math.floor((Date.now() - momento.getTime()) / 60000)
+  return minutos > 0 ? minutos : null
+}
+
 export const ETIQUETA_POR_ESTADO: Record<string, string> = {
   libre: "Libre",
   ocupada: "Ocupada",

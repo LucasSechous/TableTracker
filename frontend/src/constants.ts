@@ -186,7 +186,10 @@ export function horaDeLaReserva(reservadaPara: string | null | undefined): strin
   if (!reservadaPara) return null
   const momento = new Date(reservadaPara)
   if (Number.isNaN(momento.getTime())) return null
-  return momento.toLocaleTimeString("es-UY", { hour: "2-digit", minute: "2-digit" })
+  // hour12 en false explicito: el default de es-UY es 12 horas y devuelve "04:03 p. m.",
+  // que en una etiqueta de 60px no entra y ademas no es como se lee un horario de
+  // restaurante. Con 24 horas son siempre cinco caracteres: "16:03".
+  return momento.toLocaleTimeString("es-UY", { hour: "2-digit", minute: "2-digit", hour12: false })
 }
 
 /**

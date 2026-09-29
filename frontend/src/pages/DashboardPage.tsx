@@ -424,8 +424,9 @@ export default function DashboardPage() {
                 setEstadoFiltro(SIN_FILTRO)
                 setModo("edicion")
               }}
+              title="Editar disposición"
             >
-              Editar disposición
+              <span className="texto-en-escritorio">Editar disposición</span>
             </Boton>
           ) : null}
         </>

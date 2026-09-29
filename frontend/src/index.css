@@ -124,7 +124,20 @@
   padding: 0 24px;
 }
 
+/* Texto que solo tiene sentido con lugar de sobra. Se usa en las etiquetas de los botones
+ * del encabezado: en un celular compiten con el indicador de frescura y el botón queda
+ * cortado contra el borde. Escondiendo el texto, el icono alcanza para reconocerlo y el
+ * botón sigue siendo alcanzable — que es lo que importa, porque es la puerta de entrada al
+ * modo edición. El nombre completo sigue disponible en el title para quien lo necesite. */
+.texto-en-escritorio {
+  display: inline;
+}
+
 @media (max-width: 640px) {
+  .texto-en-escritorio {
+    display: none;
+  }
+
   /* En un celular, 24px por lado se comen un 13% del ancho útil. */
   .app-main {
     padding: 16px;

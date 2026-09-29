@@ -8,7 +8,7 @@ from app.routers._comun import validar_sector
 from app.models.mesa import Mesa, EstadoMesa
 from app.models.sector import Sector
 from app.models.historial import HistorialEstado, OrigenCambio
-from app.schemas.mesa import MesaCreate, MesaUpdate, MesaResponse, EstadoUpdate, PosicionUpdate
+from app.schemas.mesa import MesaCreate, MesaUpdate, MesaResponse, EstadoUpdate, PosicionUpdate, ReservaUpdate
 from app.models.user import User
 from app.routers.auth import get_usuario_actual, requiere_rol, ROL_ADMIN, ROL_VISION_MODULE
 from app.services.estado_dudoso import marcar_estados_dudosos
@@ -52,6 +52,16 @@ def registrar_historial(db: Session, mesa: Mesa, origen: OrigenCambio) -> None:
     """
     db.add(HistorialEstado(mesa_id=mesa.id, estado=mesa.estado, origen_cambio=origen))
     mesa.estado_desde = func.now()
+
+    # Los datos de la reserva viven mientras dura la reserva (T26-208). Al salir de
+    # `reservada` se limpian acá y no en cada endpoint por el mismo motivo por el que
+    # estado_desde se mueve acá: este es el único lugar por donde pasa un cambio de
+    # estado, así que es el único donde no se pueden olvidar. Sin esto, una mesa ocupada
+    # arrastraría la hora de una reserva ya consumida y el aviso de una detección ya
+    # resuelta, y el salón mostraría una reserva que no existe.
+    if mesa.estado != EstadoMesa.reservada:
+        mesa.reservada_para = None
+        mesa.ocupacion_detectada_en = None
 
 
 @router.get("/", response_model=list[MesaResponse])
@@ -194,12 +204,72 @@ def limpiar_mesa(
 @router.patch("/{mesa_id}/reserva", response_model=MesaResponse)
 def reservar_mesa(
     mesa_id: int,
+    datos: Optional[ReservaUpdate] = None,
     db: Session = Depends(get_db),
     usuario: User = Depends(requiere_rol("encargado", "recepcion")),
 ):
+    """Marca la mesa como reservada, opcionalmente para una hora.
+
+    El cuerpo es opcional para no romper a quien ya reservaba sin hora. Con hora, el
+    salón puede mostrar para cuándo es y avisar cuando se pasó; sin hora se comporta
+    como siempre.
+    """
     mesa = _obtener(db, mesa_id)
     mesa.estado = EstadoMesa.reservada
     registrar_historial(db, mesa, origen_de(usuario))
+    # Después de registrar_historial: esa función limpia los datos de reserva cuando el
+    # estado nuevo no es `reservada`, y acá sí lo es, así que no los toca. Se asigna
+    # después igual, para que el orden no dependa de ese detalle.
+    mesa.reservada_para = datos.reservada_para if datos else None
+    db.commit()
+    db.refresh(mesa)
+    db.refresh(mesa, attribute_names=["sector"])
+    return mesa
+
+
+@router.patch("/{mesa_id}/deteccion-reserva", response_model=MesaResponse)
+def marcar_deteccion_en_reserva(
+    mesa_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(requiere_rol(ROL_VISION_MODULE)),
+):
+    """El módulo de visión avisa que hay gente en una mesa reservada.
+
+    No cambia el estado a propósito: hasta acá el módulo mandaba
+    `reservada + hay gente -> ocupada` dando por hecho que era quien había reservado, y
+    ese supuesto falla cuando alguien se sienta sin ver que la mesa está tomada. La mesa
+    queda reservada y la decisión la toma una persona desde el salón.
+
+    Solo `vision_module`: es un hecho observado por la cámara, no una acción de nadie.
+    Quien opera la aplicación confirma con PATCH /mesas/{id}/estado o descarta con el
+    DELETE de acá abajo.
+    """
+    mesa = _obtener(db, mesa_id)
+    if mesa.estado != EstadoMesa.reservada:
+        raise HTTPException(status_code=409, detail="La mesa no está reservada")
+    # Solo la primera detección sella la hora: si se reescribiera en cada ciclo, el
+    # aviso diría siempre "recién" y se perdería hace cuánto está esperando.
+    if mesa.ocupacion_detectada_en is None:
+        mesa.ocupacion_detectada_en = func.now()
+        db.commit()
+        db.refresh(mesa)
+    db.refresh(mesa, attribute_names=["sector"])
+    return mesa
+
+
+@router.delete("/{mesa_id}/deteccion-reserva", response_model=MesaResponse)
+def descartar_deteccion_en_reserva(
+    mesa_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(requiere_rol("encargado", "recepcion")),
+):
+    """Descarta el aviso: no eran los de la reserva, la mesa sigue reservada.
+
+    Mismos roles que reservar: quien gestiona la reserva es quien puede decir que esa
+    gente no era la esperada.
+    """
+    mesa = _obtener(db, mesa_id)
+    mesa.ocupacion_detectada_en = None
     db.commit()
     db.refresh(mesa)
     db.refresh(mesa, attribute_names=["sector"])

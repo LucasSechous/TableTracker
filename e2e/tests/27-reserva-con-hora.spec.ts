@@ -93,7 +93,15 @@ test.describe("con una mesa reservada", () => {
     // La hora se arma en el navegador desde el instante absoluto, así que lo que se ve es
     // la hora del reloj local. Eso es justamente lo que se verifica: si el ISO se cortara
     // como texto, acá saldría la hora UTC, tres horas corrida.
-    const esperada = enUnRato.toLocaleTimeString("es-UY", { hour: "2-digit", minute: "2-digit" });
+    // hour12 en false, igual que horaDeLaReserva(): el default de es-UY es 12 horas y
+    // devolvería "04:53 p. m.", que no entra en una etiqueta de 60px. Si esta expectativa
+    // no replicara las MISMAS opciones que la aplicación, el test verificaría el formato
+    // de Intl en vez de lo que le interesa, que es que la hora mostrada sea la local.
+    const esperada = enUnRato.toLocaleTimeString("es-UY", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
     await expect(etiqueta(page, mesa.numero)).toHaveText(esperada);
   });
 

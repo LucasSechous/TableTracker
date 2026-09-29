@@ -340,6 +340,24 @@ def publicar_deteccion_actual(cliente, camara_id, detector, detecciones, frame):
             "No se pudo publicar la detección actual de la cámara %s, se sigue igual: %s", camara_id, error
         )
 
+def _momento(texto):
+    """La fecha que manda el backend, como datetime, o None.
+
+    El backend serializa en ISO 8601 con zona; fromisoformat lo entiende, pero acepta
+    también un None sin hora porque `reservada_para` es nullable y la mayoría de las mesas
+    no lo tienen.
+    """
+    if not texto:
+        return None
+    try:
+        return datetime.fromisoformat(texto.replace("Z", "+00:00"))
+    except ValueError:
+        # Un formato inesperado no puede tumbar el ciclo: sin hora, la política se
+        # comporta como antes de T26-208 y la mesa se ocupa sola.
+        logger.warning("No se pudo leer reservada_para=%r, se ignora", texto)
+        return None
+
+
 
 def aplicar_cambio(cliente, confirmador, mesa_id, hay_gente):
     """Lleva al backend un cambio ya confirmado, si la política lo permite.
@@ -355,7 +373,12 @@ def aplicar_cambio(cliente, confirmador, mesa_id, hay_gente):
     """
     try:
         mesa = cliente.obtener_mesa(mesa_id)
-        objetivo = politica.estado_objetivo(hay_gente, mesa["estado"])
+        objetivo = politica.estado_objetivo(
+            hay_gente,
+            mesa["estado"],
+            reservada_para=_momento(mesa.get("reservada_para")),
+            tolerancia_minutos=config.RESERVA_TOLERANCIA_MINUTOS,
+        )
         if objetivo is None:
             logger.info(
                 "Mesa nº %s: %s pero está en «%s», se deja como está",
@@ -364,6 +387,15 @@ def aplicar_cambio(cliente, confirmador, mesa_id, hay_gente):
                 mesa["estado"],
             )
             # No-op deliberado, no un fallo: no hay nada que reintentar.
+            return True
+        if objetivo is politica.CONFIRMAR:
+            # Hay gente en una mesa reservada, lejos de la hora: la mesa NO se toca y se
+            # deja el aviso para que lo resuelva una persona desde el salón (T26-208).
+            cliente.marcar_deteccion_en_reserva(mesa_id)
+            logger.info(
+                "Mesa nº %s: hay gente pero está reservada para otra hora, se pide confirmación",
+                mesa["numero"],
+            )
             return True
         cliente.cambiar_estado(mesa_id, objetivo)
         logger.info("Mesa nº %s: %s → %s", mesa["numero"], mesa["estado"], objetivo)

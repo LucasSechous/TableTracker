@@ -157,4 +157,15 @@ APLICADOR_HILOS = int(os.getenv("APLICADOR_HILOS", "4"))
 # reporta como fallo y el ciclo lo reintenta, en vez de crecer sin techo.
 APLICADOR_MAXIMO_POR_MESA = int(os.getenv("APLICADOR_MAXIMO_POR_MESA", "8"))
 
+# Cuanto puede desviarse una deteccion de la hora reservada y seguir contando como
+# "llegaron los de la reserva" (T26-208). Dentro de esta ventana la mesa se ocupa sola,
+# como siempre; fuera, el modulo avisa y la decision la toma una persona.
+#
+# Treinta minutos por defecto: llegar media hora antes o demorarse media hora es lo
+# normal de una reserva, y sentarse una hora antes ya no lo es. Subirlo hace el sistema
+# mas permisivo (menos avisos, mas riesgo de tapar una reserva ajena) y bajarlo lo hace
+# mas desconfiado (mas avisos, y si nadie mira la pantalla la mesa queda mostrando
+# "reservada" con gente sentada).
+RESERVA_TOLERANCIA_MINUTOS = int(os.getenv("RESERVA_TOLERANCIA_MINUTOS", "30"))
+
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

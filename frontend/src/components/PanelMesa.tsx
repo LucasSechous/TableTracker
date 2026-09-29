@@ -14,7 +14,8 @@ import { historialApi, mesasApi, extraerDetalle } from "../services/api"
 import { COLOR_POR_ESTADO, ETIQUETA_POR_ESTADO } from "../constants"
 import { useAuth } from "../hooks/useAuth"
 import { useAvisoError } from "../hooks/useAvisoError"
-import { puedeCambiarEstado, puedeConfirmarLimpieza, puedeReservar } from "../permisos"
+import { esAdmin, puedeCambiarEstado, puedeConfirmarLimpieza, puedeReservar } from "../permisos"
+import CamaraDeLaMesa from "./CamaraDeLaMesa"
 
 interface Props {
   mesa: Mesa | null
@@ -173,6 +174,14 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                   {desde ? formatearTranscurrido(desde) : "Calculando..."}
                 </div>
               </div>
+
+              {/* Después del estado y antes de las acciones: primero qué pasa con la mesa,
+                  después con qué se lo está viendo, y al final qué se puede hacer.
+
+                  Solo admin, y no por comodidad: docs/privacidad-vision.md declara la
+                  restricción de las cámaras a admin como control de privacidad, referenciado
+                  contra el anteproyecto. Para los demás roles el componente no dibuja nada. */}
+              <CamaraDeLaMesa mesaId={mesa.id} habilitado={esAdmin(rol)} />
 
               {/* PATCH /mesas/{id}/limpieza pide encargado o limpieza (T26-195): un mozo
                   veía este botón y se comía el 403 recién al tocarlo. */}

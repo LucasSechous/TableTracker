@@ -78,18 +78,38 @@ export default function Layout({ children, acciones, titulo }: Props) {
             title="Ir al salón"
             className="border-0 bg-[none] p-[0px] cursor-pointer shrink-0 flex items-center"
           >
-            {logoRoto ? (
-              // Si el archivo del logo no está, en vez de un icono roto se cae al nombre
-              // escrito, que es como se veía antes de tener logo.
-              <span className="text-[13px] font-bold tracking-[0.5px] text-slate-400">TABLETRACKER</span>
-            ) : (
+            {/* La mesa va como imagen y el nombre como TEXTO, no las dos cosas en un
+                archivo. Escrito se lee nítido a cualquier tamaño y en cualquier pantalla,
+                mientras que un nombre rasterizado a 40px de alto se empasta —que es
+                justamente lo que pasaba con el lockup cuadrado original—. */}
+            {!logoRoto && (
               <img
-                src="/logo-horizontal.png"
-                alt="TableTracker"
+                src="/logo-icono.png"
+                alt=""
+                aria-hidden
                 onError={() => setLogoRoto(true)}
-                className="h-[40px] w-auto block"
+                className="h-[38px] w-auto block"
               />
             )}
+            {/* Serif, para que la letra acompañe a la T con serifas que forma la pata de la
+                mesa en el propio logo. Una sans geométrica al lado de ese dibujo se lee
+                como dos marcas distintas pegadas.
+
+                Se resuelve con la familia del sistema y no con una fuente web: Times y
+                Georgia están en Windows, macOS, iOS y Android, así que no hay una descarga
+                que pueda tardar o fallar y dejar el encabezado saltando de tipografía a
+                mitad de carga. El resto de la aplicación sigue en su sans; el serif es la
+                excepción de la marca. */}
+            <span
+              className="text-[26px] leading-[1] text-gris-900 whitespace-nowrap"
+              style={{ fontFamily: '"Times New Roman", Times, Georgia, serif' }}
+            >
+              {/* El contraste de pesos entre las dos palabras es el que ya tenía el logo
+                  original: "Table" firme y "Tracker" más liviano. Cambia la tipografía, no
+                  la jerarquía. */}
+              <strong className="font-bold">Table</strong>
+              <span className="font-normal">Tracker</span>
+            </span>
           </button>
 
           {/* El separador solo existe cuando hay logo: sin él, el nombre escrito y el

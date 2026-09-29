@@ -84,10 +84,10 @@ export default function Layout({ children, acciones, titulo }: Props) {
               <span className="text-[13px] font-bold tracking-[0.5px] text-slate-400">TABLETRACKER</span>
             ) : (
               <img
-                src="/logo.png"
+                src="/logo-icono.png"
                 alt="TableTracker"
                 onError={() => setLogoRoto(true)}
-                className="h-[46px] w-auto block"
+                className="h-[40px] w-auto block"
               />
             )}
           </button>

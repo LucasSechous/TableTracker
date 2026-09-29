@@ -11,11 +11,13 @@ import { useEffect, useState } from "react"
 import type { CSSProperties } from "react"
 import type { Mesa } from "../types"
 import { historialApi, mesasApi, extraerDetalle } from "../services/api"
-import { COLOR_POR_ESTADO, ETIQUETA_POR_ESTADO } from "../constants"
+import { COLOR_POR_ESTADO, ETIQUETA_POR_ESTADO, horaDeLaReserva } from "../constants"
 import { useAuth } from "../hooks/useAuth"
 import { useAvisoError } from "../hooks/useAvisoError"
 import { esAdmin, puedeCambiarEstado, puedeConfirmarLimpieza, puedeReservar } from "../permisos"
 import CamaraDeLaMesa from "./CamaraDeLaMesa"
+import Boton from "./ui/Boton"
+import { CalendarClock } from "lucide-react"
 
 interface Props {
   mesa: Mesa | null
@@ -45,6 +47,9 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
   // Hora tecleada para la reserva, en formato HH:MM del <input type="time">. Vacía
   // significa reservar sin hora, que sigue siendo válido.
   const [horaReserva, setHoraReserva] = useState("")
+  // Si el formulario de reserva está desplegado. Colapsado por defecto: abrir una mesa
+  // para mirarla es más frecuente que abrirla para reservarla.
+  const [reservando, setReservando] = useState(false)
   const [accionando, setAccionando] = useState(false)
   const [, forceTick] = useState(0)
 
@@ -52,6 +57,8 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
 
   useEffect(() => {
     setExpandido(false)
+    setReservando(false)
+    setHoraReserva("")
     setDesde(null)
     if (!mesa) return
     let cancelado = false
@@ -168,6 +175,82 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                 </div>
               </div>
 
+              {/* Reservar, pegado al estado y no escondido en la corrección manual: es una
+                  acción del día a día de quien atiende el salón, no un arreglo.
+
+                  Colapsado igual, porque abrir una mesa para mirarla es más frecuente que
+                  abrirla para reservarla, y un campo de hora siempre desplegado empujaría
+                  hacia abajo el estado y el tiempo, que son lo que se viene a ver.
+
+                  PATCH /mesas/{id}/reserva pide encargado o recepción (T26-195). */}
+              {mesa.estado !== "reservada" && puedeReservar(rol) && (
+                <div className="mb-[24px]">
+                  {!reservando ? (
+                    <Boton
+                      icono={CalendarClock}
+                      data-testid="panel-mesa-abrir-reserva"
+                      onClick={() => setReservando(true)}
+                    >
+                      Reservar mesa
+                    </Boton>
+                  ) : (
+                    <div className="flex flex-col gap-[8px]">
+                      <label className="text-[12px] text-slate-500 flex flex-col gap-[4px]">
+                        {/* Opcional a propósito: una hostess normalmente reserva PARA una
+                            hora, y con ella el salón puede mostrar para cuándo es y avisar
+                            cuando se pasó; pero reservar sin decir hora seguía siendo
+                            válido antes de T26-208 y tiene que seguir siéndolo. */}
+                        Hora de la reserva (opcional)
+                        <input
+                          data-testid="panel-mesa-hora-reserva"
+                          type="time"
+                          autoFocus
+                          value={horaReserva}
+                          onChange={(e) => setHoraReserva(e.target.value)}
+                          className="min-h-[44px] py-[6px] px-[10px] rounded-[6px] border border-slate-300 bg-blanco text-[14px] font-[inherit]"
+                        />
+                      </label>
+                      <div className="flex gap-[8px] flex-wrap">
+                        <Boton
+                          variante="primario"
+                          data-testid="panel-mesa-reservar"
+                          cargando={accionando}
+                          textoCargando="Reservando..."
+                          onClick={() =>
+                            ejecutarAccion(() =>
+                              mesasApi.marcarReservada(mesa.id, momentoDeHoy(horaReserva))
+                            )
+                          }
+                        >
+                          {horaReserva ? `Reservar para las ${horaReserva}` : "Reservar sin hora"}
+                        </Boton>
+                        <Boton
+                          variante="neutro"
+                          data-testid="panel-mesa-cancelar-reserva"
+                          disabled={accionando}
+                          onClick={() => {
+                            setReservando(false)
+                            setHoraReserva("")
+                          }}
+                        >
+                          Cancelar
+                        </Boton>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Ya reservada: lo útil no es volver a reservar sino saber para cuándo. */}
+              {mesa.estado === "reservada" && horaDeLaReserva(mesa.reservada_para) && (
+                <div className="mb-[24px]" data-testid="panel-mesa-reservada-para">
+                  <div style={etiquetaStyle}>Reservada para</div>
+                  <div className="text-[16px] font-semibold text-slate-900">
+                    {horaDeLaReserva(mesa.reservada_para)}
+                  </div>
+                </div>
+              )}
+
               <div className="mb-[24px]">
                 <div style={etiquetaStyle}>Tiempo en este estado</div>
                 <div className="text-[16px] font-semibold text-slate-900">
@@ -208,10 +291,14 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
                 </button>
               )}
 
-              {/* El desplegable contiene dos cosas con permisos distintos —reservar y
-                  corregir estado—, así que se muestra si el rol puede al menos una. Para
-                  `limpieza`, que no puede ninguna, abrirlo mostraría una caja vacía. */}
-              {(puedeReservar(rol) || puedeCambiarEstado(rol)) && (
+              {/* Desde T26-208 el desplegable contiene SOLO la corrección manual: reservar
+                  salió de acá y subió arriba, con su propio botón. Estaban juntas por
+                  parecido —las dos cambian el estado— pero no son lo mismo: reservar es
+                  una acción del día a día de la hostess, y corregir es arreglar algo que
+                  la detección leyó mal. Esconder la primera detrás de "Corregir estado
+                  manualmente" la volvía difícil de encontrar y la hacía parecer un
+                  arreglo. */}
+              {puedeCambiarEstado(rol) && (
                 <div>
                   <button
                     data-testid="panel-mesa-toggle-correccion"
@@ -226,39 +313,6 @@ export default function PanelMesa({ mesa, onClose, onEstadoChange, onMesaActuali
 
                   {expandido && (
                     <div className="flex flex-col gap-[8px] mt-[12px]">
-                      {/* PATCH /mesas/{id}/reserva pide encargado o recepcion (T26-195).
-
-                          La hora es opcional a propósito. Una hostess normalmente reserva
-                          PARA una hora, y con ella el salón puede mostrar para cuándo es y
-                          avisar cuando se pasó; pero reservar sin decir hora sigue siendo
-                          válido, que es como funcionaba hasta T26-208. Obligarla habría
-                          roto el flujo de quien solo quiere bloquear la mesa. */}
-                      {mesa.estado !== "reservada" && puedeReservar(rol) && (
-                        <div className="flex flex-col gap-[6px]">
-                          <label className="text-[12px] text-slate-500 flex flex-col gap-[4px]">
-                            Hora de la reserva (opcional)
-                            <input
-                              data-testid="panel-mesa-hora-reserva"
-                              type="time"
-                              value={horaReserva}
-                              onChange={(e) => setHoraReserva(e.target.value)}
-                              className="min-h-[44px] py-[6px] px-[10px] rounded-[6px] border border-slate-300 bg-blanco text-[14px] font-[inherit]"
-                            />
-                          </label>
-                          <button
-                            data-testid="panel-mesa-reservar"
-                            disabled={accionando}
-                            onClick={() =>
-                              ejecutarAccion(() =>
-                                mesasApi.marcarReservada(mesa.id, momentoDeHoy(horaReserva))
-                              )
-                            }
-                            style={estiloBotonAccion("var(--color-slate-300)", accionando)}
-                          >
-                            {horaReserva ? `Reservar para las ${horaReserva}` : "Marcar como reservada"}
-                          </button>
-                        </div>
-                      )}
                       {/* PATCH /mesas/{id}/estado pide encargado o mozo (T26-195): recepcion
                           y limpieza no corrigen estados a mano. */}
                       {puedeCambiarEstado(rol) &&

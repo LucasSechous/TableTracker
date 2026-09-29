@@ -88,9 +88,17 @@ export function getConfirmarLimpiezaButton(page: Page): Locator {
   return page.getByRole("button", { name: "Confirmar limpieza" });
 }
 
-/** "Marcar como reservada", dentro del desplegable de corrección manual. */
-export function getMarcarReservadaButton(page: Page): Locator {
-  return page.getByRole("button", { name: "Marcar como reservada" });
+/**
+ * "Reservar mesa": el botón que despliega el formulario de reserva.
+ *
+ * Desde T26-208 vive DEBAJO DE "Estado actual" y ya no dentro del desplegable de
+ * corrección manual. Estaban juntos por parecido —los dos cambian el estado— pero no son
+ * lo mismo: reservar es una acción del día a día de quien atiende el salón, y corregir es
+ * arreglar algo que la detección leyó mal. Esconder la primera detrás de "Corregir estado
+ * manualmente" la volvía difícil de encontrar y la hacía parecer un arreglo.
+ */
+export function getReservarMesaButton(page: Page): Locator {
+  return page.getByTestId("panel-mesa-abrir-reserva");
 }
 
 /** Uno de los cuatro botones de corrección manual de estado, dentro del desplegable. */

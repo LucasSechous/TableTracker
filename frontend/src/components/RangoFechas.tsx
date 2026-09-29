@@ -52,13 +52,13 @@ export const labelStyle: CSSProperties = {
   flexDirection: "column",
   gap: 4,
   fontSize: 13,
-  color: "#444",
+  color: "var(--color-gris-700)",
 }
 
 export const inputStyle: CSSProperties = {
   padding: "6px 8px",
   borderRadius: 6,
-  border: "1px solid #ccc",
+  border: "1px solid var(--color-gris-250)",
 }
 
 // El backend interpreta fecha_fin como un instante, así que un "hasta 2026-08-31" a secas

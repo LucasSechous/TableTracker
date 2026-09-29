@@ -33,26 +33,26 @@ const DIAS_MINIMOS_PARA_PATRON = 3
 
 
 const estiloTarjeta: React.CSSProperties = {
-  backgroundColor: "#fff",
-  border: "1px solid #e0e0e0",
+  backgroundColor: "var(--color-blanco)",
+  border: "1px solid var(--color-gris-200)",
   borderRadius: 8,
   padding: 16,
 }
 
 const estiloError: React.CSSProperties = {
   fontSize: 13,
-  color: "#c62828",
-  backgroundColor: "#ffebee",
-  border: "1px solid #ef9a9a",
+  color: "var(--color-error)",
+  backgroundColor: "var(--color-error-fondo)",
+  border: "1px solid var(--color-error-borde)",
   borderRadius: 6,
   padding: "8px 12px",
 }
 
 const estiloAviso: React.CSSProperties = {
   fontSize: 13,
-  color: "#b45309",
-  backgroundColor: "#fffbeb",
-  border: "1px solid #fcd34d",
+  color: "var(--color-aviso-fuerte)",
+  backgroundColor: "var(--color-aviso-fuerte-fondo)",
+  border: "1px solid var(--color-aviso-fuerte-borde)",
   borderRadius: 6,
   padding: "8px 12px",
 }
@@ -133,7 +133,7 @@ export default function DemandaPage() {
         </Boton>
       }
     >
-      <main style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, maxWidth: 1000 }}>
+      <main className="app-main flex flex-col gap-[16px] max-w-[1000px]">
         <PestanasMetricas />
 
         <div style={{ ...estiloTarjeta, display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
@@ -144,7 +144,7 @@ export default function DemandaPage() {
               data-testid="demanda-filtro-sector"
               value={sectorId}
               onChange={(e) => setSectorId(e.target.value)}
-              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", minWidth: 180 }}
+              className="py-[6px] px-[8px] rounded-[6px] border border-gris-250 min-w-[180px]"
             >
               <option value="">Todos los sectores</option>
               {sectores.map((s) => (
@@ -162,7 +162,7 @@ export default function DemandaPage() {
           </Boton>
         </div>
 
-        {cargando && <p style={{ fontSize: 14, color: "#888" }}>Cargando demanda...</p>}
+        {cargando && <p className="text-[14px] text-gris-400">Cargando demanda...</p>}
         {error && (
           <p data-testid="demanda-error" style={estiloError}>
             {error}
@@ -181,7 +181,7 @@ export default function DemandaPage() {
             )}
 
             {datos.franjas.length === 0 ? (
-              <p data-testid="demanda-sin-datos" style={{ ...estiloTarjeta, fontSize: 14, color: "#666" }}>
+              <p data-testid="demanda-sin-datos" style={{ ...estiloTarjeta, fontSize: 14, color: "var(--color-gris-500)" }}>
                 No hay actividad registrada en el período elegido. El reporte se construye sobre el
                 historial de estados dentro del horario de servicio: si el local no operó, o si todavía
                 no se acumularon datos, no hay nada que graficar.
@@ -190,47 +190,37 @@ export default function DemandaPage() {
               <>
                 <div style={estiloTarjeta}>
                   <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: "#64748b",
-                      textTransform: "uppercase",
-                      letterSpacing: 0.4,
-                      marginBottom: 4,
-                    }}
+                    className="flex items-center gap-[8px] text-[12px] font-bold text-slate-500 uppercase tracking-[0.4px] mb-[4px]"
                   >
                     <BarChart3 size={14} />
                     Ocupación media por franja
                   </div>
-                  <p style={{ margin: "0 0 16px 0", fontSize: 13, color: "#888" }}>
+                  <p className="mt-[0] mr-[0] mb-[16px] ml-[0] text-[13px] text-gris-400">
                     {datos.dias} {datos.dias === 1 ? "día operativo" : "días operativos"} entre{" "}
                     {datos.fecha_inicio} y {datos.fecha_fin}
                     {pico && (
                       <>
                         {" · "}
-                        <strong data-testid="demanda-pico" style={{ color: "#1a1a1a" }}>
+                        <strong data-testid="demanda-pico" className="text-gris-900">
                           pico a las {hh(pico.hora)} ({pico.porcentaje_ocupacion}%)
                         </strong>
                       </>
                     )}
                   </p>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div className="flex flex-col gap-[6px]">
                     {datos.franjas.map((f) => (
                       <div
                         key={f.hora}
                         data-testid={`demanda-franja-${f.hora}`}
-                        style={{ display: "flex", alignItems: "center", gap: 10 }}
+                        className="flex items-center gap-[10px]"
                         title={`${f.minutos_ocupada} de ${f.minutos_medidos} minutos-mesa ocupados`}
                       >
                         <span
                           style={{
                             width: 48,
                             fontSize: 12,
-                            color: "#475569",
+                            color: "var(--color-slate-600)",
                             fontVariantNumeric: "tabular-nums",
                             flexShrink: 0,
                           }}
@@ -238,20 +228,13 @@ export default function DemandaPage() {
                           {hh(f.hora)}
                         </span>
                         <div
-                          style={{
-                            flex: 1,
-                            height: 18,
-                            backgroundColor: "#f1f5f9",
-                            borderRadius: 4,
-                            overflow: "hidden",
-                            minWidth: 0,
-                          }}
+                          className="flex-[1] h-[18px] bg-slate-100 rounded-[4px] overflow-hidden min-w-[0px]"
                         >
                           <div
                             style={{
                               width: maximo > 0 ? `${(f.porcentaje_ocupacion / maximo) * 100}%` : "0%",
                               height: "100%",
-                              backgroundColor: f === pico ? "#b45309" : "#1976d2",
+                              backgroundColor: f === pico ? "var(--color-aviso-fuerte)" : "var(--color-marca)",
                               borderRadius: 4,
                             }}
                           />
@@ -261,7 +244,7 @@ export default function DemandaPage() {
                             width: 56,
                             fontSize: 12,
                             fontWeight: 600,
-                            color: "#1a1a1a",
+                            color: "var(--color-gris-900)",
                             textAlign: "right",
                             fontVariantNumeric: "tabular-nums",
                             flexShrink: 0,
@@ -273,7 +256,7 @@ export default function DemandaPage() {
                     ))}
                   </div>
 
-                  <p style={{ margin: "12px 0 0 0", fontSize: 12, color: "#94a3b8" }}>
+                  <p className="mt-[12px] mr-[0] mb-[0] ml-[0] text-[12px] text-slate-400">
                     Las barras se escalan contra la franja más alta ({maximo}%), no contra el 100%, para
                     que se noten las diferencias entre horas.
                   </p>
@@ -283,22 +266,22 @@ export default function DemandaPage() {
                     muestra de cada franja, que es lo que permite decidir si una barra alta
                     significa algo o es una hora con dos mediciones. */}
                 <div style={{ ...estiloTarjeta, padding: 0, overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <table className="w-full border-collapse text-[13px]">
                     <thead>
-                      <tr style={{ backgroundColor: "#f8fafc", textAlign: "left" }}>
-                        <th style={{ padding: "12px 16px", fontWeight: 600 }}>Franja</th>
-                        <th style={{ padding: "12px 16px", fontWeight: 600 }}>% Ocupación</th>
-                        <th style={{ padding: "12px 16px", fontWeight: 600 }}>Minutos ocupada</th>
-                        <th style={{ padding: "12px 16px", fontWeight: 600 }}>Minutos medidos</th>
+                      <tr className="bg-slate-50 text-left">
+                        <th className="py-[12px] px-[16px] font-semibold">Franja</th>
+                        <th className="py-[12px] px-[16px] font-semibold">% Ocupación</th>
+                        <th className="py-[12px] px-[16px] font-semibold">Minutos ocupada</th>
+                        <th className="py-[12px] px-[16px] font-semibold">Minutos medidos</th>
                       </tr>
                     </thead>
                     <tbody>
                       {datos.franjas.map((f) => (
-                        <tr key={f.hora} data-testid={`demanda-fila-${f.hora}`} style={{ borderTop: "1px solid #eee" }}>
-                          <td style={{ padding: "10px 16px" }}>{hh(f.hora)}</td>
-                          <td style={{ padding: "10px 16px", fontWeight: 700 }}>{f.porcentaje_ocupacion}%</td>
-                          <td style={{ padding: "10px 16px", color: "#475569" }}>{Math.round(f.minutos_ocupada)}</td>
-                          <td style={{ padding: "10px 16px", color: "#475569" }}>{Math.round(f.minutos_medidos)}</td>
+                        <tr key={f.hora} data-testid={`demanda-fila-${f.hora}`} className="border-t border-t-gris-150">
+                          <td className="py-[10px] px-[16px]">{hh(f.hora)}</td>
+                          <td className="py-[10px] px-[16px] font-bold">{f.porcentaje_ocupacion}%</td>
+                          <td className="py-[10px] px-[16px] text-slate-600">{Math.round(f.minutos_ocupada)}</td>
+                          <td className="py-[10px] px-[16px] text-slate-600">{Math.round(f.minutos_medidos)}</td>
                         </tr>
                       ))}
                     </tbody>

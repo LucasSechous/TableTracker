@@ -36,8 +36,13 @@ interface Props {
 }
 
 export default function IndicadorFrescura({ ultimoExito, intervaloMs, pausado = false }: Props) {
-  // El texto dice "hace 4s", así que tiene que recalcularse aunque no llegue ningún dato
-  // nuevo: es precisamente cuando NO llega que este componente importa.
+  // La edad del dato crece sola, así que hay que recalcularla aunque no llegue nada nuevo:
+  // es precisamente cuando NO llega que este componente importa.
+  //
+  // El tic sigue siendo de un segundo aunque el texto cambie cada diez. Lo que no puede
+  // esperar es el paso a "estancado": con un tic de diez segundos, el aviso llegaría hasta
+  // diez tarde. El render de más es barato —React no toca el DOM si el texto no cambió— y
+  // el aviso llega a tiempo.
   const [, tick] = useState(0)
   useEffect(() => {
     if (pausado) return
@@ -49,7 +54,7 @@ export default function IndicadorFrescura({ ultimoExito, intervaloMs, pausado = 
     return (
       <span
         data-testid="indicador-frescura"
-        style={{ ...base, color: "#94a3b8" }}
+        style={{ ...base, color: "var(--color-slate-400)" }}
         title="El salón no se actualiza mientras se edita la disposición"
       >
         Actualización en pausa
@@ -59,26 +64,29 @@ export default function IndicadorFrescura({ ultimoExito, intervaloMs, pausado = 
 
   if (ultimoExito === null) {
     return (
-      <span data-testid="indicador-frescura" style={{ ...base, color: "#94a3b8" }}>
+      <span data-testid="indicador-frescura" style={{ ...base, color: "var(--color-slate-400)" }}>
         Conectando…
       </span>
     )
   }
 
-  const segundos = Math.max(0, Math.round((Date.now() - ultimoExito) / 1000))
+  // Floor y no round: la edad se muestra por tramos ("menos de 20 segundos"), y redondear
+  // al segundo más cercano haría que a los 9,6s ya se contara como 10 y saltara al tramo
+  // siguiente antes de tiempo. Truncando, la cuenta coincide con lo que dice el cartel.
+  const segundos = Math.max(0, Math.floor((Date.now() - ultimoExito) / 1000))
   const vencido = Date.now() - ultimoExito > intervaloMs * CICLOS_TOLERADOS
 
   return (
     <span
       data-testid="indicador-frescura"
-      style={{ ...base, color: vencido ? "#b45309" : "#94a3b8" }}
+      style={{ ...base, color: vencido ? "var(--color-aviso-fuerte)" : "var(--color-slate-400)" }}
       title={
         vencido
           ? "El salón dejó de recibir datos. Lo que se ve puede no reflejar el estado real de las mesas."
           : "El salón se actualiza solo cada pocos segundos"
       }
     >
-      {vencido && <TriangleAlert size={14} aria-hidden style={{ flexShrink: 0 }} />}
+      {vencido && <TriangleAlert size={14} aria-hidden className="shrink-0" />}
       {/* aria-hidden en el contador: si se anunciara, un lector de pantalla leería el
           número nuevo cada segundo y taparía todo lo demás. Lo que sí hay que anunciar es
           el cambio de estado, y de eso se encarga la región de abajo. */}
@@ -96,11 +104,28 @@ export default function IndicadorFrescura({ ultimoExito, intervaloMs, pausado = 
   )
 }
 
+/**
+ * La edad del dato, redondeada hacia arriba y dicha como una cota: "menos de 20 segundos".
+ *
+ * No dice el número exacto a propósito. Un contador que corre de a un segundo invita a
+ * mirarlo, y acá no hay nada que mirar: entre 4 y 7 segundos no hay ninguna decisión
+ * distinta que tomar. Lo único que importa es de qué lado del umbral está el dato, y para
+ * eso alcanza con el tramo. De paso, el cartel deja de moverse cada segundo en un rincón
+ * de la pantalla.
+ *
+ * Se redondea hacia ARRIBA para que la cota nunca mienta a favor: con 12 segundos, decir
+ * "menos de 20" es cierto, y decir "menos de 10" sería falso.
+ */
 function textoEdad(segundos: number): string {
-  if (segundos < 60) return `${segundos}s`
+  if (segundos < 60) return `menos de ${aTramo(segundos, 10)} segundos`
   const minutos = Math.floor(segundos / 60)
-  if (minutos < 60) return `${minutos} min`
-  return `${Math.floor(minutos / 60)} h`
+  if (minutos < 60) return `menos de ${minutos + 1} min`
+  return `menos de ${Math.floor(minutos / 60) + 1} h`
+}
+
+/** El siguiente múltiplo de `paso` estrictamente mayor que `valor`. */
+function aTramo(valor: number, paso: number): number {
+  return (Math.floor(valor / paso) + 1) * paso
 }
 
 const base: CSSProperties = {

@@ -153,26 +153,16 @@ export default function HistorialPage() {
 
   return (
     <Layout>
-      <main style={{ padding: 24 }}>
+      <main className="app-main">
         <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "flex-end",
-            gap: 16,
-            backgroundColor: "#fff",
-            border: "1px solid #e0e0e0",
-            borderRadius: 8,
-            padding: 16,
-            marginBottom: 20,
-          }}
+          className="flex flex-wrap items-end gap-[16px] bg-blanco border border-gris-200 rounded-[8px] p-[16px] mb-[20px]"
         >
           <label style={labelStyle}>
             Mesa
             <select
               value={mesaId}
               onChange={(e) => setMesaId(e.target.value)}
-              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", minWidth: 160 }}
+              className="py-[6px] px-[8px] rounded-[6px] border border-gris-250 min-w-[160px]"
             >
               <option value="">Todas las mesas</option>
               {mesas.map((m) => (
@@ -195,7 +185,7 @@ export default function HistorialPage() {
             <select
               value={orden}
               onChange={(e) => handleOrdenChange(e.target.value as "asc" | "desc")}
-              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", minWidth: 160 }}
+              className="py-[6px] px-[8px] rounded-[6px] border border-gris-250 min-w-[160px]"
             >
               <option value="desc">Más reciente primero</option>
               <option value="asc">Más antiguo primero</option>
@@ -224,18 +214,11 @@ export default function HistorialPage() {
           </Boton>
         </div>
 
-        {loading && <p style={{ fontSize: 14, color: "#888" }}>Cargando historial...</p>}
+        {loading && <p className="text-[14px] text-gris-400">Cargando historial...</p>}
 
         {error && (
           <p
-            style={{
-              fontSize: 14,
-              color: "#c62828",
-              backgroundColor: "#ffebee",
-              border: "1px solid #ef9a9a",
-              borderRadius: 6,
-              padding: "10px 16px",
-            }}
+            className="text-[14px] text-error bg-error-fondo border border-error-borde rounded-[6px] py-[10px] px-[16px]"
           >
             {error}
           </p>
@@ -244,49 +227,45 @@ export default function HistorialPage() {
         {truncado && !loading && !error && (
           <p
             data-testid="historial-truncado"
-            style={{
-              fontSize: 13,
-              color: "#8a6d0b",
-              backgroundColor: "#fff8e1",
-              border: "1px solid #ffe082",
-              borderRadius: 6,
-              padding: "10px 16px",
-            }}
+            className="text-[13px] text-aviso bg-aviso-fondo border border-aviso-borde rounded-[6px] py-[10px] px-[16px]"
           >
             {`Hay más registros de los que entran en pantalla: se muestran los primeros ${MAX_FILAS_PANTALLA.toLocaleString("es")}. Exportá a CSV para llevarte el detalle completo, o acotá el rango de fechas.`}
           </p>
         )}
 
         {!loading && !error && (
-          <div style={{ backgroundColor: "#fff", border: "1px solid #e0e0e0", borderRadius: 8, overflow: "hidden" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+          // overflowX en vez de overflow:hidden, como ya hacian Rotacion, Ocupacion diaria y
+          // Demanda: con hidden, las columnas que no entran en una pantalla angosta no se
+          // recortan con aviso, simplemente no existen para el usuario.
+          <div className="bg-blanco border border-gris-200 rounded-[8px] overflow-x-auto">
+            <table className="w-full border-collapse text-[14px]">
               <thead>
-                <tr style={{ backgroundColor: "#fafafa", textAlign: "left" }}>
-                  <th style={{ padding: "10px 16px", color: "#666", fontWeight: 600 }}>Mesa</th>
-                  <th style={{ padding: "10px 16px", color: "#666", fontWeight: 600 }}>Estado</th>
-                  <th style={{ padding: "10px 16px", color: "#666", fontWeight: 600 }}>Origen</th>
-                  <th style={{ padding: "10px 16px", color: "#666", fontWeight: 600 }}>Fecha</th>
+                <tr className="bg-gris-50 text-left">
+                  <th className="py-[10px] px-[16px] text-gris-500 font-semibold">Mesa</th>
+                  <th className="py-[10px] px-[16px] text-gris-500 font-semibold">Estado</th>
+                  <th className="py-[10px] px-[16px] text-gris-500 font-semibold">Origen</th>
+                  <th className="py-[10px] px-[16px] text-gris-500 font-semibold">Fecha</th>
                 </tr>
               </thead>
               <tbody>
                 {historial.length === 0 && (
                   <tr>
-                    <td colSpan={4} style={{ padding: "16px", color: "#888", textAlign: "center" }}>
+                    <td colSpan={4} className="p-[16px] text-gris-400 text-center">
                       No hay registros de historial para estos filtros.
                     </td>
                   </tr>
                 )}
                 {historial.map((h) => (
-                  <tr key={h.id} style={{ borderTop: "1px solid #eee" }}>
-                    <td style={{ padding: "10px 16px" }}>{h.mesa_id}</td>
-                    <td style={{ padding: "10px 16px" }}>{ETIQUETA_POR_ESTADO[h.estado] ?? h.estado}</td>
+                  <tr key={h.id} className="border-t border-t-gris-150">
+                    <td className="py-[10px] px-[16px]">{h.mesa_id}</td>
+                    <td className="py-[10px] px-[16px]">{ETIQUETA_POR_ESTADO[h.estado] ?? h.estado}</td>
                     <td
                       data-testid={`historial-origen-${h.id}`}
-                      style={{ padding: "10px 16px", color: h.origen_cambio === null ? "#94a3b8" : "#475569" }}
+                      style={{ padding: "10px 16px", color: h.origen_cambio === null ? "var(--color-slate-400)" : "var(--color-slate-600)" }}
                     >
                       {etiquetaOrigen(h.origen_cambio)}
                     </td>
-                    <td style={{ padding: "10px 16px" }}>{new Date(h.created_at).toLocaleString()}</td>
+                    <td className="py-[10px] px-[16px]">{new Date(h.created_at).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

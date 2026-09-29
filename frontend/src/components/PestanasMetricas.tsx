@@ -29,13 +29,7 @@ export default function PestanasMetricas() {
     <div
       role="tablist"
       aria-label="Vistas de métricas"
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 4,
-        borderBottom: "1px solid #e2e8f0",
-        marginBottom: 20,
-      }}
+      className="flex flex-wrap gap-[4px] border-b border-b-slate-200 mb-[20px]"
     >
       {METRICAS.map((seccion) => {
         const Icono = seccion.icono
@@ -71,13 +65,13 @@ const pestana: CSSProperties = {
   fontFamily: "inherit",
   fontSize: 13,
   fontWeight: 600,
-  color: "#64748b",
+  color: "var(--color-slate-500)",
   cursor: "pointer",
   whiteSpace: "nowrap",
   marginBottom: -1,
 }
 
 const pestanaActiva: CSSProperties = {
-  color: "#1d4ed8",
-  borderBottom: "2px solid #1d4ed8",
+  color: "var(--color-marca-fuerte)",
+  borderBottom: "2px solid var(--color-marca-fuerte)",
 }

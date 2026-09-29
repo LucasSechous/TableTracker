@@ -91,18 +91,18 @@ export default function Layout({ children, acciones, titulo }: Props) {
                 className="h-[38px] w-auto block"
               />
             )}
-            {/* Serif, para que la letra acompañe a la T con serifas que forma la pata de la
-                mesa en el propio logo. Una sans geométrica al lado de ese dibujo se lee
-                como dos marcas distintas pegadas.
+            {/* Playfair Display, para que la letra acompañe a la T con serifas que forma la
+                pata de la mesa en el propio logo. Una sans geométrica al lado de ese dibujo
+                se lee como dos marcas distintas pegadas.
 
-                Se resuelve con la familia del sistema y no con una fuente web: Times y
-                Georgia están en Windows, macOS, iOS y Android, así que no hay una descarga
-                que pueda tardar o fallar y dejar el encabezado saltando de tipografía a
-                mitad de carga. El resto de la aplicación sigue en su sans; el serif es la
-                excepción de la marca. */}
+                Va autoalojada —ver el @font-face en index.css— y con Georgia de respaldo,
+                que es el serif del sistema más parecido en peso. El resto de la aplicación
+                sigue en su sans: el serif es la excepción de la marca, no un cambio de
+                tipografía general. */}
             <span
+              data-testid="marca-nombre"
               className="text-[26px] leading-[1] text-gris-900 whitespace-nowrap"
-              style={{ fontFamily: '"Times New Roman", Times, Georgia, serif' }}
+              style={{ fontFamily: '"Playfair Display", Georgia, serif' }}
             >
               {/* El contraste de pesos entre las dos palabras es el que ya tenía el logo
                   original: "Table" firme y "Tracker" más liviano. Cambia la tipografía, no

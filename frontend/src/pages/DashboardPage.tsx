@@ -11,9 +11,10 @@ import ModalAltaMesa from "../components/ModalAltaMesa"
 import Layout from "../components/Layout"
 import IndicadorFrescura from "../components/IndicadorFrescura"
 import Boton from "../components/ui/Boton"
+import AvisoReservaDetectada from "../components/AvisoReservaDetectada"
 import { useAuth } from "../hooks/useAuth"
 import { AvisoErrorProvider } from "../hooks/useAvisoError"
-import { puedeEditarLayout } from "../permisos"
+import { puedeEditarLayout, puedeReservar } from "../permisos"
 import { labelStyle } from "../components/RangoFechas"
 import { COLOR_OCUPACION_ALTA, ETIQUETA_POR_ESTADO } from "../constants"
 
@@ -67,6 +68,9 @@ export default function DashboardPage() {
   // esa: aquella depende de datos que el canvas ya tiene (estado y reloj de cada mesa),
   // esta depende del total del salón, que el canvas filtrado no conoce.
   const [ocupacion, setOcupacion] = useState<OcupacionResponse | null>(null)
+  // Bloquea los botones del aviso de reserva mientras va una de las dos acciones, para
+  // que un doble clic no mande dos veces la misma decisión.
+  const [resolviendoReserva, setResolviendoReserva] = useState(false)
   // Momento del último refresco que SÍ trajo datos, para poder decir en pantalla qué tan
   // viejo es lo que se está mirando. Se guarda el éxito y no el intento: un intento que
   // falló no rejuvenece el dato, y contarlo sería justo lo contrario de lo que esto mide.
@@ -184,6 +188,43 @@ export default function DashboardPage() {
       clearInterval(intervalId)
     }
   }, [modo])
+
+  // Mesas reservadas donde el módulo de visión vio gente lejos de la hora reservada y
+  // nadie resolvió todavía si corresponde ocuparlas (T26-208). Sale del mismo /mesas que
+  // ya se pide cada 3s: no agrega ninguna request al ciclo.
+  //
+  // Se filtra por permiso porque las dos salidas del aviso —ocupar o descartar— exigen
+  // encargado o recepción. A un mozo el cartel le mostraría dos botones que le van a dar
+  // 403, que es peor que no verlo.
+  const reservasConGente = puedeReservar(rol)
+    ? sectores.flatMap((s) => s.mesas ?? []).filter((m) => m.ocupacion_detectada_en)
+    : []
+
+  async function handleConfirmarReserva(mesa: Mesa) {
+    setResolviendoReserva(true)
+    try {
+      // Ocupar la mesa limpia la marca sola: el backend borra los datos de reserva en
+      // cuanto el estado deja de ser `reservada` (registrar_historial).
+      const { data } = await mesasApi.cambiarEstado(mesa.id, "ocupada")
+      handleMesaActualizada(data)
+    } catch (err) {
+      setErrorAccion(await extraerDetalle(err, "No se pudo ocupar la mesa"))
+    } finally {
+      setResolviendoReserva(false)
+    }
+  }
+
+  async function handleDescartarReserva(mesa: Mesa) {
+    setResolviendoReserva(true)
+    try {
+      const { data } = await mesasApi.descartarDeteccionEnReserva(mesa.id)
+      handleMesaActualizada(data)
+    } catch (err) {
+      setErrorAccion(await extraerDetalle(err, "No se pudo descartar el aviso"))
+    } finally {
+      setResolviendoReserva(false)
+    }
+  }
 
   function handleMesaEstadoChange(mesaId: number, nuevoEstado: string) {
     const estadoAnterior = sectores.flatMap((s) => s.mesas ?? []).find((m) => m.id === mesaId)?.estado
@@ -383,8 +424,9 @@ export default function DashboardPage() {
                 setEstadoFiltro(SIN_FILTRO)
                 setModo("edicion")
               }}
+              title="Editar disposición"
             >
-              Editar disposición
+              <span className="texto-en-escritorio">Editar disposición</span>
             </Boton>
           ) : null}
         </>
@@ -441,6 +483,18 @@ export default function DashboardPage() {
               ×
             </button>
           </p>
+        )}
+
+        {/* Va arriba de todo lo demás del salón: es lo único de esta pantalla que pide
+            una decisión de una persona, y no tiene sentido que quede debajo de avisos
+            que solo informan. */}
+        {modo === "monitoreo" && (
+          <AvisoReservaDetectada
+            mesas={reservasConGente}
+            onConfirmar={handleConfirmarReserva}
+            onDescartar={handleDescartarReserva}
+            ocupado={resolviendoReserva}
+          />
         )}
 
         {/* Alerta de alta ocupación (T26-187, RF-26).

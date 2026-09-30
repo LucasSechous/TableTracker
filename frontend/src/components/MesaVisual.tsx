@@ -15,6 +15,10 @@ import {
   COLOR_ESTADO_DUDOSO,
   limpiezaDemorada,
   minutosEnEstado,
+  muestraTiempoEnEstado,
+  textoTiempoEnEstado,
+  horaDeLaReserva,
+  minutosDeAtrasoDeReserva,
 } from "../constants"
 import { useAuth } from "../hooks/useAuth"
 import { useAvisoError } from "../hooks/useAvisoError"
@@ -130,6 +134,26 @@ export default function MesaVisual({
 
   const Icono = ICONO_POR_ESTADO[mesa.estado]
 
+  // Hace cuanto la mesa esta en su estado (T26-208). Igual que los dos avisos de
+  // arriba, solo en monitoreo: en edicion el canvas es para acomodar mesas y una
+  // etiqueta por mesa compite con los controles de arrastre.
+  // Una mesa reservada con hora no dice hace cuánto está reservada sino PARA CUÁNDO es:
+  // mirando el salón, lo que alguien necesita saber es a qué hora llega esa gente, no hace
+  // cuánto se bloqueó la mesa (T26-208). Sin hora cae al tiempo transcurrido, que es lo que
+  // se mostraba antes y lo único que se puede decir de una reserva sin hora.
+  const horaReservada = mesa.estado === "reservada" ? horaDeLaReserva(mesa.reservada_para) : null
+  const atrasoReserva =
+    mesa.estado === "reservada" ? minutosDeAtrasoDeReserva(mesa.reservada_para) : null
+
+  const tiempoEnEstado =
+    modo === "monitoreo" && muestraTiempoEnEstado(mesa.estado)
+      ? horaReservada ?? textoTiempoEnEstado(mesa.estado_desde)
+      : null
+
+  // Pasada la hora y sin que nadie haya llegado, la etiqueta pasa a contar el atraso. Es
+  // el mismo recurso que la limpieza demorada: la misma etiqueta, otro color.
+  const reservaVencida = tiempoEnEstado !== null && atrasoReserva !== null
+
   const colorBorde = atrasada
     ? COLOR_LIMPIEZA_DEMORADA
     : dudosa
@@ -186,19 +210,51 @@ export default function MesaVisual({
         )}
       </div>
 
-      {atrasada && minutosAtraso !== null && (
+      {/* Hace cuánto la mesa está así (T26-208).
+
+          Reemplaza al badge rojo que antes avisaba la limpieza demorada por su cuenta. Los
+          dos decían el mismo número —los minutos en el estado— así que conviviendo lo
+          habrían mostrado dos veces en la misma mesa. Ahora hay una sola etiqueta y el
+          atraso es un COLOR suyo, no un elemento aparte.
+
+          Por eso también conserva el data-testid del aviso viejo cuando hay atraso: lo que
+          se afirma sobre él —que no está por debajo del umbral y que dice los minutos por
+          encima— sigue siendo cierto palabra por palabra.
+
+          Va arriba y CENTRADA, mientras que el "?" de estado dudoso vive en la esquina
+          derecha: así los dos caben sin pisarse y se distinguen de un vistazo. Son cosas
+          distintas —uno habla del dato, el otro del tiempo— y pueden coexistir: una mesa
+          ocupada con el local cerrado es justo el caso donde interesan las dos. */}
+      {tiempoEnEstado !== null && (
         <div
-          data-testid={`mesa-${mesa.numero}-limpieza-demorada`}
-          title={`Pendiente de limpieza hace ${minutosAtraso} minutos`}
+          data-testid={
+            atrasada ? `mesa-${mesa.numero}-limpieza-demorada` : `mesa-${mesa.numero}-tiempo-en-estado`
+          }
+          title={
+            atrasada
+              ? `Pendiente de limpieza hace ${minutosAtraso} minutos`
+              : reservaVencida
+                ? `Reservada para las ${horaReservada}: hace ${atrasoReserva} minutos que pasó la hora`
+                : horaReservada
+                  ? `Reservada para las ${horaReservada}`
+                  : `${ETIQUETA_POR_ESTADO[mesa.estado] ?? mesa.estado} hace ${tiempoEnEstado}`
+          }
           style={{
             position: "absolute",
-            top: -8,
-            left: DIAMETRO_MESA - 16,
-            minWidth: 26,
+            top: -9,
+            // Centrada sobre la mesa sin depender de cuánto mida el texto: el 50% la ancla
+            // al medio y el translate la corre media etiqueta hacia la izquierda.
+            left: DIAMETRO_MESA / 2,
+            transform: "translateX(-50%)",
             height: 18,
-            padding: "0 5px",
+            padding: "0 6px",
             borderRadius: 9,
-            backgroundColor: COLOR_LIMPIEZA_DEMORADA,
+            // El rojo del atraso es el mismo de antes, para que quien ya conocía el aviso
+            // lo siga reconociendo. El resto del tiempo es un gris oscuro que se lee sobre
+            // el canvas sin competir con el color del estado, que es lo que tiene que
+            // seguir dominando la lectura del salón.
+            backgroundColor:
+              atrasada || reservaVencida ? COLOR_LIMPIEZA_DEMORADA : "var(--color-slate-700)",
             color: "var(--color-blanco)",
             fontSize: 10,
             fontWeight: 700,
@@ -212,7 +268,7 @@ export default function MesaVisual({
             whiteSpace: "nowrap",
           }}
         >
-          {minutosAtraso}m
+          {reservaVencida ? `+${atrasoReserva}m` : tiempoEnEstado}
         </div>
       )}
 

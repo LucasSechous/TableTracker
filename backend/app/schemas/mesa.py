@@ -23,6 +23,17 @@ class EstadoUpdate(BaseModel):
     estado: EstadoMesa
 
 
+class ReservaUpdate(BaseModel):
+    """Cuerpo opcional de PATCH /mesas/{id}/reserva.
+
+    `reservada_para` es opcional y el endpoint acepta que no venga cuerpo, para no
+    romper a quien ya reservaba sin hora. Reservar sin decir para cuándo sigue siendo
+    válido; simplemente no se puede avisar del atraso.
+    """
+
+    reservada_para: Optional[datetime] = None
+
+
 class PosicionUpdate(BaseModel):
     pos_x: int
     pos_y: int
@@ -39,6 +50,11 @@ class MesaResponse(BaseModel):
     # Desde cuándo está en este estado (T26-173). Viene denormalizado en la fila, no
     # calculado: este endpoint lo pide el dashboard cada 3 segundos.
     estado_desde: Optional[datetime] = None
+    # Para cuándo está reservada, o None si se reservó sin decir hora (T26-208).
+    reservada_para: Optional[datetime] = None
+    # Hay gente sentada en una mesa reservada, esperando que alguien decida si
+    # corresponde ocuparla (T26-208). None cuando no hay nada pendiente.
+    ocupacion_detectada_en: Optional[datetime] = None
     pos_x: int = 0
     pos_y: int = 0
     # Posible error de detección (T26-188, RF-27): la mesa sigue 'ocupada' con el local

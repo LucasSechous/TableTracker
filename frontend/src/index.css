@@ -36,6 +36,33 @@
  *     borde suave              --gris-200    --slate-200
  *     fondo de realce          --gris-75     --slate-100
  */
+/* Playfair Display, la tipografía de la marca (T26-208).
+ *
+ * Autoalojada y no enlazada a fonts.googleapis.com. El motivo es concreto: el logo está en
+ * todas las pantallas, y si el día de la defensa la red del lugar anda mal o bloquea ese
+ * dominio, el nombre se dibujaría con un serif del sistema en plena presentación. Un
+ * archivo propio no depende de nadie.
+ *
+ * Un solo archivo para los dos pesos: Playfair Display es una fuente VARIABLE, así que el
+ * mismo woff2 cubre de 400 a 900. Se verificó —los dos archivos que sirve Google para 400
+ * y 700 tienen el mismo hash— y por eso el rango va declarado en font-weight: sin él el
+ * navegador sintetizaría la negrita deformando la regular en vez de usar el eje real.
+ *
+ * Solo el subconjunto latin. La aplicación es en español y la marca dice "TableTracker":
+ * traer cirílico o vietnamita sería versionar bytes que nunca se van a dibujar.
+ *
+ * swap: mientras el archivo carga se ve el serif de respaldo y después cambia. La
+ * alternativa es que el nombre no se vea hasta que el archivo esté, y un encabezado con un
+ * hueco se nota más que uno que cambia de letra.
+ */
+@font-face {
+  font-family: "Playfair Display";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("/fuentes/playfair-display.woff2") format("woff2");
+}
+
 @theme {
   /* Base */
   --color-blanco: #fff;
@@ -124,7 +151,20 @@
   padding: 0 24px;
 }
 
+/* Texto que solo tiene sentido con lugar de sobra. Se usa en las etiquetas de los botones
+ * del encabezado: en un celular compiten con el indicador de frescura y el botón queda
+ * cortado contra el borde. Escondiendo el texto, el icono alcanza para reconocerlo y el
+ * botón sigue siendo alcanzable — que es lo que importa, porque es la puerta de entrada al
+ * modo edición. El nombre completo sigue disponible en el title para quien lo necesite. */
+.texto-en-escritorio {
+  display: inline;
+}
+
 @media (max-width: 640px) {
+  .texto-en-escritorio {
+    display: none;
+  }
+
   /* En un celular, 24px por lado se comen un 13% del ancho útil. */
   .app-main {
     padding: 16px;

@@ -32,6 +32,23 @@ class Mesa(Base):
     # Lo mantiene registrar_historial() en app/routers/mesas.py, que es el único lugar
     # por donde pasa un cambio de estado con su fila de historial.
     estado_desde = Column(DateTime(timezone=True), server_default=func.now())
+    # Para qué momento está reservada la mesa (T26-208). Nullable: hasta ahora el
+    # sistema sabía QUE una mesa estaba reservada pero no para cuándo, así que las
+    # reservas ya cargadas no tienen hora y la aplicación tiene que seguir andando con
+    # ellas. Se guarda el momento completo y no una hora suelta porque un "21:00" pelado
+    # es ambiguo entre días y vuelve incalculable cuánto se pasó si el servicio cruza la
+    # medianoche.
+    reservada_para = Column(DateTime(timezone=True), nullable=True)
+    # Cuándo el módulo de visión vio gente en esta mesa reservada sin que nadie lo haya
+    # resuelto todavía (T26-208). Es una MARCA sobre el estado, no un quinto estado: la
+    # mesa sigue `reservada` y lo único que se señala es que hay una decisión pendiente.
+    # Meter `pendiente_confirmacion` en el enum se propagaría a colores, iconos, leyenda,
+    # filtro, métricas e historial para expresar una condición sobre un estado que ya
+    # existe — mismo criterio por el que COLOR_LIMPIEZA_DEMORADA no entró en
+    # COLOR_POR_ESTADO.
+    #
+    # Las dos las limpia registrar_historial() cuando la mesa deja de estar reservada.
+    ocupacion_detectada_en = Column(DateTime(timezone=True), nullable=True)
     activa = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     # server_default: la base ya lo tenía y el modelo no lo declaraba (T26-137).

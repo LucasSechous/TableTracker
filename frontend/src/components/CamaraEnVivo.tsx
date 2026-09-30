@@ -52,7 +52,6 @@ const estiloMarco: React.CSSProperties = {
 export default function CamaraEnVivo({ camaraId, nombre }: Props) {
   const [src, setSrc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [frames, setFrames] = useState(0);
   // El object URL vigente vive en un ref y no en el estado: hay que revocar el anterior
   // en cada frame, y leerlo del estado dentro del bucle daría siempre el valor capturado
   // al montar.
@@ -67,7 +66,6 @@ export default function CamaraEnVivo({ camaraId, nombre }: Props) {
       if (urlVigente.current) URL.revokeObjectURL(urlVigente.current);
       urlVigente.current = url;
       setSrc(url);
-      setFrames((n) => n + 1);
     }
 
     async function reproducir() {
@@ -149,7 +147,7 @@ export default function CamaraEnVivo({ camaraId, nombre }: Props) {
         <div style={estiloMarco}>Conectando con la cámara...</div>
       )}
       <span className="text-[11px] text-gris-400">
-        {src ? `En vivo · ${frames} ${frames === 1 ? "frame" : "frames"}` : "Abriendo el stream"}
+        {src ? "En vivo" : "Abriendo el stream"}
       </span>
     </div>
   );

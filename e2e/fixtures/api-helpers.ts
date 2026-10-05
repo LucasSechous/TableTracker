@@ -160,7 +160,9 @@ export async function actualizarUsuario(
   request: APIRequestContext,
   token: string,
   usuarioId: number,
-  datos: { rol?: string; activo?: boolean }
+  // `nombre` se sumó al cerrar RF-03: PATCH /usuarios/{id} pasó a aceptar nombre, rol y
+  // activo. Email y password siguen fuera del endpoint (ver UserAdminUpdate en el backend).
+  datos: { nombre?: string; rol?: string; activo?: boolean }
 ): Promise<UsuarioAdminResponse> {
   const res = await request.patch(`${BACKEND_URL}/usuarios/${usuarioId}`, {
     headers: authHeaders(token),

@@ -293,11 +293,22 @@ export const usuariosApi = {
   listar: (params?: { incluir_inactivos?: boolean }) =>
     api.get<UsuarioAdmin[]>("/usuarios/", { params }),
 
-  // Rol y baja lógica únicamente (T26-175): las salvaguardas (no auto-desactivarse,
+  // El alta apunta a /auth/register y no a un POST /usuarios/ que no existe: ese endpoint
+  // ya exige admin, ya hashea la password y ya rechaza el email repetido con un 400 que
+  // trae el mensaje redactado (RF-03). Agregar un segundo camino de alta al backend solo
+  // para que la ruta combine con el resto del recurso sería duplicar las tres cosas.
+  //
+  // Devuelve UserResponse, sin el `es_cuenta_servicio` de UsuarioAdmin: quien lo llama
+  // recarga el listado en vez de insertar la fila en memoria, así que no hace falta el
+  // tipo completo acá.
+  crear: (datos: { nombre: string; email: string; password: string; rol: string }) =>
+    api.post<Omit<UsuarioAdmin, "es_cuenta_servicio">>("/auth/register", datos),
+
+  // Nombre, rol y baja lógica (T26-175, RF-03): las salvaguardas (no auto-desactivarse,
   // no dejar el sistema sin admin, no desactivar la cuenta de vision-module) las
   // aplica el backend y devuelven 409 — este cliente no las duplica, solo muestra
   // el detail que llega.
-  actualizar: (id: number, datos: { rol?: string; activo?: boolean }) =>
+  actualizar: (id: number, datos: { nombre?: string; rol?: string; activo?: boolean }) =>
     api.patch<UsuarioAdmin>(`/usuarios/${id}`, datos),
 };
 

@@ -1,4 +1,4 @@
-# GET/PATCH /usuarios: gestión de usuarios desde la aplicación (T26-175).
+# GET/PATCH /usuarios: gestión de usuarios desde la aplicación (T26-175, RF-03).
 #
 # `como()` (conftest.py) siempre devuelve un usuario con id=1 para el que hace el
 # pedido — no persiste fila en la base. Por eso los tests de las salvaguardas de
@@ -81,6 +81,77 @@ def test_patch_no_pisa_campos_no_enviados(client, como, crear_usuario):
     como("admin")
 
     respuesta = client.patch(f"/usuarios/{usuario.id}", json={"rol": "encargado"})
+    assert respuesta.json()["activo"] is True
+
+
+def test_patch_cambia_el_nombre(client, como, crear_usuario):
+    usuario = crear_usuario(id=2, nombre="Nombre Viejo")
+    como("admin")
+
+    respuesta = client.patch(f"/usuarios/{usuario.id}", json={"nombre": "Nombre Nuevo"})
+    assert respuesta.status_code == 200
+    assert respuesta.json()["nombre"] == "Nombre Nuevo"
+
+
+def test_patch_recorta_los_espacios_del_nombre(client, como, crear_usuario):
+    usuario = crear_usuario(id=2, nombre="Original")
+    como("admin")
+
+    respuesta = client.patch(f"/usuarios/{usuario.id}", json={"nombre": "  Con Espacios  "})
+    assert respuesta.status_code == 200
+    assert respuesta.json()["nombre"] == "Con Espacios"
+
+
+def test_patch_rechaza_un_nombre_vacio(client, como, crear_usuario):
+    usuario = crear_usuario(id=2, nombre="Original")
+    como("admin")
+
+    assert client.patch(f"/usuarios/{usuario.id}", json={"nombre": ""}).status_code == 422
+    # Y la fila no quedó tocada: User.nombre es NOT NULL y la pantalla dibuja la tarjeta
+    # con ese texto como encabezado.
+    assert client.get("/usuarios/").json()[0]["nombre"] == "Original"
+
+
+def test_patch_rechaza_un_nombre_de_solo_espacios(client, como, crear_usuario):
+    usuario = crear_usuario(id=2, nombre="Original")
+    como("admin")
+
+    assert client.patch(f"/usuarios/{usuario.id}", json={"nombre": "    "}).status_code == 422
+
+
+def test_patch_cambia_nombre_y_rol_en_el_mismo_pedido(client, como, crear_usuario):
+    usuario = crear_usuario(id=2, nombre="Viejo", rol="mozo")
+    como("admin")
+
+    respuesta = client.patch(f"/usuarios/{usuario.id}", json={"nombre": "Nuevo", "rol": "encargado"})
+    assert respuesta.status_code == 200
+    assert respuesta.json()["nombre"] == "Nuevo"
+    assert respuesta.json()["rol"] == "encargado"
+
+
+def test_patch_cambiar_el_nombre_no_pisa_el_rol(client, como, crear_usuario):
+    usuario = crear_usuario(id=2, nombre="Viejo", rol="encargado")
+    como("admin")
+
+    respuesta = client.patch(f"/usuarios/{usuario.id}", json={"nombre": "Nuevo"})
+    assert respuesta.json()["rol"] == "encargado"
+    assert respuesta.json()["activo"] is True
+
+
+def test_patch_con_null_explicito_no_rompe_ni_borra_la_columna(client, como, crear_usuario):
+    """Las tres columnas que este PATCH escribe son NOT NULL.
+
+    Los campos de UserAdminUpdate son Optional para poder omitirlos, así que un null
+    explícito pasa la validación de Pydantic. Antes llegaba al setattr y moría en el
+    commit con un 500; ahora se descarta igual que un campo ausente.
+    """
+    usuario = crear_usuario(id=2, nombre="Original", rol="mozo")
+    como("admin")
+
+    respuesta = client.patch(f"/usuarios/{usuario.id}", json={"nombre": None, "rol": None, "activo": None})
+    assert respuesta.status_code == 200
+    assert respuesta.json()["nombre"] == "Original"
+    assert respuesta.json()["rol"] == "mozo"
     assert respuesta.json()["activo"] is True
 
 

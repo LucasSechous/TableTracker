@@ -212,3 +212,23 @@ export const ETIQUETA_POR_ESTADO: Record<string, string> = {
   pendiente_limpieza: "Pendiente de limpieza",
   reservada: "Reservada",
 }
+
+// Roles que la UI ofrece al asignar o cambiar el rol de un usuario (RF-03).
+//
+// Vivía dentro de UsuariosPage; se mueve acá porque ahora la comparten esa pantalla (el
+// select de cada fila) y ModalAltaUsuario (el select del alta), y tenerla en la página
+// obligaría al modal a importar a su propio contenedor.
+//
+// NO es una validación ni una fuente de verdad: `User.rol` es un String libre en la base,
+// sin enum ni CHECK, y los roles viven como literales sueltos en cada requiere_rol(...)
+// del backend. Es una lista curada para no repetir a mano el typo documentado ("admim"),
+// que deja a alguien sin pasar ningún requiere_rol(...). Ver el encabezado de permisos.ts,
+// que explica por qué el frontend deliberadamente no declara un enum de roles.
+export const ROLES_ASIGNABLES = [
+  "admin",
+  "encargado",
+  "mozo",
+  "recepcion",
+  "limpieza",
+  "vision_module",
+] as const

@@ -3,9 +3,16 @@
 # /auth/register (alta) — no había forma de ver quién tiene acceso al sistema ni de
 # revocárselo sin tocar la base a mano.
 #
-# Alcance a propósito acotado (ver la tarea): solo GET /usuarios y PATCH
-# /usuarios/{id} para rol y activo. Nada de nombre/email/password acá, y nada de
-# DELETE — igual que mesas/sectores/cámaras/ROI, la baja es siempre lógica
+# Alcance: GET /usuarios y PATCH /usuarios/{id} para nombre, rol y activo. El nombre se
+# sumó al cerrar RF-03 ("alta, baja y modificación de usuarios"), junto con el alta desde
+# la pantalla —que no vive acá: reusa POST /auth/register, que ya exige admin, ya hashea
+# la password y ya rechaza el email duplicado—.
+#
+# Email y password siguen fuera, y el docstring de UserAdminUpdate explica por qué: el
+# email es el `sub` del JWT y la clave de la salvaguarda de vision-module, y rotar la
+# password sin versionado de tokens deja la credencial vieja viva hasta que el JWT venza.
+#
+# Nada de DELETE — igual que mesas/sectores/cámaras/ROI, la baja es siempre lógica
 # (activo=False), nunca borrado físico, porque el usuario puede estar referenciado
 # desde historial_estados.origen_cambio y otras partes del sistema.
 
@@ -62,7 +69,14 @@ def actualizar_usuario(
     # exclude_unset (patrón de camaras.py): distingue "no tocar este campo" de
     # "lo mandaron a propósito", necesario para que las salvaguardas de abajo miren
     # solo los cambios que el pedido realmente pide hacer.
-    cambios = datos.model_dump(exclude_unset=True)
+    #
+    # Los None se descartan además de los campos ausentes. Las tres columnas que este
+    # PATCH escribe son NOT NULL, así que un `{"rol": null}` explícito pasaba la
+    # validación de Pydantic (los campos son Optional para poder omitirlos), llegaba
+    # al setattr y moría recién en el commit con un 500 por violación de NOT NULL.
+    # Mandar null es pedir "dejalo sin valor", que para estas tres columnas no es una
+    # operación válida: se trata igual que no haberlo mandado (RF-03).
+    cambios = {campo: valor for campo, valor in datos.model_dump(exclude_unset=True).items() if valor is not None}
 
     if usuario.email == VISION_MODULE_EMAIL and cambios.get("activo") is False:
         raise HTTPException(

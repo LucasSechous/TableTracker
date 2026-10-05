@@ -10,7 +10,7 @@ import {
 } from "../fixtures/api-helpers";
 import { injectToken } from "../fixtures/ui-helpers";
 
-// Sección 23 — Pantalla de administración de usuarios (T26-175)
+// Sección 23 — Pantalla de administración de usuarios (T26-175, RF-03)
 //
 // La pantalla existía sin ningún test e2e: lo detectó la auditoría de código (T26-133) al
 // cruzar pantallas contra specs. Es una pantalla admin-only con tres salvaguardas de negocio
@@ -41,13 +41,23 @@ test.describe("pantalla de usuarios", () => {
 
   test.beforeEach(async ({ request, token }) => {
     editable = await ensureUsuarioEditable(request, token);
-    // Estado conocido de partida: activo y mozo. Si una corrida anterior murió a mitad de
-    // camino, esto la deja en su sitio antes de empezar.
-    await actualizarUsuario(request, token, editable.id, { rol: "mozo", activo: true });
+    // Estado conocido de partida: activo, mozo y con su nombre original. Si una corrida
+    // anterior murió a mitad de camino, esto la deja en su sitio antes de empezar. El
+    // nombre se sumó al volverse editable (RF-03): sin restaurarlo, 23.12 pasaba una vez y
+    // después comparaba contra el nombre que él mismo había dejado.
+    await actualizarUsuario(request, token, editable.id, {
+      rol: "mozo",
+      activo: true,
+      nombre: credencialesEditable().nombre,
+    });
   });
 
   test.afterEach(async ({ request, token }) => {
-    await actualizarUsuario(request, token, editable.id, { rol: "mozo", activo: true }).catch(() => {});
+    await actualizarUsuario(request, token, editable.id, {
+      rol: "mozo",
+      activo: true,
+      nombre: credencialesEditable().nombre,
+    }).catch(() => {});
   });
 
   test("23.1 acceder a /usuarios sin sesión redirige a /login", async ({ page }) => {
@@ -162,5 +172,155 @@ test.describe("pantalla de usuarios", () => {
     await tarjeta.getByRole("combobox").selectOption("recepcion");
 
     await expect(tarjeta.getByText(MENSAJE)).toBeVisible();
+  });
+
+  // --- Alta de usuarios (RF-03) --------------------------------------------------------
+  //
+  // Nota de método, y vale para los tres tests de abajo: el alta FELIZ se verifica contra
+  // un POST interceptado y no creando un usuario de verdad. No es comodidad, es la misma
+  // razón que ya está escrita en credencialesEditable() (api-helpers.ts): no existe DELETE
+  // /usuarios/{id} —la baja es lógica a propósito, porque el usuario queda referenciado
+  // desde historial_estados.origen_cambio—, así que un alta real por corrida dejaría una
+  // cuenta muerta en la base para siempre.
+  //
+  // Cómo queda repartido, entonces: que el register cree la fila, hashee la password y
+  // rechace el email repetido lo cubre pytest (test_auth.py, test_usuarios.py); lo que le
+  // toca a esta pantalla —mandar exactamente lo que se cargó, cerrar el modal solo si
+  // anduvo— se cubre acá. El 400 por email repetido sí se provoca de verdad en 23.10,
+  // porque ese camino no crea ninguna fila.
+
+  async function abrirAltaDeUsuario(page: import("@playwright/test").Page, token: string) {
+    await irAUsuarios(page, token);
+    await page.getByRole("button", { name: "+ Nuevo usuario" }).click();
+    await expect(page.getByRole("heading", { name: "Nuevo usuario" })).toBeVisible();
+  }
+
+  test("23.9 el alta manda lo que se cargó, recorta los espacios y cierra el modal", async ({
+    page,
+    token,
+  }) => {
+    let enviado: { nombre: string; email: string; password: string; rol: string } | null = null;
+
+    await page.route("**/auth/register", async (route) => {
+      enviado = route.request().postDataJSON();
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({ id: 999999, ...enviado, activo: true }),
+      });
+    });
+
+    await abrirAltaDeUsuario(page, token);
+
+    // Nombre y email van con espacios de sobra a los costados, que es lo que queda al
+    // pegar desde una planilla: el cliente los recorta antes de mandar.
+    await page.getByTestId("alta-usuario-nombre").fill("   Ana Pérez   ");
+    await page.getByTestId("alta-usuario-email").fill("  ana.perez@tabletracker.com  ");
+    await page.getByTestId("alta-usuario-password").fill(" con espacios adentro ");
+    await page.getByTestId("alta-usuario-rol").selectOption("encargado");
+    await page.getByRole("button", { name: "Crear usuario" }).click();
+
+    // El modal se cierra SOLO si el alta anduvo: es la señal de éxito de esta pantalla.
+    await expect(page.getByRole("heading", { name: "Nuevo usuario" })).toHaveCount(0);
+
+    expect(enviado).toEqual({
+      nombre: "Ana Pérez",
+      email: "ana.perez@tabletracker.com",
+      // La password NO se recorta: los espacios son caracteres válidos de una contraseña, y
+      // sacarlos guardaría una distinta de la que la persona escribió — que después no la
+      // dejaría entrar.
+      password: " con espacios adentro ",
+      rol: "encargado",
+    });
+  });
+
+  test("23.10 un email ya registrado lo rechaza el backend y el modal lo muestra sin cerrarse", async ({
+    page,
+    token,
+  }) => {
+    // Sin interceptar: es un 400 real de POST /auth/register. Este camino no crea ninguna
+    // fila, así que provocarlo de verdad no deja basura, y además prueba que el `detail`
+    // del backend llega a la vista a través de extraerDetalle.
+    await abrirAltaDeUsuario(page, token);
+
+    await page.getByTestId("alta-usuario-nombre").fill("Repetido");
+    await page.getByTestId("alta-usuario-email").fill(credencialesEditable().email);
+    await page.getByTestId("alta-usuario-password").fill("cualquiera");
+    await page.getByRole("button", { name: "Crear usuario" }).click();
+
+    // El modal NO se cierra: si se cerrara, quien lo usó creería que el usuario se creó.
+    await expect(page.getByRole("heading", { name: "Nuevo usuario" })).toBeVisible();
+    await expect(page.getByText("El email ya está registrado")).toBeVisible();
+  });
+
+  test("23.11 un campo vacío lo ataja el cliente sin llegar al backend", async ({ page, token }) => {
+    let huboPedido = false;
+    await page.route("**/auth/register", async (route) => {
+      huboPedido = true;
+      await route.fallback();
+    });
+
+    await abrirAltaDeUsuario(page, token);
+
+    // Todo vacío: el primer faltante es el nombre.
+    await page.getByRole("button", { name: "Crear usuario" }).click();
+    await expect(page.getByText("El nombre es obligatorio")).toBeVisible();
+
+    await page.getByTestId("alta-usuario-nombre").fill("Alguien");
+    await page.getByRole("button", { name: "Crear usuario" }).click();
+    await expect(page.getByText("El email es obligatorio")).toBeVisible();
+
+    await page.getByTestId("alta-usuario-email").fill("alguien@tabletracker.com");
+    await page.getByRole("button", { name: "Crear usuario" }).click();
+    await expect(page.getByText("La contraseña es obligatoria")).toBeVisible();
+
+    expect(huboPedido).toBe(false);
+  });
+
+  // --- Renombrado (RF-03) --------------------------------------------------------------
+
+  test("23.12 renombrar un usuario persiste el nombre nuevo", async ({ page, token, request }) => {
+    await irAUsuarios(page, token);
+    const tarjeta = tarjetaDe(page, editable.id);
+
+    await tarjeta.getByTestId(`usuario-renombrar-${editable.id}`).click();
+    const input = tarjeta.getByTestId(`usuario-nombre-input-${editable.id}`);
+    // El editor arranca con el nombre actual y no vacío: renombrar acá es corregir, y
+    // obligar a tipear todo de nuevo para arreglar una letra invita a perder el resto.
+    await expect(input).toHaveValue(credencialesEditable().nombre);
+
+    await input.fill("Nombre Corregido");
+    await tarjeta.getByRole("button", { name: "Guardar" }).click();
+
+    await expect(tarjeta.getByText("Nombre Corregido")).toBeVisible();
+    // Y quedó en la base: no es la UI mostrando lo que se tipeó.
+    const usuarios = await listarUsuarios(request, token, { incluir_inactivos: true });
+    expect(usuarios.find((u) => u.id === editable.id)?.nombre).toBe("Nombre Corregido");
+  });
+
+  test("23.13 un nombre vacío se avisa en la fila, y cancelar no cambia nada", async ({
+    page,
+    token,
+    request,
+  }) => {
+    await irAUsuarios(page, token);
+    const tarjeta = tarjetaDe(page, editable.id);
+
+    await tarjeta.getByTestId(`usuario-renombrar-${editable.id}`).click();
+    const input = tarjeta.getByTestId(`usuario-nombre-input-${editable.id}`);
+    await input.fill("   ");
+    await tarjeta.getByRole("button", { name: "Guardar" }).click();
+
+    // El aviso lo da el cliente —el backend también lo rechazaría, con 422— y el editor
+    // sigue abierto con lo escrito, para corregirlo en vez de volver a empezar.
+    await expect(tarjeta.getByText("El nombre no puede quedar vacío")).toBeVisible();
+    await expect(input).toBeVisible();
+
+    await tarjeta.getByRole("button", { name: "Cancelar" }).click();
+    await expect(input).toHaveCount(0);
+    await expect(tarjeta.getByText(credencialesEditable().nombre)).toBeVisible();
+
+    const usuarios = await listarUsuarios(request, token, { incluir_inactivos: true });
+    expect(usuarios.find((u) => u.id === editable.id)?.nombre).toBe(credencialesEditable().nombre);
   });
 });

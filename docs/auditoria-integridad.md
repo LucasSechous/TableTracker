@@ -1,7 +1,7 @@
 # Auditoría de integridad — TableTracker
 
 **Auditoría original:** 2026-09-07, rama `develop` @ `4c23f39`
-**Revisión vigente:** 2026-10-05, rama `feature/alta-de-usuarios-y-nombre-editable` @ `3f5ccea` — que es `develop` más el commit que cierra RF-03. `develop` y `main` tienen contenido idéntico y no hay ninguna otra rama con trabajo sin mergear.
+**Revisión vigente:** 2026-10-05, sobre `develop` tras el merge de `feature/alta-de-usuarios-y-nombre-editable` (`e2fb4a8`), que es el commit que cierra RF-03. `develop` y `main` quedan con contenido idéntico y no hay ninguna otra rama con trabajo sin mergear.
 **Alcance:** RF-01 a RF-34, RNF de la sección 9.2, estado de base de datos, testing, deuda conocida y consistencia documental.
 **Naturaleza:** solo lectura sobre el código. No se corrieron migraciones ni se modificó la base; lo único que se escribió es este archivo.
 

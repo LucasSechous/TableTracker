@@ -112,7 +112,18 @@ export const mesasApi = {
 
   confirmarLimpieza: (id: number) => api.patch<Mesa>(`/mesas/${id}/limpieza`),
 
-  marcarReservada: (id: number) => api.patch<Mesa>(`/mesas/${id}/reserva`),
+  /**
+   * Reserva una mesa, opcionalmente para un momento dado.
+   *
+   * `reservadaPara` va en ISO con zona: el backend guarda un instante absoluto, no un
+   * texto de reloj. Mandar "21:00" pelado dejaría la interpretación en manos del
+   * servidor, que corre en UTC, y la reserva quedaría tres horas corrida.
+   */
+  marcarReservada: (id: number, reservadaPara?: string | null) =>
+    api.patch<Mesa>(`/mesas/${id}/reserva`, reservadaPara ? { reservada_para: reservadaPara } : {}),
+
+  /** Descarta el aviso de que hay gente en una mesa reservada: no eran los de la reserva. */
+  descartarDeteccionEnReserva: (id: number) => api.delete<Mesa>(`/mesas/${id}/deteccion-reserva`),
 
   // Soft-delete vía el PATCH genérico (mismo endpoint que usa MesaUpdate.activa en el
   // backend), igual que sectoresApi.actualizar(id, { activo: false }). No usa

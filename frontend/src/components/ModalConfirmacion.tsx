@@ -50,7 +50,7 @@ export default function ModalConfirmacion({
       ocupado={ocupado}
       peligroso={peligroso}
     >
-      <p style={{ fontSize: 14, color: "#444", margin: "0 0 20px", lineHeight: 1.5 }}>{mensaje}</p>
+      <p className="text-[14px] text-gris-700 mt-[0] mx-[0] mb-[20px] leading-[1.5]">{mensaje}</p>
     </Modal>
   )
 }

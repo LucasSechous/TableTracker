@@ -11,9 +11,10 @@ import ModalAltaMesa from "../components/ModalAltaMesa"
 import Layout from "../components/Layout"
 import IndicadorFrescura from "../components/IndicadorFrescura"
 import Boton from "../components/ui/Boton"
+import AvisoReservaDetectada from "../components/AvisoReservaDetectada"
 import { useAuth } from "../hooks/useAuth"
 import { AvisoErrorProvider } from "../hooks/useAvisoError"
-import { puedeEditarLayout } from "../permisos"
+import { puedeEditarLayout, puedeReservar } from "../permisos"
 import { labelStyle } from "../components/RangoFechas"
 import { COLOR_OCUPACION_ALTA, ETIQUETA_POR_ESTADO } from "../constants"
 
@@ -67,6 +68,9 @@ export default function DashboardPage() {
   // esa: aquella depende de datos que el canvas ya tiene (estado y reloj de cada mesa),
   // esta depende del total del salón, que el canvas filtrado no conoce.
   const [ocupacion, setOcupacion] = useState<OcupacionResponse | null>(null)
+  // Bloquea los botones del aviso de reserva mientras va una de las dos acciones, para
+  // que un doble clic no mande dos veces la misma decisión.
+  const [resolviendoReserva, setResolviendoReserva] = useState(false)
   // Momento del último refresco que SÍ trajo datos, para poder decir en pantalla qué tan
   // viejo es lo que se está mirando. Se guarda el éxito y no el intento: un intento que
   // falló no rejuvenece el dato, y contarlo sería justo lo contrario de lo que esto mide.
@@ -184,6 +188,43 @@ export default function DashboardPage() {
       clearInterval(intervalId)
     }
   }, [modo])
+
+  // Mesas reservadas donde el módulo de visión vio gente lejos de la hora reservada y
+  // nadie resolvió todavía si corresponde ocuparlas (T26-208). Sale del mismo /mesas que
+  // ya se pide cada 3s: no agrega ninguna request al ciclo.
+  //
+  // Se filtra por permiso porque las dos salidas del aviso —ocupar o descartar— exigen
+  // encargado o recepción. A un mozo el cartel le mostraría dos botones que le van a dar
+  // 403, que es peor que no verlo.
+  const reservasConGente = puedeReservar(rol)
+    ? sectores.flatMap((s) => s.mesas ?? []).filter((m) => m.ocupacion_detectada_en)
+    : []
+
+  async function handleConfirmarReserva(mesa: Mesa) {
+    setResolviendoReserva(true)
+    try {
+      // Ocupar la mesa limpia la marca sola: el backend borra los datos de reserva en
+      // cuanto el estado deja de ser `reservada` (registrar_historial).
+      const { data } = await mesasApi.cambiarEstado(mesa.id, "ocupada")
+      handleMesaActualizada(data)
+    } catch (err) {
+      setErrorAccion(await extraerDetalle(err, "No se pudo ocupar la mesa"))
+    } finally {
+      setResolviendoReserva(false)
+    }
+  }
+
+  async function handleDescartarReserva(mesa: Mesa) {
+    setResolviendoReserva(true)
+    try {
+      const { data } = await mesasApi.descartarDeteccionEnReserva(mesa.id)
+      handleMesaActualizada(data)
+    } catch (err) {
+      setErrorAccion(await extraerDetalle(err, "No se pudo descartar el aviso"))
+    } finally {
+      setResolviendoReserva(false)
+    }
+  }
 
   function handleMesaEstadoChange(mesaId: number, nuevoEstado: string) {
     const estadoAnterior = sectores.flatMap((s) => s.mesas ?? []).find((m) => m.id === mesaId)?.estado
@@ -317,14 +358,14 @@ export default function DashboardPage() {
   // el salón completo.
   const filtroEstado =
     modo === "monitoreo" ? (
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
+      <div className="flex items-end gap-[12px] flex-wrap">
         <label style={labelStyle}>
           Estado
           <select
             data-testid="dashboard-filtro-estado"
             value={estadoFiltro}
             onChange={(e) => setEstadoFiltro(e.target.value)}
-            style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #ccc", minWidth: 200 }}
+            className="py-[6px] px-[8px] rounded-[6px] border border-gris-250 min-w-[200px]"
           >
             <option value={SIN_FILTRO}>Todos los estados</option>
             {OPCIONES_ESTADO.map(([valor, etiqueta]) => (
@@ -341,22 +382,13 @@ export default function DashboardPage() {
         {estadoFiltro !== SIN_FILTRO && (
           <span
             data-testid="dashboard-filtro-aviso"
-            style={{ fontSize: 13, color: "#1d4ed8", paddingBottom: 6 }}
+            className="text-[13px] text-marca-fuerte pb-[6px]"
           >
             Mostrando solo mesas en «{ETIQUETA_POR_ESTADO[estadoFiltro]}».{" "}
             <button
               data-testid="dashboard-filtro-limpiar"
               onClick={() => setEstadoFiltro(SIN_FILTRO)}
-              style={{
-                border: "none",
-                background: "none",
-                padding: 0,
-                color: "#1d4ed8",
-                fontSize: 13,
-                fontWeight: 600,
-                textDecoration: "underline",
-                cursor: "pointer",
-              }}
+              className="border-0 bg-[none] p-[0px] text-marca-fuerte text-[13px] font-semibold underline cursor-pointer"
             >
               Ver todas
             </button>
@@ -392,8 +424,9 @@ export default function DashboardPage() {
                 setEstadoFiltro(SIN_FILTRO)
                 setModo("edicion")
               }}
+              title="Editar disposición"
             >
-              Editar disposición
+              <span className="texto-en-escritorio">Editar disposición</span>
             </Boton>
           ) : null}
         </>
@@ -402,18 +435,7 @@ export default function DashboardPage() {
 
       {modo === "edicion" && (
         <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            padding: "8px 16px",
-            backgroundColor: "#eff6ff",
-            borderBottom: "1px solid #bfdbfe",
-            color: "#1d4ed8",
-            fontSize: 13,
-            fontWeight: 700,
-          }}
+          className="flex items-center justify-center gap-[8px] py-[8px] px-[16px] bg-marca-tenue border-b border-b-[#bfdbfe] text-marca-fuerte text-[13px] font-bold"
         >
           <Pencil size={14} />
           Editando disposición del salón
@@ -422,30 +444,17 @@ export default function DashboardPage() {
 
       {modo === "edicion" && (
         <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 300,
-            border: "4px solid #1d4ed8",
-            pointerEvents: "none",
-          }}
+          className="fixed inset-[0px] z-[300] border-4 border-marca-fuerte pointer-events-none"
         />
       )}
 
-      <main style={{ padding: 24, paddingBottom: modo === "edicion" ? 96 : 24 }}>
+      <main className="app-main" style={{ paddingBottom: modo === "edicion" ? 96 : undefined }}>
         {loading && (
-          <p style={{ fontSize: 14, color: "#888" }}>Cargando salón...</p>
+          <p className="text-[14px] text-gris-400">Cargando salón...</p>
         )}
         {error && (
           <p
-            style={{
-              fontSize: 14,
-              color: "#c62828",
-              backgroundColor: "#ffebee",
-              border: "1px solid #ef9a9a",
-              borderRadius: 6,
-              padding: "10px 16px",
-            }}
+            className="text-[14px] text-error bg-error-fondo border border-error-borde rounded-[6px] py-[10px] px-[16px]"
           >
             {error}
           </p>
@@ -462,38 +471,30 @@ export default function DashboardPage() {
         {errorAccion && (
           <p
             data-testid="dashboard-error-accion"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-              fontSize: 14,
-              color: "#c62828",
-              backgroundColor: "#ffebee",
-              border: "1px solid #ef9a9a",
-              borderRadius: 6,
-              padding: "10px 16px",
-            }}
+            className="flex items-center justify-between gap-[12px] text-[14px] text-error bg-error-fondo border border-error-borde rounded-[6px] py-[10px] px-[16px]"
           >
             {errorAccion}
             <button
               data-testid="dashboard-error-accion-cerrar"
               onClick={() => setErrorAccion(null)}
               title="Cerrar aviso"
-              style={{
-                border: "none",
-                background: "none",
-                color: "#c62828",
-                fontSize: 18,
-                lineHeight: 1,
-                cursor: "pointer",
-                padding: "0 4px",
-                flexShrink: 0,
-              }}
+              className="border-0 bg-[none] text-error text-[18px] leading-[1] cursor-pointer py-[0] px-[4px] shrink-0"
             >
               ×
             </button>
           </p>
+        )}
+
+        {/* Va arriba de todo lo demás del salón: es lo único de esta pantalla que pide
+            una decisión de una persona, y no tiene sentido que quede debajo de avisos
+            que solo informan. */}
+        {modo === "monitoreo" && (
+          <AvisoReservaDetectada
+            mesas={reservasConGente}
+            onConfirmar={handleConfirmarReserva}
+            onDescartar={handleDescartarReserva}
+            ocupado={resolviendoReserva}
+          />
         )}
 
         {/* Alerta de alta ocupación (T26-187, RF-26).
@@ -518,14 +519,17 @@ export default function DashboardPage() {
               // configuración y no del localSize de SalonCanvas —que es el que manda durante
               // un resize— porque este aviso solo existe en monitoreo, donde no se redimensiona.
               width: configuracion.ancho_salon,
+              // El salon puede ser mas ancho que la pantalla: sin este techo el aviso
+              // desborda el viewport en un celular y arrastra la pagina entera con el.
+              maxWidth: "100%",
               fontSize: 14,
               fontWeight: 600,
               color: COLOR_OCUPACION_ALTA,
-              backgroundColor: "#fffbeb",
+              backgroundColor: "var(--color-aviso-fuerte-fondo)",
               // Borde izquierdo grueso, el mismo recurso con el que T26-173 refuerza el
               // borde de una mesa atrasada: marca la condición sin depender solo del color,
               // que por sí solo no se lee en un monitor lavado ni con daltonismo.
-              border: "1px solid #fcd34d",
+              border: "1px solid var(--color-aviso-fuerte-borde)",
               borderLeft: `4px solid ${COLOR_OCUPACION_ALTA}`,
               borderRadius: 6,
               padding: "10px 16px",
@@ -567,21 +571,7 @@ export default function DashboardPage() {
 
       {modo === "edicion" && (
         <div
-          style={{
-            position: "fixed",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 97,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 10,
-            padding: "12px 16px",
-            backgroundColor: "#fff",
-            borderTop: "2px solid #e2e8f0",
-            boxShadow: "0 -4px 12px rgba(0,0,0,0.08)",
-          }}
+          className="fixed left-[0px] right-[0px] bottom-[0px] z-[97] flex items-center justify-center gap-[10px] py-[12px] px-[16px] bg-blanco border-t-2 border-t-slate-200 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]"
         >
           {puedeEditarLayout(rol) && (
             <>
@@ -618,8 +608,8 @@ const editExitBtnStyle: React.CSSProperties = {
   padding: "0 18px",
   borderRadius: 8,
   border: "none",
-  backgroundColor: "#1a1a1a",
-  color: "#fff",
+  backgroundColor: "var(--color-gris-900)",
+  color: "var(--color-blanco)",
   fontSize: 14,
   fontWeight: 600,
 }

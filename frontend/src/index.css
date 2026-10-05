@@ -1,1 +1,176 @@
 @import "tailwindcss";
+
+/* Paleta de la aplicación (T26-209).
+ *
+ * Acá viven los colores que estaban repetidos en más de un archivo. Eran 37, escritos a
+ * mano en 32 pantallas y componentes: #ccc aparecía en 21 archivos y #fff en 23, así que
+ * cambiar el borde de las tarjetas o el fondo de los paneles era una búsqueda y reemplazo
+ * a ciegas por todo el proyecto.
+ *
+ * LOS VALORES SON EXACTAMENTE LOS QUE YA ESTABAN. Este cambio no altera ni un píxel a
+ * propósito: lo único que hace es darles un nombre y un solo lugar donde vivir.
+ *
+ * Lo que NO está acá, y por qué:
+ *
+ *  - Los colores de dominio (estado de mesa, limpieza demorada, ocupación alta, estado
+ *    dudoso) siguen en constants.ts. Ya tenían una sola fuente y comentarios que explican
+ *    por qué cada uno es el que es; traerlos acá los alejaría de esa explicación sin
+ *    ganar nada.
+ *  - Los colores que se usan en un solo archivo. Un color con un único consumidor ya es
+ *    de fuente única; moverlo acá sería ceremonia.
+ *
+ * Sobre las DOS FAMILIAS de gris
+ *
+ * Conviven dos escalas que hacen exactamente el mismo trabajo: los grises neutros
+ * (--gris-*, herencia de Material) y los slate con tinte azul (--slate-*). No se
+ * unificaron porque NO son el mismo color —el slate tira a azul— y fundirlos cambiaría
+ * cómo se ve la aplicación, que es justo lo que este ticket no puede hacer.
+ *
+ * Quedan emparejados acá para que la unificación, cuando se decida, sea mecánica:
+ *
+ *     rol                      neutro        slate
+ *     texto tenue              --gris-400    --slate-400
+ *     texto secundario         --gris-500    --slate-500
+ *     texto de cuerpo          --gris-600    --slate-600
+ *     título                   --gris-900    --slate-900
+ *     borde suave              --gris-200    --slate-200
+ *     fondo de realce          --gris-75     --slate-100
+ */
+/* Playfair Display, la tipografía de la marca (T26-208).
+ *
+ * Autoalojada y no enlazada a fonts.googleapis.com. El motivo es concreto: el logo está en
+ * todas las pantallas, y si el día de la defensa la red del lugar anda mal o bloquea ese
+ * dominio, el nombre se dibujaría con un serif del sistema en plena presentación. Un
+ * archivo propio no depende de nadie.
+ *
+ * Un solo archivo para los dos pesos: Playfair Display es una fuente VARIABLE, así que el
+ * mismo woff2 cubre de 400 a 900. Se verificó —los dos archivos que sirve Google para 400
+ * y 700 tienen el mismo hash— y por eso el rango va declarado en font-weight: sin él el
+ * navegador sintetizaría la negrita deformando la regular en vez de usar el eje real.
+ *
+ * Solo el subconjunto latin. La aplicación es en español y la marca dice "TableTracker":
+ * traer cirílico o vietnamita sería versionar bytes que nunca se van a dibujar.
+ *
+ * swap: mientras el archivo carga se ve el serif de respaldo y después cambia. La
+ * alternativa es que el nombre no se vea hasta que el archivo esté, y un encabezado con un
+ * hueco se nota más que uno que cambia de letra.
+ */
+@font-face {
+  font-family: "Playfair Display";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("/fuentes/playfair-display.woff2") format("woff2");
+}
+
+@theme {
+  /* Base */
+  --color-blanco: #fff;
+
+  /* Grises neutros */
+  --color-gris-900: #1a1a1a;
+  --color-gris-700: #444;
+  --color-gris-600: #555;
+  --color-gris-500: #666;
+  --color-gris-400: #888;
+  --color-gris-350: #999;
+  --color-gris-250: #ccc;
+  --color-gris-200: #e0e0e0;
+  --color-gris-150: #eee;
+  --color-gris-75: #f5f5f5;
+  --color-gris-50: #fafafa;
+  /* Gris de relleno cuando un estado no se reconoce (MesaVisual). */
+  --color-gris-desconocido: #9e9e9e;
+
+  /* Slate */
+  --color-slate-900: #1e293b;
+  --color-slate-700: #334155;
+  --color-slate-600: #475569;
+  --color-slate-500: #64748b;
+  --color-slate-400: #94a3b8;
+  --color-slate-300: #cbd5e1;
+  --color-slate-200: #e2e8f0;
+  --color-slate-100: #f1f5f9;
+  --color-slate-50: #f8fafc;
+
+  /* Marca: el azul de las acciones */
+  --color-marca: #1976d2;
+  --color-marca-fuerte: #1d4ed8;
+  --color-marca-tenue: #eff6ff;
+
+  /* Error */
+  --color-error: #c62828;
+  --color-error-fondo: #ffebee;
+  --color-error-borde: #ef9a9a;
+
+  /* Éxito */
+  --color-exito: #2e7d32;
+  --color-exito-fondo: #e8f5e9;
+  --color-exito-borde: #a5d6a7;
+
+  /* Aviso ámbar suave: el de los mensajes informativos */
+  --color-aviso: #8a6d0b;
+  --color-aviso-fondo: #fff8e1;
+  --color-aviso-borde: #ffe082;
+
+  /* Aviso ámbar fuerte: el de las condiciones que piden atención */
+  --color-aviso-fuerte: #b45309;
+  --color-aviso-fuerte-fondo: #fffbeb;
+  --color-aviso-fuerte-borde: #fcd34d;
+}
+
+/* Reglas responsive de la aplicación (T26-209).
+ *
+ * Por qué existe este archivo y no está todo inline como el resto: un objeto style de React
+ * no admite media queries. Mientras cada pantalla escribía su padding a mano, la aplicación
+ * no podía adaptarse a un ancho de celular ni aunque se quisiera — y no había ni una media
+ * query en todo el proyecto.
+ *
+ * La regla que gobierna todo lo de acá: POR ENCIMA DEL BREAKPOINT NADA CAMBIA. Los valores
+ * de las reglas base son exactamente los que estaban inline, así que en un monitor la
+ * aplicación se ve idéntica a antes; lo que agregan las media queries solo se activa por
+ * debajo de 640px. El escritorio queda intacto por construcción y no por cuidado manual,
+ * que es lo que hace este cambio seguro a esta altura del proyecto.
+ *
+ * Cuidado al tocar esto: un estilo inline le gana a cualquier regla de acá. Si una pantalla
+ * vuelve a poner `padding` en su style, esta hoja deja de tener efecto sobre ella en
+ * silencio, sin romper nada y sin avisar.
+ */
+
+/* 640px: el ancho a partir del cual la aplicación deja de ser una pantalla de escritorio.
+ * Coincide con el breakpoint `sm` de Tailwind, para que cuando el resto migre a clases
+ * (T26-209, punto 3) no convivan dos criterios distintos de "esto es un celular". */
+
+/* El <main> de las diez pantallas. 24px es el valor que tenían todas inline. */
+.app-main {
+  padding: 24px;
+}
+
+/* El encabezado fijo que monta Layout. */
+.app-header {
+  padding: 0 24px;
+}
+
+/* Texto que solo tiene sentido con lugar de sobra. Se usa en las etiquetas de los botones
+ * del encabezado: en un celular compiten con el indicador de frescura y el botón queda
+ * cortado contra el borde. Escondiendo el texto, el icono alcanza para reconocerlo y el
+ * botón sigue siendo alcanzable — que es lo que importa, porque es la puerta de entrada al
+ * modo edición. El nombre completo sigue disponible en el title para quien lo necesite. */
+.texto-en-escritorio {
+  display: inline;
+}
+
+@media (max-width: 640px) {
+  .texto-en-escritorio {
+    display: none;
+  }
+
+  /* En un celular, 24px por lado se comen un 13% del ancho útil. */
+  .app-main {
+    padding: 16px;
+  }
+
+  .app-header {
+    padding: 0 12px;
+  }
+}

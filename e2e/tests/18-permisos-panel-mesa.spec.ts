@@ -18,7 +18,7 @@ import {
   getPanelMesaToggle,
   getPanelMesaCerrar,
   getConfirmarLimpiezaButton,
-  getMarcarReservadaButton,
+  getReservarMesaButton,
   getPanelMesaEstadoButton,
   cerrarPanelMesa,
 } from "../fixtures/ui-helpers";
@@ -70,10 +70,12 @@ test.describe("con una mesa libre y otra pendiente de limpieza", () => {
     await expect(getPanelMesaCerrar(page)).toBeVisible();
     await expect(getConfirmarLimpiezaButton(page)).toHaveCount(0);
 
+    // Reservar no es suyo, y ahora que está afuera del desplegable se verifica ahí mismo.
+    await expect(getReservarMesaButton(page)).toHaveCount(0);
+
     // Pero sí corregir el estado a mano (RF-17), que es su tarea.
     await getPanelMesaToggle(page).click();
     await expect(getPanelMesaEstadoButton(page, "ocupada")).toBeVisible();
-    await expect(getMarcarReservadaButton(page)).toHaveCount(0);
   });
 
   test("18.2 recepcion reserva pero no corrige estados ni confirma limpieza", async ({ page, tokenDeRol }) => {
@@ -84,10 +86,14 @@ test.describe("con una mesa libre y otra pendiente de limpieza", () => {
     await expect(getPanelMesaCerrar(page)).toBeVisible();
     await expect(getConfirmarLimpiezaButton(page)).toHaveCount(0);
 
-    // El desplegable existe porque puede reservar, pero adentro solo eso: los cuatro
-    // botones de estado son de encargado/mozo.
-    await getPanelMesaToggle(page).click();
-    await expect(getMarcarReservadaButton(page)).toBeVisible();
+    // Reservar está a la vista, sin abrir nada: desde T26-208 vive debajo del estado y no
+    // dentro del desplegable de corrección.
+    await expect(getReservarMesaButton(page)).toBeVisible();
+
+    // Y el desplegable de corrección ya no aparece: contiene solo los cuatro botones de
+    // estado, que son de encargado/mozo. Antes se mostraba porque también guardaba
+    // "reservar" adentro.
+    await expect(getPanelMesaToggle(page)).toHaveCount(0);
     for (const estado of ["libre", "ocupada", "pendiente_limpieza", "reservada"]) {
       await expect(getPanelMesaEstadoButton(page, estado)).toHaveCount(0);
     }
@@ -124,8 +130,10 @@ test.describe("con una mesa libre y otra pendiente de limpieza", () => {
     await getMesaCircle(sectorBlock, mesaPendiente.numero).click();
     await expect(getConfirmarLimpiezaButton(page)).toBeVisible();
 
+    // Reservar, a la vista y sin desplegar nada.
+    await expect(getReservarMesaButton(page)).toBeVisible();
+
     await getPanelMesaToggle(page).click();
-    await expect(getMarcarReservadaButton(page)).toBeVisible();
     await expect(getPanelMesaEstadoButton(page, "libre")).toBeVisible();
   });
 

@@ -9,6 +9,7 @@ import {
   listarMesas,
   listarSectores,
   obtenerConfiguracion,
+  actualizarConfiguracion,
   uniqueSuffix,
   SectorResponse,
   MesaResponse,
@@ -43,11 +44,28 @@ const MARGEN_PARA_CRECER_Y = 100;
 // botón y la lógica no debería estar duplicada en cada spec.
 const toggleAEdicion = entrarEnModoEdicion;
 
+// Lo que el sector de este bloque necesita para que un arrastre hacia abajo de 45px no
+// choque contra el borde: 50 de posición + 400 de alto + 45 de recorrido, más aire.
+//
+// No es un detalle de estilo. 5.5 estuvo fallando sin que nadie lo tocara porque el salón
+// quedó configurado en 446 de alto: el sector ya nacía 4px fuera, y al arrastrarlo hacia
+// abajo el clamp lo empujaba hacia ARRIBA, dando un desplazamiento negativo. El test daba
+// por sentado un tamaño de salón que es un dato de configuración, no algo suyo, así que
+// cualquiera que redimensionara el salón desde la UI lo rompía sin enterarse.
+const ALTO_SALON_NECESARIO = 520;
+
 test.describe("con un sector (700x400) y una mesa cerca de la esquina", () => {
   let sector: SectorResponse;
   let mesa: MesaResponse;
+  let altoSalonOriginal: number | null = null;
 
   test.beforeEach(async ({ request, token }) => {
+    const config = await obtenerConfiguracion(request, token);
+    if (config.alto_salon < ALTO_SALON_NECESARIO) {
+      altoSalonOriginal = config.alto_salon;
+      await actualizarConfiguracion(request, token, { alto_salon: ALTO_SALON_NECESARIO });
+    }
+
     const suffix = uniqueSuffix(test.info().parallelIndex);
     sector = await createSector(request, token, { nombre: `E2E Edicion ${suffix}` });
     sector = await actualizarSector(request, token, sector.id, { pos_x: 50, pos_y: 50, ancho: 700, alto: 400 });
@@ -57,6 +75,12 @@ test.describe("con un sector (700x400) y una mesa cerca de la esquina", () => {
   test.afterEach(async ({ request, token }) => {
     await deleteMesa(request, token, mesa.id).catch(() => {});
     await deleteSector(request, token, sector.id).catch(() => {});
+    // El salón vuelve a su tamaño: es configuración compartida, y dejarlo agrandado le
+    // cambiaría el escenario a los specs que corren después.
+    if (altoSalonOriginal !== null) {
+      await actualizarConfiguracion(request, token, { alto_salon: altoSalonOriginal }).catch(() => {});
+      altoSalonOriginal = null;
+    }
   });
 
   test("5.1 el toggle monitoreo/edición cambia el comportamiento del click", async ({ page, token }) => {

@@ -66,40 +66,24 @@ export default function Modal({
       // PATCH de posición al soltar. Lo que pasa acá adentro no es asunto de lo que hay detrás.
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0,0,0,0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
+      className="fixed inset-[0px] bg-[rgba(0,0,0,0.5)] flex items-center justify-center z-[1000]"
     >
       <div
         data-testid="modal"
         style={{
-          backgroundColor: "#fff",
+          backgroundColor: "var(--color-blanco)",
           borderRadius: 8,
           padding: 24,
           width: ancho,
           boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
         }}
       >
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1a1a1a", margin: "0 0 16px" }}>{titulo}</h2>
+        <h2 className="text-[16px] font-bold text-gris-900 mt-[0] mx-[0] mb-[16px]">{titulo}</h2>
 
         {error && (
           <p
             data-testid="modal-error"
-            style={{
-              fontSize: 13,
-              color: "#c62828",
-              backgroundColor: "#ffebee",
-              border: "1px solid #ef9a9a",
-              borderRadius: 6,
-              padding: "8px 12px",
-              margin: "0 0 12px",
-            }}
+            className="text-[13px] text-error bg-error-fondo border border-error-borde rounded-[6px] py-[8px] px-[12px] mt-[0] mx-[0] mb-[12px]"
           >
             {error}
           </p>
@@ -107,7 +91,7 @@ export default function Modal({
 
         {children}
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <div className="flex justify-end gap-[8px]">
           <button
             data-testid="modal-cancelar"
             onClick={onCancelar}
@@ -115,11 +99,11 @@ export default function Modal({
             style={{
               padding: "6px 14px",
               borderRadius: 6,
-              border: "1px solid #ccc",
+              border: "1px solid var(--color-gris-250)",
               fontSize: 13,
               cursor: ocupado ? "default" : "pointer",
-              backgroundColor: "#fff",
-              color: "#555",
+              backgroundColor: "var(--color-blanco)",
+              color: "var(--color-gris-600)",
               fontWeight: 500,
             }}
           >
@@ -135,8 +119,8 @@ export default function Modal({
               border: "none",
               fontSize: 13,
               cursor: primarioBloqueado ? "default" : "pointer",
-              backgroundColor: peligroso ? "#c62828" : "#1976d2",
-              color: "#fff",
+              backgroundColor: peligroso ? "var(--color-error)" : "var(--color-marca)",
+              color: "var(--color-blanco)",
               fontWeight: 500,
               opacity: primarioBloqueado ? 0.6 : 1,
             }}

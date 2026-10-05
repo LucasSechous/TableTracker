@@ -38,13 +38,17 @@ interface Props {
 
 export default function Layout({ children, acciones, titulo }: Props) {
   const [menuAbierto, setMenuAbierto] = useState(false)
+  // El logo es un archivo suelto en public/. Si falta, el encabezado no puede quedar
+  // con un icono roto: se cae al nombre escrito, que es como se veía antes.
+  const [logoRoto, setLogoRoto] = useState(false)
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const seccion = seccionDe(pathname)
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
+    <div className="min-h-[100vh] bg-gris-75">
       <header
+        className="app-header"
         style={{
           position: "fixed",
           top: 0,
@@ -52,9 +56,8 @@ export default function Layout({ children, acciones, titulo }: Props) {
           right: 0,
           zIndex: 150,
           height: ALTURA_HEADER,
-          backgroundColor: "#fff",
+          backgroundColor: "var(--color-blanco)",
           boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-          padding: "0 24px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -62,61 +65,73 @@ export default function Layout({ children, acciones, titulo }: Props) {
           boxSizing: "border-box",
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
-          {/* La marca es el camino de vuelta al salón desde cualquier lado, que es lo que
-              hacía el botón "Volver al salón" de cada pantalla. Sigue estando además como
-              primera entrada del menú: acá es el atajo, allá el destino explícito. */}
+        {/* Logo a la izquierda y el nombre de la sección a su derecha. Los dos en una fila
+            y no apilados como antes: el logo ya dice el nombre del producto, así que
+            repetirlo arriba del título sería decirlo dos veces.
+
+            La marca es el camino de vuelta al salón desde cualquier lado, que es lo que
+            hacía el botón "Volver al salón" de cada pantalla. Sigue estando además como
+            primera entrada del menú: acá es el atajo, allá el destino explícito. */}
+        <div className="flex items-center gap-[12px] min-w-[0px]">
           <button
             onClick={() => navigate("/")}
-            style={{
-              border: "none",
-              background: "none",
-              padding: 0,
-              fontFamily: "inherit",
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: 0.5,
-              color: "#94a3b8",
-              cursor: "pointer",
-              textAlign: "left",
-            }}
+            title="Ir al salón"
+            className="border-0 bg-[none] p-[0px] cursor-pointer shrink-0 flex items-center"
           >
-            TABLETRACKER
+            {/* La mesa va como imagen y el nombre como TEXTO, no las dos cosas en un
+                archivo. Escrito se lee nítido a cualquier tamaño y en cualquier pantalla,
+                mientras que un nombre rasterizado a 40px de alto se empasta —que es
+                justamente lo que pasaba con el lockup cuadrado original—. */}
+            {!logoRoto && (
+              <img
+                src="/logo-icono.png"
+                alt=""
+                aria-hidden
+                onError={() => setLogoRoto(true)}
+                className="h-[38px] w-auto block"
+              />
+            )}
+            {/* Playfair Display, para que la letra acompañe a la T con serifas que forma la
+                pata de la mesa en el propio logo. Una sans geométrica al lado de ese dibujo
+                se lee como dos marcas distintas pegadas.
+
+                Va autoalojada —ver el @font-face en index.css— y con Georgia de respaldo,
+                que es el serif del sistema más parecido en peso. El resto de la aplicación
+                sigue en su sans: el serif es la excepción de la marca, no un cambio de
+                tipografía general. */}
+            <span
+              data-testid="marca-nombre"
+              className="text-[26px] leading-[1] text-gris-900 whitespace-nowrap"
+              style={{ fontFamily: '"Playfair Display", Georgia, serif' }}
+            >
+              {/* El contraste de pesos entre las dos palabras es el que ya tenía el logo
+                  original: "Table" firme y "Tracker" más liviano. Cambia la tipografía, no
+                  la jerarquía. */}
+              <strong className="font-bold">Table</strong>
+              <span className="font-normal">Tracker</span>
+            </span>
           </button>
+
+          {/* El separador solo existe cuando hay logo: sin él, el nombre escrito y el
+              título quedarían pegados sin nada que los distinga. */}
+          <span aria-hidden className="text-[20px] text-slate-300 shrink-0 font-[300]">
+            /
+          </span>
+
           <h1
-            style={{
-              fontSize: 18,
-              fontWeight: 700,
-              color: "#1a1a1a",
-              margin: 0,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
+            className="text-[18px] font-bold text-gris-900 m-[0px] overflow-hidden text-ellipsis whitespace-nowrap"
           >
             {titulo ?? seccion.etiqueta}
           </h1>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        <div className="flex items-center gap-[8px] shrink-0">
           {acciones}
           <button
             onClick={() => setMenuAbierto(true)}
             aria-label="Abrir menú"
             aria-expanded={menuAbierto}
-            style={{
-              width: 44,
-              height: 44,
-              flexShrink: 0,
-              border: "none",
-              borderRadius: 10,
-              backgroundColor: "#f1f5f9",
-              color: "#1a1a1a",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
+            className="w-[44px] h-[44px] shrink-0 border-0 rounded-[10px] bg-slate-100 text-gris-900 cursor-pointer flex items-center justify-center"
           >
             <Menu size={20} aria-hidden />
           </button>

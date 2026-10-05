@@ -146,6 +146,14 @@ class BackendClient:
         # estado: libre | ocupada | pendiente_limpieza | reservada
         return self._request("PATCH", f"/mesas/{mesa_id}/estado", json={"estado": estado}).json()
 
+    def marcar_deteccion_en_reserva(self, mesa_id):
+        """Avisa que hay gente en una mesa reservada, sin cambiar su estado.
+
+        El backend ignora la segunda y siguientes llamadas mientras el aviso siga sin
+        resolver, asi que es seguro llamarlo en cada ciclo.
+        """
+        return self._enviar("PATCH", f"/mesas/{mesa_id}/deteccion-reserva")
+
     def publicar_deteccion_actual(self, camara_id, payload):
         # POST /camaras/{camara_id}/deteccion-actual — resultado crudo del frame
         # para la vista en vivo (T26-150). 204 sin cuerpo: nada que parsear de

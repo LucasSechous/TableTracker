@@ -55,7 +55,7 @@ function centroide(puntos: PuntoRoi[]): PuntoRoi {
 // para que la etiqueta nunca se interponga en el click que agrega puntos al polígono.
 function EtiquetaMesa({ x, y, numero, fontSize }: { x: number; y: number; numero: number; fontSize: number }): ReactNode {
   return (
-    <g style={{ pointerEvents: "none" }}>
+    <g className="pointer-events-none">
       <text
         x={x}
         y={y}
@@ -89,7 +89,7 @@ function EtiquetaDeteccion({ x, y, texto, fontSize }: { x: number; y: number; te
       stroke="#000"
       strokeWidth={fontSize * 0.28}
       paintOrder="stroke"
-      style={{ pointerEvents: "none" }}
+      className="pointer-events-none"
     >
       {texto}
     </text>
@@ -169,7 +169,7 @@ export default function RoiCanvas({
 
   if (errorCarga) {
     return (
-      <p style={{ fontSize: 13, color: "#c62828" }}>
+      <p className="text-[13px] text-[#c62828]">
         No se pudo mostrar el frame de la cámara como imagen.
       </p>
     );
@@ -184,11 +184,11 @@ export default function RoiCanvas({
     draftPoints.length >= 3 && mesaSeleccionadaNumero !== undefined ? centroide(draftPoints) : null;
 
   return (
-    <div style={{ position: "relative", display: "inline-block", maxWidth: "100%" }}>
+    <div className="relative inline-block max-w-[100%]">
       <img
         src={snapshotSrc}
         alt="Frame de referencia de la cámara"
-        style={{ display: "block", maxWidth: "100%", borderRadius: 6, border: "1px solid #ccc", userSelect: "none" }}
+        className="block max-w-[100%] rounded-[6px] border border-[#ccc] select-none"
         onLoad={(e) =>
           setNaturalSize({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })
         }

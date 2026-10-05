@@ -49,27 +49,18 @@ export default function ModalEditarSector({ sector, onClose, onSectorActualizado
       onConfirmar={handleConfirmar}
       onCancelar={onClose}
     >
-      <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 12 }}>
+      <label className="block text-[13px] text-gris-600 mb-[12px]">
         Nombre
         <input
           type="text"
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
           autoFocus
-          style={{
-            display: "block",
-            width: "100%",
-            boxSizing: "border-box",
-            marginTop: 4,
-            padding: 8,
-            fontSize: 14,
-            border: "1px solid #ccc",
-            borderRadius: 6,
-          }}
+          className="block w-full box-border mt-[4px] p-[8px] text-[14px] border border-gris-250 rounded-[6px]"
         />
       </label>
 
-      <label style={{ display: "block", fontSize: 13, color: "#555", marginBottom: 20 }}>
+      <label className="block text-[13px] text-gris-600 mb-[20px]">
         Descripción (opcional)
         <textarea
           value={descripcion}
@@ -81,7 +72,7 @@ export default function ModalEditarSector({ sector, onClose, onSectorActualizado
             marginTop: 4,
             padding: 8,
             fontSize: 14,
-            border: "1px solid #ccc",
+            border: "1px solid var(--color-gris-250)",
             borderRadius: 6,
             minHeight: 60,
             resize: "vertical",

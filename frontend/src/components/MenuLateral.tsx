@@ -87,7 +87,7 @@ export default function MenuLateral({ abierto, onClose }: Props) {
           bottom: 0,
           width: "100%",
           maxWidth: 300,
-          backgroundColor: "#fff",
+          backgroundColor: "var(--color-blanco)",
           zIndex: 201,
           transform: abierto ? "translateX(0)" : "translateX(100%)",
           transition: "transform 0.25s ease",
@@ -97,46 +97,28 @@ export default function MenuLateral({ abierto, onClose }: Props) {
         }}
       >
         <div
-          style={{
-            padding: 20,
-            borderBottom: "2px solid #e2e8f0",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-          }}
+          className="p-[20px] border-b-2 border-b-slate-200 flex items-center justify-between gap-[12px]"
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-            <User size={20} color="#1e293b" />
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "#1e293b" }}>{user?.nombre ?? ""}</div>
-              <div style={{ fontSize: 12, color: "#94a3b8", textTransform: "capitalize" }}>{rol ?? ""}</div>
+          <div className="flex items-center gap-[10px] min-w-[0px]">
+            {/* El color va por CSS y no por la prop `color`: lucide la vuelca en el atributo
+                stroke, y var() no se resuelve en un atributo de presentacion de SVG.
+                Sin la prop, lucide usa currentColor, que si lo resuelve. */}
+            <User size={20} className="text-slate-900" />
+            <div className="min-w-[0px]">
+              <div className="text-[16px] font-bold text-slate-900">{user?.nombre ?? ""}</div>
+              <div className="text-[12px] text-slate-400 capitalize">{rol ?? ""}</div>
             </div>
           </div>
           <button
             onClick={onClose}
             aria-label="Cerrar menú"
-            style={{
-              width: 44,
-              height: 44,
-              flexShrink: 0,
-              border: "none",
-              background: "#f1f5f9",
-              borderRadius: 10,
-              fontSize: 22,
-              lineHeight: 1,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#64748b",
-            }}
+            className="w-[44px] h-[44px] shrink-0 border-0 bg-slate-100 rounded-[10px] text-[22px] leading-[1] cursor-pointer flex items-center justify-center text-slate-500"
           >
             ×
           </button>
         </div>
 
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", padding: "8px 0" }}>
+        <div className="flex-[1] flex flex-col overflow-y-auto py-[8px] px-[0]">
           {GRUPOS.map((grupo) => {
             const delGrupo = visibles.filter((s) => s.grupo === grupo)
             // Un rol no admin no ve ninguna sección de administración: sin esto quedaría
@@ -146,14 +128,7 @@ export default function MenuLateral({ abierto, onClose }: Props) {
             return (
               <div key={grupo}>
                 <div
-                  style={{
-                    padding: "10px 20px 4px",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    letterSpacing: 0.5,
-                    textTransform: "uppercase",
-                    color: "#94a3b8",
-                  }}
+                  className="pt-[10px] px-[20px] pb-[4px] text-[11px] font-bold tracking-[0.5px] uppercase text-slate-400"
                 >
                   {TITULO_GRUPO[grupo]}
                 </div>
@@ -181,7 +156,7 @@ export default function MenuLateral({ abierto, onClose }: Props) {
             )
           })}
 
-          <div style={{ height: 1, background: "#e2e8f0", margin: "8px 20px", marginTop: "auto" }} />
+          <div className="h-[1px] bg-slate-200 my-[8px] mx-[20px] mt-auto" />
 
           <button onClick={salir} style={{ ...itemStyle, color: "#ef4444" }}>
             <LogOut size={18} aria-hidden />
@@ -206,7 +181,7 @@ const itemStyle: CSSProperties = {
   fontSize: 14,
   fontWeight: 600,
   fontFamily: "inherit",
-  color: "#334155",
+  color: "var(--color-slate-700)",
   cursor: "pointer",
   textAlign: "left",
 }
@@ -215,7 +190,7 @@ const itemStyle: CSSProperties = {
 // de la izquierda. La barra es la que sobrevive en escala de grises y para quien no
 // distingue el azul del gris.
 const itemActivoStyle: CSSProperties = {
-  backgroundColor: "#eff6ff",
-  color: "#1d4ed8",
-  borderLeft: "3px solid #1d4ed8",
+  backgroundColor: "var(--color-marca-tenue)",
+  color: "var(--color-marca-fuerte)",
+  borderLeft: "3px solid var(--color-marca-fuerte)",
 }

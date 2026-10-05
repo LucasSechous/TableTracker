@@ -1,7 +1,16 @@
-// Pantalla de administración de usuarios (T26-175): listado, cambio de rol y baja
-// lógica. Estructura calcada de CamarasPage.tsx (header, banners de error/éxito,
-// extraerDetalle). Acceso restringido a admin, igual que /usuarios en el backend
-// (requiere_rol("admin")) — ver AdminRoute en App.tsx.
+// Pantalla de administración de usuarios (T26-175, RF-03): alta, listado, renombrado,
+// cambio de rol y baja lógica. Estructura calcada de CamarasPage.tsx (header, banners de
+// error/éxito, extraerDetalle). Acceso restringido a admin, igual que /usuarios en el
+// backend (requiere_rol("admin")) — ver AdminRoute en App.tsx.
+//
+// El alta y el renombrado cierran RF-03. Antes esta pantalla sabía listar, cambiar rol y
+// dar de baja, pero crear un usuario era POST /auth/register a mano y el nombre no se
+// podía corregir desde ningún lado: un typo al cargar a alguien quedaba fijo en la base.
+//
+// Email y password NO se editan acá a propósito, y el motivo está en el docstring de
+// UserAdminUpdate (backend): el email es el `sub` del JWT y la clave con la que el backend
+// reconoce a la cuenta de servicio de vision-module, y rotar la password sin versionado de
+// tokens dejaría la credencial vieja usable hasta que el JWT venza solo.
 //
 // Las salvaguardas (no admin auto-desactivarse, no dejar el sistema sin admin activo,
 // no desactivar la cuenta de vision-module) las aplica el backend con 409: esta
@@ -11,20 +20,15 @@
 // sin otra request).
 
 import { useEffect, useState } from "react"
-import { ShieldAlert } from "lucide-react"
+import { Pencil, ShieldAlert } from "lucide-react"
 import { usuariosApi, extraerDetalle } from "../services/api"
 import type { UsuarioAdmin } from "../types"
 import { useAuth } from "../hooks/useAuth"
+import { ROLES_ASIGNABLES } from "../constants"
 import Layout from "../components/Layout"
 import Boton from "../components/ui/Boton"
+import ModalAltaUsuario from "../components/ModalAltaUsuario"
 import ModalConfirmacion from "../components/ModalConfirmacion"
-
-// Valores de rol usados en el resto del sistema (docs/roles-permisos.md). No hay
-// enum ni CHECK del lado del backend —sigue siendo un String libre, a propósito
-// fuera de alcance de este ticket—, así que este select es una ayuda de la UI para
-// no repetir el typo documentado ("admim") que deja a alguien sin poder pasar
-// ningún requiere_rol(...), no una validación real.
-const ROLES = ["admin", "encargado", "mozo", "recepcion", "limpieza", "vision_module"] as const
 
 const estiloSelect: React.CSSProperties = {
   padding: "6px 10px",
@@ -57,6 +61,12 @@ export default function UsuariosPage() {
   const [guardando, setGuardando] = useState<Record<number, boolean>>({})
   // El usuario que está esperando confirmación para activarse o desactivarse (T26-200/F-10).
   const [usuarioAConfirmar, setUsuarioAConfirmar] = useState<UsuarioAdmin | null>(null)
+  const [modalAltaAbierto, setModalAltaAbierto] = useState(false)
+  // Id del usuario que se está renombrando, y el texto en curso. Uno solo a la vez: el
+  // borrador es un string y no un mapa por id porque abrir un segundo renombrado cierra el
+  // primero, igual que el botón "Editar" de CamarasPage abre un modal y no varios.
+  const [renombrando, setRenombrando] = useState<number | null>(null)
+  const [borradorNombre, setBorradorNombre] = useState("")
 
   useEffect(() => {
     cargar(incluirInactivos, true)
@@ -76,7 +86,11 @@ export default function UsuariosPage() {
     }
   }
 
-  async function aplicarCambio(usuario: UsuarioAdmin, datos: { rol?: string; activo?: boolean }) {
+  /** Devuelve si el cambio se aplicó: el renombrado deja el editor abierto si falló. */
+  async function aplicarCambio(
+    usuario: UsuarioAdmin,
+    datos: { nombre?: string; rol?: string; activo?: boolean }
+  ): Promise<boolean> {
     setGuardando((prev) => ({ ...prev, [usuario.id]: true }))
     setErrorFila((prev) => ({ ...prev, [usuario.id]: null }))
     try {
@@ -85,9 +99,11 @@ export default function UsuariosPage() {
       // default), desactivar a alguien tiene que sacarlo de la lista, no dejarlo con
       // la marca "inactivo" puesta pero visible pese al filtro.
       await cargar(incluirInactivos)
+      return true
     } catch (err) {
       const mensaje = await extraerDetalle(err, "No se pudo actualizar el usuario")
       setErrorFila((prev) => ({ ...prev, [usuario.id]: mensaje }))
+      return false
     } finally {
       setGuardando((prev) => ({ ...prev, [usuario.id]: false }))
     }
@@ -109,8 +125,43 @@ export default function UsuariosPage() {
     aplicarCambio(usuario, { activo: !usuario.activo })
   }
 
+  function handleRenombrarClick(usuario: UsuarioAdmin) {
+    setRenombrando(usuario.id)
+    setBorradorNombre(usuario.nombre)
+    // Limpia un error anterior de esta fila: si el intento pasado falló, el mensaje viejo
+    // al lado de un campo recién abierto se lee como si el nuevo ya hubiera fallado.
+    setErrorFila((prev) => ({ ...prev, [usuario.id]: null }))
+  }
+
+  async function handleGuardarNombre(usuario: UsuarioAdmin) {
+    const limpio = borradorNombre.trim()
+    // Mismo criterio que el backend (min_length=1 sobre el nombre ya recortado), para no
+    // gastar un viaje en un pedido que vuelve 422.
+    if (!limpio) {
+      setErrorFila((prev) => ({ ...prev, [usuario.id]: "El nombre no puede quedar vacío" }))
+      return
+    }
+    if (limpio === usuario.nombre) {
+      setRenombrando(null)
+      return
+    }
+    // El editor se cierra solo si el PATCH anduvo: si falló, el texto escrito sigue en
+    // pantalla para corregirlo, en vez de perderse y obligar a tipearlo de nuevo.
+    if (await aplicarCambio(usuario, { nombre: limpio })) setRenombrando(null)
+  }
+
   return (
-    <Layout>
+    // "+ Nuevo usuario" va en el encabezado y no entre los controles de la lista, igual que
+    // "+ Nueva cámara" en CamarasPage: es la acción principal de la pantalla.
+    <Layout
+      acciones={
+        !cargandoInicial && !errorInicial ? (
+          <Boton variante="primario" onClick={() => setModalAltaAbierto(true)}>
+            + Nuevo usuario
+          </Boton>
+        ) : undefined
+      }
+    >
       <main className="app-main flex flex-col gap-[16px] max-w-[900px]">
         {cargandoInicial && <p className="text-[14px] text-gris-400">Cargando usuarios...</p>}
         {errorInicial && <p style={estiloError}>{errorInicial}</p>}
@@ -164,24 +215,68 @@ export default function UsuariosPage() {
                       className="flex justify-between items-center flex-wrap gap-[12px]"
                     >
                       <div>
-                        <div className="text-[14px] font-bold text-gris-900 flex items-center gap-[6px]">
-                          {usuario.nombre}
-                          {esUnoMismo && (
-                            <span className="text-[11px] font-medium text-slate-400">(vos)</span>
-                          )}
-                          {usuario.es_cuenta_servicio && (
-                            <span
-                              title="Cuenta de servicio del módulo de visión: si se desactiva, la detección se detiene."
-                              className="flex items-center gap-[4px] text-[11px] font-semibold text-aviso"
+                        {renombrando === usuario.id ? (
+                          // Renombrado en línea y no en un modal: es un solo campo, y el
+                          // modal taparía el error de la fila que es justo donde el backend
+                          // contesta. Enter guarda y Escape cancela, además de los botones.
+                          <div className="flex items-center gap-[6px] flex-wrap">
+                            <input
+                              type="text"
+                              data-testid={`usuario-nombre-input-${usuario.id}`}
+                              value={borradorNombre}
+                              onChange={(e) => setBorradorNombre(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleGuardarNombre(usuario)
+                                if (e.key === "Escape") setRenombrando(null)
+                              }}
+                              autoFocus
+                              className="p-[6px] text-[14px] font-bold border border-gris-250 rounded-[6px]"
+                            />
+                            <Boton
+                              variante="primario"
+                              onClick={() => handleGuardarNombre(usuario)}
+                              cargando={guardando[usuario.id]}
+                              textoCargando="Guardando..."
                             >
-                              <ShieldAlert size={13} />
-                              cuenta de servicio
-                            </span>
-                          )}
-                          {!usuario.activo && (
-                            <span className="text-[11px] font-semibold text-error">· inactivo</span>
-                          )}
-                        </div>
+                              Guardar
+                            </Boton>
+                            <Boton onClick={() => setRenombrando(null)}>Cancelar</Boton>
+                          </div>
+                        ) : (
+                          <div className="text-[14px] font-bold text-gris-900 flex items-center gap-[6px]">
+                            {usuario.nombre}
+                            {/* Renombrar no está restringido ni para la fila propia ni para la
+                                cuenta de servicio, a diferencia del select de rol y del botón de
+                                baja: el nombre no identifica ni autentica nada —el backend
+                                reconoce a vision-module por su EMAIL— así que cambiarlo no puede
+                                dejar a nadie afuera ni apagar una salvaguarda. */}
+                            <button
+                              type="button"
+                              data-testid={`usuario-renombrar-${usuario.id}`}
+                              title="Renombrar"
+                              aria-label={`Renombrar a ${usuario.nombre}`}
+                              onClick={() => handleRenombrarClick(usuario)}
+                              className="flex items-center bg-transparent border-none p-[2px] cursor-pointer text-gris-400 hover:text-gris-900"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            {esUnoMismo && (
+                              <span className="text-[11px] font-medium text-slate-400">(vos)</span>
+                            )}
+                            {usuario.es_cuenta_servicio && (
+                              <span
+                                title="Cuenta de servicio del módulo de visión: si se desactiva, la detección se detiene."
+                                className="flex items-center gap-[4px] text-[11px] font-semibold text-aviso"
+                              >
+                                <ShieldAlert size={13} />
+                                cuenta de servicio
+                              </span>
+                            )}
+                            {!usuario.activo && (
+                              <span className="text-[11px] font-semibold text-error">· inactivo</span>
+                            )}
+                          </div>
+                        )}
                         <div className="text-[12px] text-gris-400">{usuario.email}</div>
                       </div>
 
@@ -195,10 +290,10 @@ export default function UsuariosPage() {
                           {/* Si el rol actual no está en la lista curada (typo viejo, o un valor
                               cargado directo en la base) se agrega igual para no perderlo del
                               select ni forzar un cambio no pedido. */}
-                          {!ROLES.includes(usuario.rol as (typeof ROLES)[number]) && (
-                            <option value={usuario.rol}>{usuario.rol}</option>
-                          )}
-                          {ROLES.map((rol) => (
+                          {!ROLES_ASIGNABLES.includes(
+                            usuario.rol as (typeof ROLES_ASIGNABLES)[number]
+                          ) && <option value={usuario.rol}>{usuario.rol}</option>}
+                          {ROLES_ASIGNABLES.map((rol) => (
                             <option key={rol} value={rol}>
                               {rol}
                             </option>
@@ -225,6 +320,19 @@ export default function UsuariosPage() {
           </>
         )}
       </main>
+
+      {modalAltaAbierto && (
+        <ModalAltaUsuario
+          onClose={() => setModalAltaAbierto(false)}
+          onUsuarioCreado={() => {
+            setModalAltaAbierto(false)
+            // Recarga en vez de insertar la fila que devolvió el register: ese endpoint
+            // responde UserResponse, sin el `es_cuenta_servicio` que esta lista necesita, y
+            // con el filtro de inactivos puesto el orden lo define el backend (por id).
+            cargar(incluirInactivos)
+          }}
+        />
+      )}
 
       {usuarioAConfirmar && (
         <ModalConfirmacion

@@ -4,7 +4,53 @@
 # ACTIVAS, para que un sector ya vaciado (a fuerza de baja lógica) se pueda
 # desactivar él también.
 
+import pytest
+from fastapi import HTTPException
+
 from app.models.sector import Sector
+from app.routers._comun import validar_sector
+
+
+# ------------------------------------------------- validacion de sector (RF-04)
+
+
+def test_validar_sector_rechaza_un_sector_inexistente(db, crear_sector):
+    """La guarda compartida que usan /mesas y /metricas antes de filtrar por sector.
+
+    Se prueba la función y no un endpoint porque la usan muchos llamadores
+    (`routers/_comun.py`) y lo que importa es que los tres casos se comporten distinto:
+    un sector real pasa, `None` pasa —"no filtrar" es el caso normal, no un error— y uno
+    inexistente corta con 400.
+
+    Es 400 y no 404 a propósito, y el assert lo fija: el recurso pedido (la lista de
+    mesas, el reporte) existe; lo que está mal es el parámetro con el que se lo pidió.
+    """
+    sector = crear_sector()
+
+    # Ninguno de los dos levanta: si lo hicieran, el test falla por la excepción.
+    validar_sector(db, sector.id)
+    validar_sector(db, None)
+
+    with pytest.raises(HTTPException) as error:
+        validar_sector(db, 999)
+    assert error.value.status_code == 400
+    assert "no existe" in error.value.detail
+
+
+def test_crear_mesa_en_un_sector_inexistente_da_400(client, como, crear_sector):
+    """La misma guarda, ahora a través de la API, que es como la ve el usuario.
+
+    Acompaña al test de arriba en vez de reemplazarlo: aquel prueba la regla, este que
+    el endpoint efectivamente la aplica. Un POST que se olvidara de llamar a
+    validar_sector haría estallar la FK con un 500 en lugar de explicar qué pasó.
+    """
+    crear_sector()
+    como("encargado")
+
+    respuesta = client.post("/mesas/", json={"numero": 1, "sector_id": 999})
+
+    assert respuesta.status_code == 400
+    assert "no existe" in respuesta.json()["detail"]
 
 
 # --------------------------------------------------------------------- eliminar

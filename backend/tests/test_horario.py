@@ -9,7 +9,7 @@ from datetime import datetime, time, timedelta, timezone
 
 import pytest
 
-from app.services.horario import TZ_LOCAL, en_horario_de_servicio, hora_local
+from app.services.horario import TZ_LOCAL, como_utc, en_horario_de_servicio, hora_local
 
 
 def utc(anio, mes, dia, hora, minuto=0):
@@ -111,3 +111,39 @@ class TestBordes:
         momento = utc(2026, 9, 5, 15, 0)
         desfasaje = momento.astimezone(TZ_LOCAL).utcoffset()
         assert desfasaje == timedelta(hours=-3)
+
+
+class TestComoUtc:
+    """Normalización naive/aware (RF-32).
+
+    `como_utc` existe por una diferencia real entre las dos bases del proyecto:
+    `created_at` es `timestamptz` y Postgres lo devuelve con tzinfo, pero la base de
+    tests es SQLite y lo devuelve naive. Sin normalizar, restar dos datetimes de origen
+    mixto tira TypeError; y cuando no hay resta de por medio el error es MUDO —el
+    recorte del día operativo sale desplazado y ningún test falla—. Ese fue el riesgo
+    que apareció al implementar el reporte de ocupación diaria.
+    """
+
+    def test_naive_y_aware_del_mismo_instante_coinciden(self):
+        """El mismo instante escrito de tres formas da el mismo UTC.
+
+        Las tres formas son las que el sistema efectivamente recibe: naive desde SQLite,
+        aware en UTC desde Postgres, y aware en hora del local desde cualquier cálculo
+        que haya pasado por TZ_LOCAL.
+        """
+        instante = utc(2026, 9, 2, 15, 0)
+        # Naive con la MISMA hora de pared que el UTC: así es como SQLite devuelve lo que
+        # func.now() guardó, y por eso como_utc asume UTC cuando falta el tzinfo.
+        naive = datetime(2026, 9, 2, 15, 0)
+        # El mismo instante visto desde Montevideo (UTC-3): 12:00 de reloj local.
+        en_montevideo = instante.astimezone(TZ_LOCAL)
+        assert en_montevideo.hour == 12
+
+        assert como_utc(naive) == instante
+        assert como_utc(instante) == instante
+        assert como_utc(en_montevideo) == instante
+
+        # Y los tres quedan aware: lo que vuelve se puede restar sin TypeError, que es
+        # justamente para lo que se normaliza.
+        for momento in (naive, instante, en_montevideo):
+            assert como_utc(momento).tzinfo == timezone.utc

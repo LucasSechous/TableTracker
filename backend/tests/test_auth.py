@@ -9,7 +9,7 @@
 
 from app.database import SessionLocal
 from app.models.user import User
-from app.routers.auth import hashear_password
+from app.routers.auth import LOGIN_RATE_LIMIT, hashear_password, verificar_password
 
 
 def _crear_admin_directo(email="admin@tabletracker-test.com", password="claveadmin1"):
@@ -24,6 +24,39 @@ def _crear_admin_directo(email="admin@tabletracker-test.com", password="claveadm
     finally:
         db.close()
     return email, password
+
+
+# ------------------------------------------------------------------ hasheo (RF-03)
+
+
+def test_hashear_password_no_guarda_el_texto_plano_y_verifica():
+    """La contraseña nunca se guarda tal cual, y el hash sirve para verificar.
+
+    Es la única prueba de esta suite que mira hashear_password/verificar_password en
+    aislamiento. El resto las ejercita de refilón —todo login pasa por ahí—, pero de
+    refilón no se distingue "verifica bien" de "verifica cualquier cosa": un
+    verificar_password que devolviera True siempre dejaría pasar igual todos los tests de
+    login con la clave correcta. Por eso acá se afirman los dos lados, el positivo y el
+    negativo.
+    """
+    hash_guardado = hashear_password("claveadmin1")
+
+    assert hash_guardado != "claveadmin1"
+    # Y no está embebido en ninguna parte del hash: lo importante no es que el string sea
+    # distinto, es que la clave no se pueda leer de la columna.
+    assert "claveadmin1" not in hash_guardado
+
+    assert verificar_password("claveadmin1", hash_guardado) is True
+    assert verificar_password("otra-clave", hash_guardado) is False
+
+    # bcrypt saltea cada hash, así que la misma clave hasheada dos veces da distinto y las
+    # dos verifican. Sin sal, dos usuarios con la misma contraseña tendrían la misma fila.
+    otro_hash = hashear_password("claveadmin1")
+    assert otro_hash != hash_guardado
+    assert verificar_password("claveadmin1", otro_hash) is True
+
+
+# ------------------------------------------------------------------- login y token
 
 
 def test_login_y_token_autorizan_un_endpoint_protegido(client, crear_sector):
@@ -113,3 +146,31 @@ def test_desactivar_a_alguien_corta_el_acceso_de_un_token_ya_emitido(client, db)
     db.commit()
 
     assert client.get("/auth/me", headers=headers).status_code == 401
+
+
+# ----------------------------------------------- rate limit de login (RNF Seguridad)
+
+
+def test_demasiados_logins_fallidos_dan_429(client):
+    """Agotar el cupo corta incluso un login con la contraseña correcta.
+
+    Ese último paso es el que importa: un rate limit que solo rechazara intentos
+    equivocados no frenaría nada —el atacante sigue probando— así que lo que se verifica
+    es que el corte es por ORIGEN y no por resultado. Con la clave buena y el cupo
+    agotado, la respuesta tiene que ser 429 y no 200.
+
+    El aislamiento lo garantiza el fixture _sin_intentos_de_login_colgados (conftest):
+    este test deja la IP de TestClient con el cupo agotado, y sin ese reset los tests
+    posteriores que hacen login recibirían 429.
+    """
+    email, password = _crear_admin_directo()
+
+    # Los del cupo son todos 401: cuentan como intento fallido pero todavía no cortan.
+    for intento in range(LOGIN_RATE_LIMIT):
+        respuesta = client.post("/auth/login", json={"email": email, "password": "incorrecta"})
+        assert respuesta.status_code == 401, f"el intento {intento + 1} debería ser 401"
+
+    # El siguiente, con la contraseña REAL, ya no llega a validarse.
+    respuesta = client.post("/auth/login", json={"email": email, "password": password})
+    assert respuesta.status_code == 429
+    assert "Demasiados intentos" in respuesta.json()["detail"]

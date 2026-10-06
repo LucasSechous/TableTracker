@@ -75,6 +75,28 @@ def _sin_detecciones_colgadas():
 
 
 @pytest.fixture(autouse=True)
+def _sin_intentos_de_login_colgados():
+    """`_login_failures` (app/routers/auth.py) es un dict en memoria del proceso, igual
+    que `_ultima_deteccion`: lleva la cuenta de logins fallidos por IP para el rate
+    limit, así que resetear las tablas no lo toca.
+
+    Sin esto la suite queda dependiente del orden. Todas las llamadas de TestClient
+    salen de la misma IP, de modo que los 401 que deja un test se suman a los del
+    siguiente: basta que entre varios se acumulen LOGIN_RATE_LIMIT fallos dentro de la
+    misma ventana de un minuto para que un login con credenciales CORRECTAS reciba 429 y
+    falle un test que no tiene nada que ver con el rate limit.
+
+    Hasta ahora no pasaba porque ningún test agotaba el límite. `test_auth.py::
+    test_demasiados_logins_fallidos_dan_429` lo agota a propósito, así que el aislamiento
+    pasa a ser necesario y no una precaución teórica.
+    """
+    from app.routers.auth import _login_failures
+
+    _login_failures.clear()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _sin_overrides_colgados():
     """Limpia dependency_overrides después de cada test.
 
